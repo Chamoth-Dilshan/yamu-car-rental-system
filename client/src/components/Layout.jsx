@@ -52,7 +52,6 @@ export default function Layout({ children }) {
               <>
                 <Link to="/signin" className="btn btn-outline btn-sm">Sign In</Link>
                 <Link to="/signup" className="btn btn-primary btn-sm">Sign Up</Link>
-                <Link to="/admin/signin" className="btn btn-secondary btn-sm">Admin</Link>
               </>
             )}
           </div>
