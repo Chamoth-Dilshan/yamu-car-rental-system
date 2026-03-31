@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { generateToken } = require('../middleware/auth');
+const { sendServerError } = require('../utils/errorResponses');
 const {
   buildRoleAssignment,
   canUseRole,
@@ -55,7 +56,7 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'A user already exists with that email or username' });
     }
 
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Registration failed');
   }
 };
 
@@ -90,7 +91,7 @@ const login = async (req, res) => {
       token: generateToken(user._id)
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Login failed');
   }
 };
 
@@ -104,7 +105,7 @@ const getMe = async (req, res) => {
 
     res.json(serializeUser(user));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to load current user');
   }
 };
 
@@ -135,7 +136,7 @@ const switchRole = async (req, res) => {
       token: generateToken(user._id)
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to switch role');
   }
 };
 

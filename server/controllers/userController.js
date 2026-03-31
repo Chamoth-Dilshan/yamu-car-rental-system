@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { sendServerError } = require('../utils/errorResponses');
 const {
   PROVIDER_ROLE_KEYS,
   buildRoleAssignment,
@@ -37,7 +38,7 @@ const getProfile = async (req, res) => {
 
     res.json(serializeUser(user));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to load profile');
   }
 };
 
@@ -82,7 +83,7 @@ const updateProfile = async (req, res) => {
       return res.status(400).json({ message: 'Email or username is already in use' });
     }
 
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to update profile');
   }
 };
 
@@ -111,7 +112,7 @@ const updateCustomerProfile = async (req, res) => {
       user: serializeUser(user)
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to update customer profile');
   }
 };
 
@@ -154,7 +155,7 @@ const updateDriverProfile = async (req, res) => {
       user: serializeUser(user)
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to update driver profile');
   }
 };
 
@@ -198,7 +199,7 @@ const updateStaffProfile = async (req, res) => {
       user: serializeUser(user)
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to update staff profile');
   }
 };
 
@@ -228,7 +229,7 @@ const updateAdminProfile = async (req, res) => {
       user: serializeUser(user)
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to update admin profile');
   }
 };
 
@@ -314,7 +315,50 @@ const applyForProviderRole = async (req, res) => {
       user: serializeUser(user)
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to submit provider application');
+  }
+};
+
+const withdrawProviderApplication = async (req, res) => {
+  try {
+    const { roleKey } = req.params;
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (!PROVIDER_ROLE_KEYS.includes(roleKey)) {
+      return res.status(400).json({ message: 'Unsupported provider role application' });
+    }
+
+    const application = getLatestProviderApplication(user, roleKey);
+    if (!application || application.status !== 'pending') {
+      return res.status(404).json({ message: 'No pending application found for this role' });
+    }
+
+    application.status = 'withdrawn';
+    application.reviewedAt = null;
+    application.reviewedBy = null;
+    application.rejectionReason = '';
+
+    user.roles = (user.roles || []).filter((role) => {
+      if (role.roleKey !== roleKey) {
+        return true;
+      }
+
+      return canUseRole(role);
+    });
+
+    syncUserRoles(user);
+    await user.save();
+
+    res.json({
+      message: `${roleKey} application withdrawn`,
+      user: serializeUser(user)
+    });
+  } catch (error) {
+    sendServerError(res, error, 'Failed to withdraw provider application');
   }
 };
 
@@ -325,5 +369,6 @@ module.exports = {
   updateDriverProfile,
   updateStaffProfile,
   updateAdminProfile,
-  applyForProviderRole
+  applyForProviderRole,
+  withdrawProviderApplication
 };

@@ -33,7 +33,7 @@ export default function SignUp() {
         email: form.email,
         password: form.password
       });
-      navigate('/profile');
+      navigate('/account');
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {

@@ -44,7 +44,7 @@ export default function Home() {
   const { user } = useAuth();
   const isAdmin = (user?.activeRole || user?.role) === 'admin';
 
-  const primaryLink = isAdmin ? '/admin/dashboard' : user ? '/profile' : '/signup';
+  const primaryLink = isAdmin ? '/admin/dashboard' : user ? '/account' : '/signup';
   const primaryText = isAdmin ? 'Open Dashboard' : user ? 'Open Account' : 'Create Account';
   const secondaryLink = isAdmin ? '/admin/signin' : '/signin';
   const secondaryText = isAdmin ? 'Admin Login' : user ? 'Sign In as Another User' : 'Sign In';

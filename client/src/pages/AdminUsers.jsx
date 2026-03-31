@@ -44,6 +44,10 @@ export default function AdminUsers() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyAction, setBusyAction] = useState('');
+  const isPendingPath = location.pathname.startsWith('/admin/pending-approvals');
+  const isUsersPath = location.pathname.startsWith('/admin/users');
+  const isRolesPath = location.pathname.startsWith('/admin/roles');
+  const isOverviewPath = !isPendingPath && !isUsersPath && !isRolesPath;
 
   const currentSection = adminSections[location.pathname] || adminSections['/admin/dashboard'];
   const pendingReviewUsers = users.filter((user) => getPendingApplications(user).length > 0);
@@ -586,10 +590,10 @@ export default function AdminUsers() {
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-danger">{error}</div>}
 
-        {location.pathname === '/admin/dashboard' && renderOverview()}
-        {location.pathname === '/admin/pending-approvals' && renderPendingSection()}
-        {location.pathname === '/admin/users' && renderUsersSection()}
-        {location.pathname === '/admin/roles' && renderRolesSection()}
+        {isOverviewPath && renderOverview()}
+        {isPendingPath && renderPendingSection()}
+        {isUsersPath && renderUsersSection()}
+        {isRolesPath && renderRolesSection()}
       </main>
     </div>
   );

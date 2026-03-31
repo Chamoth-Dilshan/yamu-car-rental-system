@@ -637,6 +637,31 @@ input:focus, select:focus, textarea:focus {
   text-align: center;
   padding: 2rem;
 }
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.account-progress {
+  margin-bottom: 1.25rem;
+}
+.account-progress-track {
+  width: 100%;
+  height: 10px;
+  background: rgba(15,23,42,0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+.account-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0%, #fbbf24 100%);
+}
+.account-request-item {
+  align-items: flex-start;
+}
 
 @media (max-width: 1024px) {
   .footer-grid { grid-template-columns: repeat(2, 1fr); }
@@ -670,6 +695,7 @@ input:focus, select:focus, textarea:focus {
     border-right: 1px solid rgba(240,165,0,0.35);
   }
   .dashboard-content { margin-left: 0; }
+  .account-grid,
   .admin-section-grid,
   .admin-summary-grid {
     grid-template-columns: 1fr;

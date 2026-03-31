@@ -13,7 +13,7 @@ export default function ProtectedRoute({ children, roles }) {
   }
 
   if (roles && !roles.includes(user.activeRole || user.role)) {
-    return <Navigate to="/profile" replace />;
+    return <Navigate to="/account" replace />;
   }
 
   return children;

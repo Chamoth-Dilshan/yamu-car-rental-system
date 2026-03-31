@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { sendServerError } = require('../utils/errorResponses');
 const {
   ACCOUNT_STATUSES,
   ROLE_KEYS,
@@ -40,7 +41,7 @@ const getAllUsers = async (req, res) => {
 
     res.json(users.map(serializeUser));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to load users');
   }
 };
 
@@ -162,7 +163,7 @@ const updateUser = async (req, res) => {
       return res.status(400).json({ message: 'Email or username is already in use' });
     }
 
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to update user');
   }
 };
 
@@ -225,7 +226,7 @@ const reviewProviderApplication = async (req, res) => {
       user: serializeUser(user)
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to review provider application');
   }
 };
 
@@ -249,7 +250,7 @@ const deleteUser = async (req, res) => {
 
     res.json({ message: 'User removed' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServerError(res, error, 'Failed to delete user');
   }
 };
 

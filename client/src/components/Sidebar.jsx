@@ -4,19 +4,25 @@ import { useAuth } from '../context/AuthContext';
 
 const menuItems = {
   customer: [
-    { to: '/profile', label: 'My Profile' },
-    { to: '/apply-roles', label: 'Apply Roles' },
-    { to: '/switch-roles', label: 'Switch Roles' }
+    { section: 'Account' },
+    { to: '/account', label: 'Overview', end: true },
+    { to: '/profile', label: 'Profile Details', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   driver: [
-    { to: '/profile', label: 'My Profile' },
-    { to: '/apply-roles', label: 'Apply Roles' },
-    { to: '/switch-roles', label: 'Switch Roles' }
+    { section: 'Account' },
+    { to: '/account', label: 'Overview', end: true },
+    { to: '/profile', label: 'Profile Details', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   staff: [
-    { to: '/profile', label: 'My Profile' },
-    { to: '/apply-roles', label: 'Apply Roles' },
-    { to: '/switch-roles', label: 'Switch Roles' }
+    { section: 'Account' },
+    { to: '/account', label: 'Overview', end: true },
+    { to: '/profile', label: 'Profile Details', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   admin: [
     { section: 'Admin Panel' },

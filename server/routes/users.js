@@ -6,7 +6,8 @@ const {
   updateDriverProfile,
   updateStaffProfile,
   updateAdminProfile,
-  applyForProviderRole
+  applyForProviderRole,
+  withdrawProviderApplication
 } = require('../controllers/userController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -20,6 +21,7 @@ router.put('/driver-profile', protect, updateDriverProfile);
 router.put('/staff-profile', protect, updateStaffProfile);
 router.put('/admin-profile', protect, updateAdminProfile);
 router.post('/applications/:roleKey', protect, applyForProviderRole);
+router.put('/applications/:roleKey/withdraw', protect, withdrawProviderApplication);
 
 module.exports = router;
 

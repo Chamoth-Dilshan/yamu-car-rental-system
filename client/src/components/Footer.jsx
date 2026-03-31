@@ -23,7 +23,7 @@ export default function Footer() {
               {!user && <li><Link to="/signin">Sign In</Link></li>}
               {!user && <li><Link to="/admin/signin">Admin Login</Link></li>}
               {!user && <li><Link to="/signup">Create Account</Link></li>}
-              {user && !isAdmin && <li><Link to="/profile">My Account</Link></li>}
+              {user && !isAdmin && <li><Link to="/account">My Account</Link></li>}
               {isAdmin && <li><Link to="/admin/dashboard">Admin Dashboard</Link></li>}
             </ul>
           </div>

@@ -15,7 +15,7 @@ export default function SignIn() {
     setError('');
     try {
       const nextUser = await login(form.email, form.password);
-      navigate((nextUser.activeRole || nextUser.role) === 'admin' ? '/admin/dashboard' : '/profile');
+      navigate((nextUser.activeRole || nextUser.role) === 'admin' ? '/admin/dashboard' : '/account');
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
     } finally {

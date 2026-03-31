@@ -27,7 +27,7 @@ export default function Layout({ children }) {
 
           <div className="nav-links">
             <NavLink to="/">Home</NavLink>
-            {user && !isAdmin && <NavLink to="/profile">Profile</NavLink>}
+            {user && !isAdmin && <NavLink to="/account">Account</NavLink>}
             {isAdmin && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
           </div>
 
@@ -37,8 +37,9 @@ export default function Layout({ children }) {
                 <img src={avatarSrc} alt={user.fullName} />
                 <span>{user.fullName?.split(' ')[0]}</span>
                 <div className="nav-user-dropdown">
-                  {!isAdmin && <Link to="/profile">My Profile</Link>}
-                  {!isAdmin && <Link to="/apply-roles">Apply Roles</Link>}
+                  {!isAdmin && <Link to="/account">Account Overview</Link>}
+                  {!isAdmin && <Link to="/profile">Profile Details</Link>}
+                  {!isAdmin && <Link to="/apply-roles">Role Requests</Link>}
                   {!isAdmin && <Link to="/switch-roles">Switch Roles</Link>}
                   {isAdmin && <Link to="/admin/dashboard">Overview</Link>}
                   {isAdmin && <Link to="/admin/pending-approvals">Pending Approvals</Link>}
