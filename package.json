@@ -1,0 +1,19 @@
+{
+  "name": "yamu-car-rental-system",
+  "private": true,
+  "scripts": {
+    "lint": "node scripts/run-service.cjs lint",
+    "lint:client": "node ./node_modules/eslint/bin/eslint.js client/src --ext .js,.jsx --max-warnings 0",
+    "lint:server": "node ./node_modules/eslint/bin/eslint.js server --ext .js,.cjs --max-warnings 0",
+    "build": "node scripts/run-service.cjs build",
+    "build:client": "node scripts/run-service.cjs build:client",
+    "build:server": "node scripts/run-service.cjs build:server"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.24.0",
+    "eslint": "^9.24.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^16.0.0"
+  }
+}

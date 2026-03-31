@@ -1,0 +1,493 @@
+import { useEffect, useMemo, useState } from 'react';
+import API from '../api/axios';
+import { buildUploadUrl } from '../api/config';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+
+const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
+const blockedApplicationStatuses = ['suspended', 'deactivated'];
+
+const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+
+export default function Profile() {
+  const { user, refreshMe, setUser } = useAuth();
+  const [profile, setProfile] = useState({
+    fullName: '',
+    username: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    dob: '',
+    bio: '',
+    password: ''
+  });
+  const [customerProfile, setCustomerProfile] = useState({
+    preferences: '',
+    notes: ''
+  });
+  const [driverProfile, setDriverProfile] = useState({
+    drivingLicenseNumber: '',
+    licenseExpiryDate: '',
+    nicId: '',
+    serviceArea: '',
+    providerDetails: ''
+  });
+  const [staffProfile, setStaffProfile] = useState({
+    storeName: '',
+    storeOwner: '',
+    businessRegistrationNumber: '',
+    storeAddress: '',
+    storeContactNumber: '',
+    storeEmail: ''
+  });
+  const [adminProfile, setAdminProfile] = useState({
+    accessScope: '',
+    controlNotes: ''
+  });
+  const [profilePic, setProfilePic] = useState(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [busyAction, setBusyAction] = useState('');
+
+  const roleMap = useMemo(() => (
+    Object.fromEntries((user?.roles || []).map((item) => [item.roleKey, item]))
+  ), [user]);
+
+  const applicationMap = useMemo(() => (
+    Object.fromEntries((user?.providerApplications || []).map((item) => [item.roleKey, item]))
+  ), [user]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    setProfile({
+      fullName: user.fullName || '',
+      username: user.username || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      address: user.address || '',
+      city: user.city || '',
+      dob: user.dob || '',
+      bio: user.bio || '',
+      password: ''
+    });
+
+    setCustomerProfile({
+      preferences: user.customerProfile?.preferences || '',
+      notes: user.customerProfile?.notes || ''
+    });
+
+    setDriverProfile({
+      drivingLicenseNumber: user.driverProfile?.drivingLicenseNumber || '',
+      licenseExpiryDate: user.driverProfile?.licenseExpiryDate ? String(user.driverProfile.licenseExpiryDate).slice(0, 10) : '',
+      nicId: user.driverProfile?.nicId || '',
+      serviceArea: user.driverProfile?.serviceArea || '',
+      providerDetails: user.driverProfile?.providerDetails || ''
+    });
+
+    setStaffProfile({
+      storeName: user.staffProfile?.storeName || '',
+      storeOwner: user.staffProfile?.storeOwner || '',
+      businessRegistrationNumber: user.staffProfile?.businessRegistrationNumber || '',
+      storeAddress: user.staffProfile?.storeAddress || '',
+      storeContactNumber: user.staffProfile?.storeContactNumber || '',
+      storeEmail: user.staffProfile?.storeEmail || ''
+    });
+
+    setAdminProfile({
+      accessScope: user.adminProfile?.accessScope || '',
+      controlNotes: user.adminProfile?.controlNotes || ''
+    });
+  }, [user]);
+
+  const customerRole = roleMap.customer;
+  const driverRole = roleMap.driver;
+  const staffRole = roleMap.staff;
+  const adminRole = roleMap.admin;
+  const driverApplication = applicationMap.driver;
+  const staffApplication = applicationMap.staff;
+
+  const saveBasicProfile = async (event) => {
+    event.preventDefault();
+    setBusyAction('basic');
+    setMessage('');
+    setError('');
+
+    try {
+      const formData = new FormData();
+      Object.entries(profile).forEach(([key, value]) => {
+        if (key === 'password') {
+          if (value) {
+            formData.append(key, value);
+          }
+          return;
+        }
+
+        if (value !== undefined && value !== null) {
+          formData.append(key, value);
+        }
+      });
+
+      if (profilePic) {
+        formData.append('profilePic', profilePic);
+      }
+
+      const res = await API.put('/users/profile', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setUser(res.data);
+      await refreshMe();
+      setProfile((prev) => ({ ...prev, password: '' }));
+      setProfilePic(null);
+      setMessage('Common profile updated successfully');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update profile');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const saveRoleProfile = async (endpoint, payload, successMessage, actionKey) => {
+    setBusyAction(actionKey);
+    setMessage('');
+    setError('');
+
+    try {
+      await API.put(endpoint, payload);
+      await refreshMe();
+      setMessage(successMessage);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save profile');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const submitProviderApplication = async (roleKey, payload) => {
+    setBusyAction(`apply-${roleKey}`);
+    setMessage('');
+    setError('');
+
+    try {
+      await API.post(`/users/applications/${roleKey}`, payload);
+      await refreshMe();
+      setMessage(`${roleLabel(roleKey)} application submitted for admin review`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to submit application');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const avatarSrc = user?.profilePic && user.profilePic !== 'avatar.png'
+    ? buildUploadUrl(user.profilePic)
+    : `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || 'User')}&background=f0a500&color=0d1b2a&bold=true`;
+
+  const driverProfileBlocked = driverRole && blockedProfileStatuses.includes(driverRole.roleStatus);
+  const staffProfileBlocked = staffRole && blockedProfileStatuses.includes(staffRole.roleStatus);
+  const driverApplicationBlocked = driverRole && blockedApplicationStatuses.includes(driverRole.roleStatus);
+  const staffApplicationBlocked = staffRole && blockedApplicationStatuses.includes(staffRole.roleStatus);
+
+  return (
+    <div className="dashboard-layout page-content">
+      <Sidebar />
+      <main className="dashboard-content">
+        <div className="form-header">
+          <h2>My Profile</h2>
+          <p style={{ color: 'var(--text-light)' }}>Manage your common account details, role-specific profiles, and provider onboarding.</p>
+        </div>
+
+        <div className="profile-summary-card">
+          <img className="profile-summary-avatar" src={avatarSrc} alt={user?.fullName} />
+          <div>
+            <h3>{user?.fullName}</h3>
+            <p>{user?.email}</p>
+            <div className="pill-row" style={{ marginTop: '0.75rem' }}>
+              <span className="badge badge-info">Active role: {user?.activeRole}</span>
+              <span className="badge badge-success">Primary role: {user?.primaryRole}</span>
+              <span className="badge badge-warning">Account: {user?.accountStatus}</span>
+            </div>
+          </div>
+        </div>
+
+        {(driverApplication?.status === 'pending' || staffApplication?.status === 'pending') && (
+          <div className="alert alert-info">
+            A provider application is waiting for admin review. Pending roles stay visible for onboarding, but they cannot be used as active roles until approved.
+          </div>
+        )}
+
+        {message && <div className="alert alert-success">{message}</div>}
+        {error && <div className="alert alert-danger">{error}</div>}
+
+        <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="form-header">
+            <h2>Common Profile</h2>
+            <p style={{ color: 'var(--text-light)' }}>These details belong to your account regardless of the active role.</p>
+          </div>
+          <form onSubmit={saveBasicProfile}>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Full Name</label>
+                <input value={profile.fullName} onChange={(e) => setProfile((prev) => ({ ...prev, fullName: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Username</label>
+                <input value={profile.username} onChange={(e) => setProfile((prev) => ({ ...prev, username: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Email</label>
+                <input type="email" value={profile.email} onChange={(e) => setProfile((prev) => ({ ...prev, email: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Phone</label>
+                <input value={profile.phone} onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>City</label>
+                <input value={profile.city} onChange={(e) => setProfile((prev) => ({ ...prev, city: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Date of Birth</label>
+                <input type="date" value={profile.dob} onChange={(e) => setProfile((prev) => ({ ...prev, dob: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Address</label>
+              <input value={profile.address} onChange={(e) => setProfile((prev) => ({ ...prev, address: e.target.value }))} />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Bio</label>
+                <textarea rows="3" value={profile.bio} onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>New Password</label>
+                <input type="password" value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Profile Picture</label>
+              <input type="file" accept="image/*" onChange={(e) => setProfilePic(e.target.files?.[0] || null)} />
+            </div>
+            <button className="btn btn-primary" type="submit" disabled={busyAction === 'basic'}>
+              {busyAction === 'basic' ? 'Saving...' : 'Save Common Profile'}
+            </button>
+          </form>
+        </div>
+
+        {customerRole && (
+          <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="form-header">
+              <h2>Customer Profile</h2>
+              <p style={{ color: 'var(--text-light)' }}>Customer-specific details stay available for booking-side workflows in the wider Yamu system.</p>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              saveRoleProfile('/users/customer-profile', customerProfile, 'Customer profile updated successfully', 'customer');
+            }}
+            >
+              <div className="form-group">
+                <label>Preferences</label>
+                <textarea rows="3" value={customerProfile.preferences} onChange={(e) => setCustomerProfile((prev) => ({ ...prev, preferences: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Notes</label>
+                <textarea rows="3" value={customerProfile.notes} onChange={(e) => setCustomerProfile((prev) => ({ ...prev, notes: e.target.value }))} />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={busyAction === 'customer'}>
+                {busyAction === 'customer' ? 'Saving...' : 'Save Customer Profile'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {(customerRole || driverRole) && (
+          <div id="driver-role" className="form-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="form-header">
+              <h2>Driver Role Onboarding</h2>
+              <p style={{ color: 'var(--text-light)' }}>Use this section to maintain the driver profile and submit or re-submit the provider request.</p>
+            </div>
+            <div className="pill-row" style={{ marginBottom: '1rem' }}>
+              <span className="badge badge-info">Role status: {driverRole?.roleStatus || 'not assigned'}</span>
+              <span className="badge badge-warning">Verification: {driverRole?.verificationStatus || 'unverified'}</span>
+              <span className="badge badge-success">Application: {driverApplication?.status || 'not submitted'}</span>
+            </div>
+            {driverApplication?.rejectionReason && (
+              <div className="alert alert-warning">Admin note: {driverApplication.rejectionReason}</div>
+            )}
+            {driverProfileBlocked && (
+              <div className="alert alert-danger">This role is blocked. Contact an admin before submitting further driver updates.</div>
+            )}
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              saveRoleProfile('/users/driver-profile', driverProfile, 'Driver profile updated successfully', 'driver');
+            }}
+            >
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Driving License Number</label>
+                  <input value={driverProfile.drivingLicenseNumber} onChange={(e) => setDriverProfile((prev) => ({ ...prev, drivingLicenseNumber: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>License Expiry Date</label>
+                  <input type="date" value={driverProfile.licenseExpiryDate} onChange={(e) => setDriverProfile((prev) => ({ ...prev, licenseExpiryDate: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>NIC / ID</label>
+                  <input value={driverProfile.nicId} onChange={(e) => setDriverProfile((prev) => ({ ...prev, nicId: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Service Area</label>
+                  <input value={driverProfile.serviceArea} onChange={(e) => setDriverProfile((prev) => ({ ...prev, serviceArea: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Provider Onboarding Details</label>
+                <textarea rows="3" value={driverProfile.providerDetails} onChange={(e) => setDriverProfile((prev) => ({ ...prev, providerDetails: e.target.value }))} />
+              </div>
+              {driverRole && (
+                <button className="btn btn-secondary" type="submit" disabled={busyAction === 'driver' || driverProfileBlocked}>
+                  {busyAction === 'driver' ? 'Saving...' : 'Save Driver Profile'}
+                </button>
+              )}
+            </form>
+            {customerRole && !driverApplicationBlocked && (
+              <button
+                className="btn btn-primary"
+                style={{ marginTop: '1rem' }}
+                type="button"
+                disabled={busyAction === 'apply-driver' || (driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified')}
+                onClick={() => submitProviderApplication('driver', driverProfile)}
+              >
+                {busyAction === 'apply-driver'
+                  ? 'Submitting...'
+                  : driverApplication?.status === 'pending'
+                    ? 'Re-submit Driver Application'
+                    : driverApplication?.status === 'rejected'
+                      ? 'Re-apply for Driver Role'
+                      : driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified'
+                        ? 'Driver Role Approved'
+                        : 'Apply for Driver Role'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {(customerRole || staffRole) && (
+          <div id="staff-role" className="form-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="form-header">
+              <h2>Staff Role Onboarding</h2>
+              <p style={{ color: 'var(--text-light)' }}>Maintain rental center information and submit the staff provider request from here.</p>
+            </div>
+            <div className="pill-row" style={{ marginBottom: '1rem' }}>
+              <span className="badge badge-info">Role status: {staffRole?.roleStatus || 'not assigned'}</span>
+              <span className="badge badge-warning">Verification: {staffRole?.verificationStatus || 'unverified'}</span>
+              <span className="badge badge-success">Application: {staffApplication?.status || 'not submitted'}</span>
+            </div>
+            {staffApplication?.rejectionReason && (
+              <div className="alert alert-warning">Admin note: {staffApplication.rejectionReason}</div>
+            )}
+            {staffProfileBlocked && (
+              <div className="alert alert-danger">This role is blocked. Contact an admin before submitting further staff updates.</div>
+            )}
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              saveRoleProfile('/users/staff-profile', staffProfile, 'Staff profile updated successfully', 'staff');
+            }}
+            >
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Store Name</label>
+                  <input value={staffProfile.storeName} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeName: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Store Owner</label>
+                  <input value={staffProfile.storeOwner} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeOwner: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Business Registration Number</label>
+                  <input value={staffProfile.businessRegistrationNumber} onChange={(e) => setStaffProfile((prev) => ({ ...prev, businessRegistrationNumber: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Store Contact Number</label>
+                  <input value={staffProfile.storeContactNumber} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeContactNumber: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Store Email</label>
+                  <input type="email" value={staffProfile.storeEmail} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeEmail: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Store Address</label>
+                  <input value={staffProfile.storeAddress} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeAddress: e.target.value }))} />
+                </div>
+              </div>
+              {staffRole && (
+                <button className="btn btn-secondary" type="submit" disabled={busyAction === 'staff' || staffProfileBlocked}>
+                  {busyAction === 'staff' ? 'Saving...' : 'Save Staff Profile'}
+                </button>
+              )}
+            </form>
+            {customerRole && !staffApplicationBlocked && (
+              <button
+                className="btn btn-primary"
+                style={{ marginTop: '1rem' }}
+                type="button"
+                disabled={busyAction === 'apply-staff' || (staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified')}
+                onClick={() => submitProviderApplication('staff', staffProfile)}
+              >
+                {busyAction === 'apply-staff'
+                  ? 'Submitting...'
+                  : staffApplication?.status === 'pending'
+                    ? 'Re-submit Staff Application'
+                    : staffApplication?.status === 'rejected'
+                      ? 'Re-apply for Staff Role'
+                      : staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified'
+                        ? 'Staff Role Approved'
+                        : 'Apply for Staff Role'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {adminRole && (
+          <div className="form-card">
+            <div className="form-header">
+              <h2>Admin Profile</h2>
+              <p style={{ color: 'var(--text-light)' }}>Reserved for seeded administrators and internal control notes.</p>
+            </div>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              saveRoleProfile('/users/admin-profile', adminProfile, 'Admin profile updated successfully', 'admin');
+            }}
+            >
+              <div className="form-group">
+                <label>Access Scope</label>
+                <input value={adminProfile.accessScope} onChange={(e) => setAdminProfile((prev) => ({ ...prev, accessScope: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Control Notes</label>
+                <textarea rows="4" value={adminProfile.controlNotes} onChange={(e) => setAdminProfile((prev) => ({ ...prev, controlNotes: e.target.value }))} />
+              </div>
+              <button className="btn btn-primary" type="submit" disabled={busyAction === 'admin'}>
+                {busyAction === 'admin' ? 'Saving...' : 'Save Admin Profile'}
+              </button>
+            </form>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
