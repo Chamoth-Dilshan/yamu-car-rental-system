@@ -1,6 +1,12 @@
 const User = require('../models/User');
 const { sendServerError } = require('../utils/errorResponses');
 const {
+  addNotificationToAdmins,
+  appendNotification,
+  getUnreadNotificationCount,
+  serializeNotification
+} = require('../utils/notificationHelpers');
+const {
   PROVIDER_ROLE_KEYS,
   buildRoleAssignment,
   canManageRoleProfile,
@@ -308,7 +314,20 @@ const applyForProviderRole = async (req, res) => {
 
     upsertProviderApplication(user, roleKey, applicationData);
     syncUserRoles(user);
+    appendNotification(user, {
+      type: 'role',
+      title: `${roleKey.charAt(0).toUpperCase() + roleKey.slice(1)} application submitted`,
+      message: `Your ${roleKey} application is now pending admin review.`,
+      link: '/apply-roles'
+    });
     await user.save();
+
+    await addNotificationToAdmins({
+      type: 'role',
+      title: 'New provider role application',
+      message: `${user.fullName} submitted a ${roleKey} application for review.`,
+      link: '/admin/pending-approvals'
+    });
 
     res.json({
       message: `${roleKey} application submitted for admin review`,
@@ -351,6 +370,12 @@ const withdrawProviderApplication = async (req, res) => {
     });
 
     syncUserRoles(user);
+    appendNotification(user, {
+      type: 'role',
+      title: 'Application withdrawn',
+      message: `Your ${roleKey} application has been withdrawn.`,
+      link: '/apply-roles'
+    });
     await user.save();
 
     res.json({
@@ -362,6 +387,86 @@ const withdrawProviderApplication = async (req, res) => {
   }
 };
 
+const getNotifications = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('notifications');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const notifications = [...(user.notifications || [])]
+      .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
+      .map(serializeNotification);
+
+    res.json({
+      notifications,
+      unreadCount: getUnreadNotificationCount(user)
+    });
+  } catch (error) {
+    sendServerError(res, error, 'Failed to load notifications');
+  }
+};
+
+const markNotificationRead = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const notification = (user.notifications || []).id(req.params.notificationId);
+
+    if (!notification) {
+      return res.status(404).json({ message: 'Notification not found' });
+    }
+
+    notification.isRead = true;
+    notification.readAt = new Date();
+    await user.save({ validateModifiedOnly: true });
+
+    const notifications = [...(user.notifications || [])]
+      .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
+      .map(serializeNotification);
+
+    res.json({
+      notifications,
+      unreadCount: getUnreadNotificationCount(user)
+    });
+  } catch (error) {
+    sendServerError(res, error, 'Failed to update notification');
+  }
+};
+
+const markAllNotificationsRead = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    (user.notifications || []).forEach((notification) => {
+      notification.isRead = true;
+      notification.readAt = notification.readAt || new Date();
+    });
+
+    await user.save({ validateModifiedOnly: true });
+
+    const notifications = [...(user.notifications || [])]
+      .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
+      .map(serializeNotification);
+
+    res.json({
+      notifications,
+      unreadCount: 0
+    });
+  } catch (error) {
+    sendServerError(res, error, 'Failed to update notifications');
+  }
+};
+
 module.exports = {
   getProfile,
   updateProfile,
@@ -370,5 +475,8 @@ module.exports = {
   updateStaffProfile,
   updateAdminProfile,
   applyForProviderRole,
-  withdrawProviderApplication
+  withdrawProviderApplication,
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead
 };

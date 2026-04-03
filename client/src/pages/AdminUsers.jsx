@@ -272,6 +272,7 @@ export default function AdminUsers() {
 
       const res = await API.put(`/admin/users/${user._id}`, payload);
       setUsers((prev) => prev.map((item) => item._id === user._id ? res.data : item));
+      await refreshNotifications().catch(() => {});
       setMessage(`Updated ${res.data.fullName}`);
       navigate(`/admin/users/${res.data._id}`);
     } catch (err) {
@@ -296,6 +297,7 @@ export default function AdminUsers() {
         rejectionReason: reason
       });
       setUsers((prev) => prev.map((item) => item._id === userId ? res.data.user : item));
+      await refreshNotifications().catch(() => {});
       setMessage(res.data.message);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to review application');

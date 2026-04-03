@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { sendServerError } = require('../utils/errorResponses');
+const { addNotificationToUser, appendNotification } = require('../utils/notificationHelpers');
 const {
   ACCOUNT_STATUSES,
   ROLE_KEYS,
@@ -164,6 +165,12 @@ const updateUser = async (req, res) => {
 
     syncUserRoles(user);
     await user.save();
+    await addNotificationToUser(req.user._id, {
+      type: 'admin',
+      title: 'User record updated',
+      message: `You updated ${user.fullName}'s account settings.`,
+      link: '/admin/users'
+    });
 
     res.json(serializeUser(user));
   } catch (error) {
@@ -179,6 +186,7 @@ const reviewProviderApplication = async (req, res) => {
   try {
     const { id, roleKey } = req.params;
     const { action, rejectionReason = '' } = req.body;
+    const actionLabel = action === 'approve' ? 'approved' : 'rejected';
 
     if (!['driver', 'staff'].includes(roleKey)) {
       return res.status(400).json({ message: 'Unsupported provider role' });
@@ -215,6 +223,12 @@ const reviewProviderApplication = async (req, res) => {
       application.rejectionReason = '';
       roleAssignment.roleStatus = 'active';
       roleAssignment.verificationStatus = 'verified';
+      appendNotification(user, {
+        type: 'role',
+        title: `${roleKey.charAt(0).toUpperCase() + roleKey.slice(1)} application approved`,
+        message: `Your ${roleKey} role is now active and ready to use.`,
+        link: '/switch-roles'
+      });
     }
 
     if (action === 'reject') {
@@ -224,13 +238,27 @@ const reviewProviderApplication = async (req, res) => {
       application.rejectionReason = rejectionReason;
       roleAssignment.roleStatus = 'rejected';
       roleAssignment.verificationStatus = 'rejected';
+      appendNotification(user, {
+        type: 'role',
+        title: `${roleKey.charAt(0).toUpperCase() + roleKey.slice(1)} application rejected`,
+        message: rejectionReason
+          ? `Your ${roleKey} application was rejected: ${rejectionReason}`
+          : `Your ${roleKey} application was rejected by admin.`,
+        link: '/apply-roles'
+      });
     }
 
     syncUserRoles(user);
     await user.save();
+    await addNotificationToUser(req.user._id, {
+      type: 'admin',
+      title: 'Application reviewed',
+      message: `You ${actionLabel} the ${roleKey} application for ${user.fullName}.`,
+      link: '/admin/pending-approvals'
+    });
 
     res.json({
-      message: `${roleKey} application ${action}d`,
+      message: `${roleKey} application ${actionLabel}`,
       user: serializeUser(user)
     });
   } catch (error) {
@@ -255,6 +283,12 @@ const deleteUser = async (req, res) => {
     }
 
     await user.deleteOne();
+    await addNotificationToUser(req.user._id, {
+      type: 'admin',
+      title: 'User removed',
+      message: `You deleted ${user.fullName}'s account.`,
+      link: '/admin/users'
+    });
 
     res.json({ message: 'User removed' });
   } catch (error) {

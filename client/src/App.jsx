@@ -1,21 +1,34 @@
-import { Route, Routes } from 'react-router-dom';
-import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute';
-import Home from './pages/Home';
-import AdminSignIn from './pages/AdminSignIn';
-import AdminUsers from './pages/AdminUsers';
-import ApplyRoles from './pages/ApplyRoles';
-import AccountOverview from './pages/AccountOverview';
-import SignIn from './pages/SignIn';
-import SignUp from './pages/SignUp';
-import Profile from './pages/Profile';
-import RoleManagement from './pages/RoleManagement';
+import { Navigate, Route, Routes } from 'react-router-dom'
+import Layout from './components/Layout'
+import ProtectedRoute from './components/ProtectedRoute'
+import Home from './pages/Home'
+import AdminSignIn from './pages/AdminSignIn'
+import AdminUsers from './pages/AdminUsers'
+import AdminBookings from './pages/AdminBookings'
+import ApplyRoles from './pages/ApplyRoles'
+import AccountOverview from './pages/AccountOverview'
+import SignIn from './pages/SignIn'
+import SignUp from './pages/SignUp'
+import Profile from './pages/Profile'
+import RoleManagement from './pages/RoleManagement'
+import Vehicles from './pages/Vehicles'
+import VehicleDetails from './pages/VehicleDetails'
+import MyBookings from './pages/MyBookings'
+import ExploreDrivers from './pages/ExploreDrivers'
+import DriverDetails from './pages/DriverDetails'
+import DriverAdList from './pages/DriverAdList'
+import DriverAdForm from './pages/DriverAdForm'
+import DriverBookings from './pages/DriverBookings'
 
 export default function App() {
   return (
     <Layout>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/cars" element={<Vehicles />} />
+        <Route path="/cars/:id" element={<VehicleDetails />} />
+        <Route path="/drivers" element={<ExploreDrivers />} />
+        <Route path="/drivers/:id" element={<DriverDetails />} />
         <Route path="/signin" element={<SignIn />} />
         <Route path="/admin/signin" element={<AdminSignIn />} />
         <Route path="/signup" element={<SignUp />} />
@@ -24,6 +37,14 @@ export default function App() {
           element={(
             <ProtectedRoute>
               <AccountOverview />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/bookings"
+          element={(
+            <ProtectedRoute roles={['customer']}>
+              <MyBookings />
             </ProtectedRoute>
           )}
         />
@@ -52,15 +73,80 @@ export default function App() {
           )}
         />
         <Route
-          path="/admin/*"
+          path="/driver/ads"
+          element={(
+            <ProtectedRoute roles={['driver']}>
+              <DriverAdList />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/driver/ads/new"
+          element={(
+            <ProtectedRoute roles={['driver']}>
+              <DriverAdForm />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/driver/ads/:id/edit"
+          element={(
+            <ProtectedRoute roles={['driver']}>
+              <DriverAdForm />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/driver/bookings"
+          element={(
+            <ProtectedRoute roles={['driver']}>
+              <DriverBookings />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/admin/dashboard"
           element={(
             <ProtectedRoute roles={['admin']}>
               <AdminUsers />
             </ProtectedRoute>
           )}
         />
+        <Route
+          path="/admin/pending-approvals"
+          element={(
+            <ProtectedRoute roles={['admin']}>
+              <AdminUsers />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/admin/users"
+          element={(
+            <ProtectedRoute roles={['admin']}>
+              <AdminUsers />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/admin/roles"
+          element={(
+            <ProtectedRoute roles={['admin']}>
+              <AdminUsers />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/admin/bookings"
+          element={(
+            <ProtectedRoute roles={['admin']}>
+              <AdminBookings />
+            </ProtectedRoute>
+          )}
+        />
+        <Route path="/admin/*" element={<Navigate to="/admin/dashboard" replace />} />
       </Routes>
     </Layout>
-  );
+  )
 }
 
