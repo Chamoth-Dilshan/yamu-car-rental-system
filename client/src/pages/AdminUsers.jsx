@@ -39,7 +39,7 @@ const getPendingApplications = (user) => (user.providerApplications || []).filte
 
 export default function AdminUsers() {
   const location = useLocation();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshNotifications } = useAuth();
   const [users, setUsers] = useState([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -191,6 +191,7 @@ export default function AdminUsers() {
 
       const res = await API.put(`/admin/users/${user._id}`, payload);
       setUsers((prev) => prev.map((item) => item._id === user._id ? res.data : item));
+      await refreshNotifications().catch(() => {});
       setMessage(`Updated ${res.data.fullName}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update user');
@@ -214,6 +215,7 @@ export default function AdminUsers() {
         rejectionReason: reason
       });
       setUsers((prev) => prev.map((item) => item._id === userId ? res.data.user : item));
+      await refreshNotifications().catch(() => {});
       setMessage(res.data.message);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to review application');
@@ -234,6 +236,7 @@ export default function AdminUsers() {
     try {
       await API.delete(`/admin/users/${userId}`);
       setUsers((prev) => prev.filter((user) => user._id !== userId));
+      await refreshNotifications().catch(() => {});
       setMessage('User deleted');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete user');

@@ -20,7 +20,7 @@ const roleCards = [
 const formatLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 
 export default function ApplyRoles() {
-  const { user, refreshMe } = useAuth();
+  const { user, refreshMe, refreshNotifications } = useAuth();
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyAction, setBusyAction] = useState('');
@@ -35,6 +35,7 @@ export default function ApplyRoles() {
     try {
       const res = await API.put(`/users/applications/${roleKey}/withdraw`);
       await refreshMe();
+      await refreshNotifications().catch(() => {});
       setMessage(res.data.message);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to withdraw application');

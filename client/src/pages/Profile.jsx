@@ -1,8 +1,10 @@
+import { Link } from 'react-router-dom';
 import { useEffect, useMemo, useState } from 'react';
 import API from '../api/axios';
 import { buildUploadUrl } from '../api/config';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
+import { formatDateTime } from '../utils/formatters';
 
 const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
 const blockedApplicationStatuses = ['suspended', 'deactivated'];
@@ -10,7 +12,16 @@ const blockedApplicationStatuses = ['suspended', 'deactivated'];
 const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 
 export default function Profile() {
-  const { user, refreshMe, setUser } = useAuth();
+  const {
+    user,
+    refreshMe,
+    setUser,
+    notifications,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead,
+    refreshNotifications
+  } = useAuth();
   const [profile, setProfile] = useState({
     fullName: '',
     username: '',
@@ -174,6 +185,7 @@ export default function Profile() {
     try {
       await API.post(`/users/applications/${roleKey}`, payload);
       await refreshMe();
+      await refreshNotifications();
       setMessage(`${roleLabel(roleKey)} application submitted for admin review`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to submit application');
@@ -221,6 +233,55 @@ export default function Profile() {
 
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-danger">{error}</div>}
+
+        <div id="notifications" className="form-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="card-header">
+            <div>
+              <h3>Notifications</h3>
+              <p style={{ color: 'var(--text-light)' }}>Track booking updates, admin actions, and role workflow changes from one feed.</p>
+            </div>
+            <div className="pill-row">
+              <span className="badge badge-info">{unreadNotificationCount} unread</span>
+              {notifications.length > 0 && (
+                <button className="btn btn-outline btn-sm" type="button" onClick={() => markAllNotificationsRead()}>
+                  Mark All Read
+                </button>
+              )}
+            </div>
+          </div>
+
+          {notifications.length > 0 ? (
+            <div className="notification-feed">
+              {notifications.map((notification) => (
+                <div key={notification._id} className={`notification-card${notification.isRead ? '' : ' unread'}`}>
+                  <div className="notification-card-copy">
+                    <strong>{notification.title}</strong>
+                    <p>{notification.message}</p>
+                    <small>{formatDateTime(notification.createdAt)}</small>
+                  </div>
+                  <div className="notification-card-actions">
+                    {!notification.isRead && (
+                      <button
+                        className="btn btn-outline btn-sm"
+                        type="button"
+                        onClick={() => markNotificationRead(notification._id)}
+                      >
+                        Mark Read
+                      </button>
+                    )}
+                    {notification.link && (
+                      <Link className="btn btn-primary btn-sm" to={notification.link}>
+                        Open
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="reservation-empty">No notifications yet. Booking and review actions will appear here.</div>
+          )}
+        </div>
 
         <div className="form-card" style={{ marginBottom: '1.5rem' }}>
           <div className="form-header">
