@@ -5,6 +5,7 @@ import Sidebar from '../../components/Sidebar';
 
 export default function CampaignsAdmin() {
   const [campaigns, setCampaigns] = useState([]);
+  const [promotions, setPromotions] = useState([]);
   const [form, setForm] = useState({ name: '', description: '', startDate: '', endDate: '', status: 'active' });
   const [editingId, setEditingId] = useState(null);
   const [message, setMessage] = useState('');
@@ -14,6 +15,7 @@ export default function CampaignsAdmin() {
   
   useEffect(() => {
     fetchCampaigns();
+    fetchPromotions();
   }, []);
 
   const fetchCampaigns = async () => {
@@ -25,6 +27,17 @@ export default function CampaignsAdmin() {
     } catch (err) {
       console.error(err);
       setError('Failed to fetch campaigns');
+    }
+  };
+
+  const fetchPromotions = async () => {
+    try {
+      const res = await api.get('/pricing/promotions', {
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      setPromotions(res.data);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -165,15 +178,35 @@ export default function CampaignsAdmin() {
             {campaigns.length > 0 ? (
               <div className="admin-stack">
                 {campaigns.map(c => (
-                  <div key={c._id} className="admin-list-item">
-                    <div>
-                      <h4 style={{ marginBottom: '0.2rem' }}>{c.name}</h4>
-                      <p style={{ fontSize: '0.85rem' }}>
-                        {new Date(c.startDate).toLocaleDateString()} to {new Date(c.endDate).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <div className="pill-row">
+                  <div key={c._id} className="admin-list-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <h4 style={{ marginBottom: '0.2rem' }}>{c.name}</h4>
+                        <p style={{ fontSize: '0.85rem' }}>
+                          {new Date(c.startDate).toLocaleDateString()} to {new Date(c.endDate).toLocaleDateString()}
+                        </p>
+                      </div>
                       <span className={`badge badge-${c.status === 'active' ? 'success' : 'warning'}`}>{c.status}</span>
+                    </div>
+
+                    <div className="admin-data-grid" style={{ marginTop: '0.75rem' }}>
+                       <div className="admin-data-item" style={{ border: 'none', background: 'rgba(59, 130, 246, 0.05)' }}>
+                          <span>Linked Discount Codes</span>
+                          <div className="pill-row" style={{ marginTop: '0.5rem' }}>
+                            {(() => {
+                              const linked = promotions.filter(p => p.campaignId?._id === c._id);
+                              if (linked.length === 0) return <span style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>None</span>;
+                              return linked.map(p => (
+                                <span key={p._id} className="badge badge-info" style={{ fontSize: '0.75rem' }}>
+                                  {p.code} ({p.discountType === 'percentage' ? `${p.discountValue}%` : `$${p.discountValue}`})
+                                </span>
+                              ));
+                            })()}
+                          </div>
+                       </div>
+                    </div>
+
+                    <div className="pill-row" style={{ marginTop: '1rem', justifyContent: 'flex-end' }}>
                       <button className="btn btn-outline btn-sm" onClick={() => handleEdit(c)}>Edit</button>
                       <button className="btn btn-danger btn-sm" disabled={busyAction === `delete-${c._id}`} onClick={() => handleDelete(c._id)}>Delete</button>
                     </div>

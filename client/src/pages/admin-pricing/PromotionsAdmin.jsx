@@ -259,6 +259,11 @@ export default function PromotionsAdmin() {
                         <p style={{ fontSize: '0.85rem' }}>
                           Discount: {p.discountType === 'percentage' ? `${p.discountValue}%` : `$${p.discountValue}`}
                         </p>
+                        {p.campaignId && (
+                          <div style={{ marginTop: '0.4rem' }}>
+                            <span className="badge badge-info" style={{ fontSize: '0.7rem' }}>Campaign: {p.campaignId.name}</span>
+                          </div>
+                        )}
                       </div>
                       <span className={`badge badge-${p.status === 'active' ? 'success' : 'warning'}`}>{p.status}</span>
                     </div>
