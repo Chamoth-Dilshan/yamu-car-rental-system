@@ -1,8 +1,26 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import API from '../api/axios'
-import { useAuth } from '../context/AuthContext'
-import { formatCurrency } from '../utils/formatters'
+import { Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+
+const featuredCars = [
+  {
+    name: 'City Compact',
+    tag: 'Best for daily errands',
+    price: '$28/day',
+    description: 'Fuel-efficient and easy to park for quick runs around town.'
+  },
+  {
+    name: 'Family SUV',
+    tag: 'Most popular choice',
+    price: '$52/day',
+    description: 'Spacious interior, strong AC, and room for luggage on longer drives.'
+  },
+  {
+    name: 'Executive Sedan',
+    tag: 'Business and airport trips',
+    price: '$46/day',
+    description: 'Comfort-focused travel with a polished look for meetings and pickups.'
+  }
+];
 
 const bookingSteps = [
   {
@@ -23,26 +41,22 @@ const bookingSteps = [
 ]
 
 export default function Home() {
-  const { user } = useAuth()
-  const isAdmin = (user?.activeRole || user?.role) === 'admin'
-  const isDriver = (user?.activeRole || user?.role) === 'driver'
-  const [featuredVehicles, setFeaturedVehicles] = useState([])
-  const [featuredDrivers, setFeaturedDrivers] = useState([])
+  const { user } = useAuth();
+  const activeRole = user?.activeRole || user?.role;
+  const isAdmin = activeRole === 'admin';
 
-  useEffect(() => {
-    API.get('/vehicles', { params: { featured: true, limit: 3, status: 'available' } })
-      .then((res) => setFeaturedVehicles(res.data.vehicles || []))
-      .catch(() => {})
+  if (isAdmin) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
 
-    API.get('/driver-ads')
-      .then((res) => setFeaturedDrivers((res.data.ads || []).slice(0, 2)))
-      .catch(() => {})
-  }, [])
+  if (user && activeRole !== 'customer') {
+    return <Navigate to="/account" replace />;
+  }
 
-  const primaryLink = isAdmin ? '/admin/dashboard' : isDriver ? '/driver/ads' : user ? '/bookings' : '/signup'
-  const primaryText = isAdmin ? 'Open Dashboard' : isDriver ? 'Open Driver Workspace' : user ? 'Open My Bookings' : 'Create Account'
-  const secondaryLink = isAdmin ? '/admin/bookings' : '/cars'
-  const secondaryText = isAdmin ? 'Manage Bookings' : 'Explore Cars'
+  const primaryLink = user ? '/account' : '/signup';
+  const primaryText = user ? 'Open Account' : 'Create Account';
+  const secondaryLink = '/signin';
+  const secondaryText = user ? 'Sign In as Another User' : 'Sign In';
 
   return (
     <div className="page-content">

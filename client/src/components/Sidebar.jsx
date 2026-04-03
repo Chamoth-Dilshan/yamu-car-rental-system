@@ -36,7 +36,7 @@ const menuItems = {
     { to: '/admin/dashboard', label: 'Overview', end: true },
     { to: '/admin/bookings', label: 'Bookings', end: true },
     { to: '/admin/pending-approvals', label: 'Pending Approvals', end: true },
-    { to: '/admin/users', label: 'Users', end: true },
+    { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: true }
   ]
 }
