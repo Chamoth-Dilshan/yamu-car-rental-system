@@ -10,6 +10,7 @@ import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import Profile from './pages/Profile';
 import RoleManagement from './pages/RoleManagement';
+import PricingOverview from './pages/admin-pricing/PricingOverview';
 import CampaignsAdmin from './pages/admin-pricing/CampaignsAdmin';
 import PromotionsAdmin from './pages/admin-pricing/PromotionsAdmin';
 import PricingRulesAdmin from './pages/admin-pricing/PricingRulesAdmin';
@@ -54,6 +55,10 @@ export default function App() {
               <RoleManagement />
             </ProtectedRoute>
           )}
+        />
+        <Route
+          path="/admin/pricing-overview"
+          element={<ProtectedRoute roles={['admin']}><PricingOverview /></ProtectedRoute>}
         />
         <Route
           path="/admin/campaigns"

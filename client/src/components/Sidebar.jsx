@@ -31,6 +31,7 @@ const menuItems = {
     { to: '/admin/users', label: 'Users', end: true },
     { to: '/admin/roles', label: 'Role Access', end: true },
     { section: 'Pricing & Promos' },
+    { to: '/admin/pricing-overview', label: 'Overview', end: true },
     { to: '/admin/campaigns', label: 'Campaigns', end: true },
     { to: '/admin/promotions', label: 'Promotions', end: true },
     { to: '/admin/pricing-rules', label: 'Pricing Rules', end: true },
