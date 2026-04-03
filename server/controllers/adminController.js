@@ -69,6 +69,14 @@ const updateUser = async (req, res) => {
     user.email = normalizedEmail;
     user.username = normalizedUsername;
 
+    if (req.body.driverProfile && typeof req.body.driverProfile === 'object') {
+      const currentDriverProfile = user.driverProfile?.toObject ? user.driverProfile.toObject() : (user.driverProfile || {});
+      user.driverProfile = {
+        ...currentDriverProfile,
+        nicId: req.body.driverProfile.nicId?.trim?.() || ''
+      };
+    }
+
     if (req.body.accountStatus) {
       if (!ACCOUNT_STATUSES.includes(req.body.accountStatus)) {
         return res.status(400).json({ message: 'Invalid account status' });
