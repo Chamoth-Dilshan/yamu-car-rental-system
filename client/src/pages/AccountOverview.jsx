@@ -10,7 +10,7 @@ export default function AccountOverview() {
   const { user } = useAuth();
   const providerApplications = (user?.providerApplications || []).filter((item) => providerRoles.includes(item.roleKey));
   const pendingCount = providerApplications.filter((item) => item.status === 'pending').length;
-  const usableRoleCount = (user?.roles || []).filter((role) => ['active', 'verified'].includes(role.roleStatus) && role.verificationStatus === 'verified').length;
+  const usableRoleCount = (user?.roles || []).filter((role) => role.roleStatus === 'active' && role.verificationStatus === 'verified').length;
   const stats = [
     { label: 'Active Role', value: formatLabel(user?.activeRole || 'customer') },
     { label: 'Primary Role', value: formatLabel(user?.primaryRole || user?.activeRole || 'customer') },

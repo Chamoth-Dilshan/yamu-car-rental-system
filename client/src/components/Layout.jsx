@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { buildUploadUrl } from '../api/config';
 import { formatDateTime } from '../utils/formatters';
+import BrandLogo from './BrandLogo';
 import Footer from './Footer';
 
 export default function Layout({ children }) {
@@ -20,7 +21,7 @@ export default function Layout({ children }) {
   const isDriver = activeRole === 'driver';
   const isAdmin = activeRole === 'admin';
   const hasHomePage = !user || activeRole === 'customer';
-  const showFooter = location.pathname === '/signin';
+  const showFooter = location.pathname === '/signin' || isCustomer;
   const logoTarget = isAdmin ? '/admin/dashboard' : user ? '/account' : '/';
   const recentNotifications = (notifications || []).slice(0, 5);
 
@@ -53,7 +54,9 @@ export default function Layout({ children }) {
     <>
       <nav className="navbar">
         <div className="container">
-          <Link to={logoTarget} className="logo">YA<span>MU</span></Link>
+          <Link to={logoTarget} className="logo" aria-label="YAMU Car Rental">
+            <BrandLogo />
+          </Link>
 
           <div className="nav-links">
             {hasHomePage && <NavLink to="/">Home</NavLink>}
@@ -113,12 +116,12 @@ export default function Layout({ children }) {
                   <span>{user.fullName?.split(' ')[0]}</span>
                   <div className="nav-user-dropdown">
                     {!isAdmin && <Link to="/account">Account Overview</Link>}
-                    {!isAdmin && <Link to="/profile">Profile Details</Link>}
+                    <Link to="/profile">Profile Details</Link>
                     {isCustomer && <Link to="/bookings">My Bookings</Link>}
                     {isDriver && <Link to="/driver/ads">My Driver Ads</Link>}
                     {isDriver && <Link to="/driver/bookings">Booking Requests</Link>}
                     {!isAdmin && <Link to="/apply-roles">Role Requests</Link>}
-                    {!isAdmin && <Link to="/switch-roles">Switch Roles</Link>}
+                    <Link to="/switch-roles">Switch Roles</Link>
                     {isAdmin && <Link to="/admin/dashboard">Overview</Link>}
                     {isAdmin && <Link to="/admin/bookings">Bookings</Link>}
                     {isAdmin && <Link to="/admin/pending-approvals">Pending Approvals</Link>}

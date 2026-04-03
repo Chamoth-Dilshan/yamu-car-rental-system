@@ -12,7 +12,7 @@ const router = express.Router()
 router.use(protect, authorize('admin'))
 
 router.get('/users', authorizePermissions('users.view'), getAllUsers)
-router.put('/users/:id', authorizePermissions('users.edit'), updateUser)
+router.put('/users/:id', authorizePermissions('users.edit', 'roles.assign'), updateUser)
 router.put('/users/:id/applications/:roleKey/review', authorizePermissions('roles.review'), reviewProviderApplication)
 router.delete('/users/:id', authorizePermissions('users.edit'), deleteUser)
 router.get('/bookings', authorizePermissions('bookings.manage'), getAdminBookings)

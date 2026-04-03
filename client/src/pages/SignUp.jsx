@@ -81,7 +81,8 @@ export default function SignUp() {
               type="password"
               value={form.password}
               onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-              placeholder="Enter a password"
+              placeholder="At least 8 characters with letters and numbers"
+              minLength={8}
               required
             />
           </div>

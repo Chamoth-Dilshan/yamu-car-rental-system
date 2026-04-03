@@ -69,6 +69,7 @@ const seed = async () => {
         relationship: 'Internal escalation'
       },
       accountStatus: 'active',
+      isSystemAdmin: true,
       verificationStatus: 'verified',
       roles: [buildRoleAssignment('admin', { isPrimary: true })],
       adminProfile: {

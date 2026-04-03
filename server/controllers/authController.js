@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const { generateToken } = require('../middleware/auth');
 const { sendServerError } = require('../utils/errorResponses');
+const { logAuditEvent } = require('../utils/auditHelpers');
 const {
   buildRoleAssignment,
   canUseRole,
@@ -9,6 +10,7 @@ const {
   serializeUser,
   syncUserRoles
 } = require('../utils/roleHelpers');
+const { validatePasswordStrength } = require('../utils/profileHelpers');
 
 const register = async (req, res) => {
   try {
@@ -18,8 +20,9 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'Full name, email, and password are required' });
     }
 
-    if (String(password).length < 5) {
-      return res.status(400).json({ message: 'Password must be at least 5 characters long' });
+    const passwordError = validatePasswordStrength(password);
+    if (passwordError) {
+      return res.status(400).json({ message: passwordError });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -107,6 +110,7 @@ const getMe = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    syncUserRoles(user);
     res.json(serializeUser(user));
   } catch (error) {
     sendServerError(res, error, 'Failed to load current user');
@@ -136,9 +140,18 @@ const switchRole = async (req, res) => {
       return res.status(400).json({ message: 'Selected role is not active for use yet' });
     }
 
+    const previousRole = user.role;
     user.role = role;
     syncUserRoles(user);
     await user.save({ validateModifiedOnly: true });
+
+    await logAuditEvent({
+      actorUserId: user._id,
+      targetUserId: user._id,
+      actionType: 'user.active_role.switched',
+      beforeSnapshot: { activeRole: previousRole },
+      afterSnapshot: { activeRole: user.role }
+    });
 
     res.json({
       ...serializeUser(user),

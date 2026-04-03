@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 
-const usableStatuses = ['active', 'verified'];
+const usableStatuses = ['active'];
 
 export default function RoleManagement() {
   const { user, switchRole } = useAuth();

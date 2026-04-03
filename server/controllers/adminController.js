@@ -4,11 +4,11 @@ const { addNotificationToUser, appendNotification } = require('../utils/notifica
 const { buildUserAuditSnapshot, logAuditEvent } = require('../utils/auditHelpers');
 const {
   ACCOUNT_STATUSES,
-  ROLE_STATUSES,
-  VERIFICATION_STATUSES,
+  ROLE_KEYS,
   buildRoleAssignment,
   canUseRole,
-  getLatestProviderApplication,
+  getLatestApprovedProviderApplication,
+  getLatestPendingProviderApplication,
   getPrimaryRole,
   getRoleAssignment,
   normalizeRoleAssignment,
@@ -18,11 +18,12 @@ const {
 } = require('../utils/roleHelpers');
 const { trimValue } = require('../utils/profileHelpers');
 
-const MANAGEABLE_ROLE_KEYS = ['customer', 'driver', 'staff'];
+const MANAGEABLE_ROLE_KEYS = [...ROLE_KEYS];
 
 const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 const toPlain = (value) => (value?.toObject ? value.toObject() : value);
 const snapshotsEqual = (left, right) => JSON.stringify(left) === JSON.stringify(right);
+const isProtectedAdminAccount = (user) => Boolean(user?.isSystemAdmin);
 
 const ensureUniqueIdentityFields = async (userId, email, username) => {
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -63,6 +64,63 @@ const buildManageableRoles = (incomingRoles = []) => {
   return nextRoles;
 };
 
+const validateProviderRoleAssignmentChange = (user, nextRoles = [], currentRoles = []) => {
+  for (const roleKey of ['driver', 'staff']) {
+    const nextRole = nextRoles.find((role) => role.roleKey === roleKey);
+    if (!nextRole) {
+      continue;
+    }
+
+    const currentRole = currentRoles.find((role) => role.roleKey === roleKey);
+    const latestPendingApplication = getLatestPendingProviderApplication(user, roleKey);
+    const latestApprovedApplication = getLatestApprovedProviderApplication(user, roleKey);
+    const roleBecameUsable = canUseRole(nextRole) && !canUseRole(currentRole);
+    const roleStateChangedWhilePending = latestPendingApplication
+      && (
+        !currentRole
+        || currentRole.roleStatus !== nextRole.roleStatus
+        || currentRole.verificationStatus !== nextRole.verificationStatus
+      );
+
+    if (roleStateChangedWhilePending) {
+      return {
+        valid: false,
+        message: `Use the provider review workflow to approve or reject the pending ${roleKey} application`
+      };
+    }
+
+    if (roleBecameUsable && !latestApprovedApplication) {
+      return {
+        valid: false,
+        message: `${roleKey} cannot become active until an approved application exists`
+      };
+    }
+  }
+
+  return { valid: true };
+};
+
+const validateProviderApplicationSnapshot = (roleKey, applicationData = {}) => {
+  const requiredFields = roleKey === 'driver'
+    ? ['drivingLicenseNumber', 'nicId', 'serviceArea']
+    : ['storeName', 'businessRegistrationNumber', 'storeAddress', 'storeContactNumber', 'storeEmail'];
+  const requiredDocuments = roleKey === 'driver'
+    ? ['nicDocument', 'licenseProof']
+    : ['businessRegistrationProof'];
+  const missingField = requiredFields.find((field) => !trimValue(applicationData[field], ''));
+
+  if (missingField) {
+    return { valid: false, message: `Missing required field: ${missingField}` };
+  }
+
+  const missingDocument = requiredDocuments.find((documentKey) => !trimValue(applicationData?.documents?.[documentKey]?.reference, ''));
+  if (missingDocument) {
+    return { valid: false, message: `Missing required document reference: ${missingDocument}` };
+  }
+
+  return { valid: true };
+};
+
 const buildIdentitySnapshot = (user) => ({
   fullName: user.fullName,
   username: user.username,
@@ -89,33 +147,6 @@ const buildRoleChangeMessage = (user) => {
   return `An administrator updated your role access. Current roles: ${roleList}.`;
 };
 
-const syncProviderApplicationsFromRoles = (user, actorUserId) => {
-  user.roles.forEach((role) => {
-    if (!['driver', 'staff'].includes(role.roleKey)) {
-      return;
-    }
-
-    const latestApplication = getLatestProviderApplication(user, role.roleKey);
-    if (!latestApplication) {
-      return;
-    }
-
-    if (canUseRole(role)) {
-      latestApplication.status = 'approved';
-      latestApplication.reviewedAt = latestApplication.reviewedAt || new Date();
-      latestApplication.reviewedBy = latestApplication.reviewedBy || actorUserId;
-      latestApplication.rejectionReason = '';
-      return;
-    }
-
-    if (role.roleStatus === 'rejected' || role.verificationStatus === 'rejected') {
-      latestApplication.status = 'rejected';
-      latestApplication.reviewedAt = new Date();
-      latestApplication.reviewedBy = actorUserId;
-    }
-  });
-};
-
 const getAllUsers = async (req, res) => {
   try {
     const users = await User.find()
@@ -137,14 +168,15 @@ const updateUser = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    if (getRoleAssignment(user, 'admin')) {
-      return res.status(403).json({ message: 'Seeded admin accounts are not editable through this workflow' });
+    if (isProtectedAdminAccount(user)) {
+      return res.status(403).json({ message: 'Protected admin accounts are not editable through this workflow' });
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
     const beforeIdentitySnapshot = buildIdentitySnapshot(user);
     const beforeRoleSnapshot = buildRoleSnapshot(user);
     const previousAccountStatus = user.accountStatus;
+    const currentRoles = (user.roles || []).map((role) => normalizeRoleAssignment(role)).filter(Boolean);
 
     const nextEmail = req.body.email || user.email;
     const nextUsername = req.body.username || user.username || nextEmail;
@@ -181,6 +213,11 @@ const updateUser = async (req, res) => {
 
     const nextPrimaryRole = trimValue(req.body.primaryRole, getPrimaryRole(user));
     const nextActiveRole = trimValue(req.body.activeRole, user.role);
+    const providerRoleValidation = validateProviderRoleAssignmentChange(user, user.roles, currentRoles);
+    if (!providerRoleValidation.valid) {
+      return res.status(400).json({ message: providerRoleValidation.message });
+    }
+
     const validation = validateManagedUserState({
       accountStatus: user.accountStatus,
       roles: user.roles,
@@ -192,13 +229,18 @@ const updateUser = async (req, res) => {
       return res.status(400).json({ message: validation.message });
     }
 
+    if (String(user._id) === String(req.user._id)) {
+      const resultingAdminRole = user.roles.find((role) => role.roleKey === 'admin');
+      if (!canUseRole(resultingAdminRole) || user.accountStatus !== 'active' || nextActiveRole !== 'admin') {
+        return res.status(400).json({ message: 'You cannot remove or deactivate your own active admin access' });
+      }
+    }
+
     user.roles = (user.roles || []).map((role) => ({
       ...toPlain(role),
       isPrimary: role.roleKey === nextPrimaryRole
     }));
     user.role = nextActiveRole;
-
-    syncProviderApplicationsFromRoles(user, req.user._id);
 
     const afterIdentityPreview = buildIdentitySnapshot(user);
     const afterRolePreview = buildRoleSnapshot({
@@ -305,7 +347,7 @@ const reviewProviderApplication = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const application = getLatestProviderApplication(user, roleKey);
+    const application = getLatestPendingProviderApplication(user, roleKey);
     if (!application || application.status !== 'pending') {
       return res.status(404).json({ message: 'No pending application found for this role' });
     }
@@ -324,6 +366,20 @@ const reviewProviderApplication = async (req, res) => {
     const trimmedReason = trimValue(rejectionReason, '');
 
     if (action === 'approve') {
+      const currentProfile = roleKey === 'driver' ? toPlain(user.driverProfile) : toPlain(user.staffProfile);
+      const applicationSnapshot = {
+        ...currentProfile,
+        ...(application.applicationData || {}),
+        documents: {
+          ...(currentProfile?.documents || {}),
+          ...((application.applicationData || {}).documents || {})
+        }
+      };
+      const validation = validateProviderApplicationSnapshot(roleKey, applicationSnapshot);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.message });
+      }
+
       application.status = 'approved';
       application.reviewedAt = new Date();
       application.reviewedBy = req.user._id;
@@ -339,6 +395,10 @@ const reviewProviderApplication = async (req, res) => {
     }
 
     if (action === 'reject') {
+      if (!trimmedReason) {
+        return res.status(400).json({ message: 'A rejection reason is required' });
+      }
+
       application.status = 'rejected';
       application.reviewedAt = new Date();
       application.reviewedBy = req.user._id;
@@ -395,8 +455,8 @@ const deleteUser = async (req, res) => {
       return res.status(400).json({ message: 'You cannot deactivate your own admin account' });
     }
 
-    if (getRoleAssignment(user, 'admin')) {
-      return res.status(403).json({ message: 'Seeded admin accounts cannot be deactivated through this workflow' });
+    if (isProtectedAdminAccount(user)) {
+      return res.status(403).json({ message: 'Protected admin accounts cannot be deactivated through this workflow' });
     }
 
     if (user.accountStatus === 'deactivated') {

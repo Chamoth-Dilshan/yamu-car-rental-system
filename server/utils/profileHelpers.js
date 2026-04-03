@@ -1,5 +1,6 @@
 const SUPPORTED_LANGUAGES = ['English', 'Sinhala', 'Tamil'];
 const DOCUMENT_STATUSES = ['not_provided', 'submitted', 'verified', 'rejected'];
+const MIN_PASSWORD_LENGTH = 8;
 
 const trimValue = (value, fallback = '') => (
   typeof value === 'string' ? value.trim() : (value ?? fallback)
@@ -24,6 +25,20 @@ const normalizeEmergencyContact = (input = {}) => ({
   phone: trimValue(input.phone),
   relationship: trimValue(input.relationship)
 });
+
+const validatePasswordStrength = (password) => {
+  const value = String(password || '');
+
+  if (value.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters long`;
+  }
+
+  if (!/[A-Za-z]/.test(value) || !/\d/.test(value)) {
+    return 'Password must include at least one letter and one number';
+  }
+
+  return null;
+};
 
 const buildDocumentMetadata = (input = {}, current = {}) => {
   const reference = trimValue(input.reference, current.reference || '');
@@ -101,10 +116,12 @@ const computeProfileCompletion = (user = {}) => {
 module.exports = {
   SUPPORTED_LANGUAGES,
   DOCUMENT_STATUSES,
+  MIN_PASSWORD_LENGTH,
   trimValue,
   parseDate,
   normalizePreferredLanguage,
   normalizeEmergencyContact,
+  validatePasswordStrength,
   buildDocumentMetadata,
   mergeDriverDocuments,
   mergeStaffDocuments,

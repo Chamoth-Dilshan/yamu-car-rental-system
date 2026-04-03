@@ -4,9 +4,9 @@ import API from '../api/axios';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 
-const manageableRoles = ['customer', 'driver', 'staff'];
+const manageableRoles = ['customer', 'driver', 'staff', 'admin'];
 const accountStatuses = ['active', 'suspended', 'deactivated'];
-const roleStatuses = ['pending', 'active', 'verified', 'rejected', 'suspended', 'deactivated'];
+const roleStatuses = ['pending', 'active', 'rejected', 'suspended', 'deactivated'];
 const verificationStatuses = ['unverified', 'pending', 'verified', 'rejected'];
 const adminSections = {
   '/admin/dashboard': {
@@ -27,7 +27,8 @@ const adminSections = {
   }
 };
 
-const canUseRole = (role) => ['active', 'verified'].includes(role.roleStatus) && role.verificationStatus === 'verified';
+const canUseRole = (role) => role.roleStatus === 'active' && role.verificationStatus === 'verified';
+const isProtectedAdmin = (user) => Boolean(user?.isSystemAdmin);
 
 const formatLabel = (value) => String(value)
   .replace(/([A-Z])/g, ' $1')
@@ -96,9 +97,9 @@ export default function AdminUsers() {
 
     return left.fullName.localeCompare(right.fullName);
   });
-  const nonAdminUsers = orderedUsers.filter((user) => !user.roles.some((role) => role.roleKey === 'admin'));
+  const visibleUsers = orderedUsers;
   const normalizedSearch = userSearch.trim().toLowerCase();
-  const filteredUsers = nonAdminUsers.filter((user) => {
+  const filteredUsers = visibleUsers.filter((user) => {
     const matchesSearch = !normalizedSearch || [
       user.fullName,
       user.username,
@@ -112,7 +113,7 @@ export default function AdminUsers() {
 
     return matchesSearch && matchesRole && matchesStatus;
   });
-  const selectedUser = nonAdminUsers.find((user) => user._id === selectedUserId) || null;
+  const selectedUser = visibleUsers.find((user) => user._id === selectedUserId) || null;
   const filteredPendingUsers = pendingReviewUsers.filter((user) => {
     const matchesSearch = !normalizedSearch || [
       user.fullName,
@@ -128,8 +129,8 @@ export default function AdminUsers() {
 
     return matchesSearch && matchesRole && matchesStatus;
   });
-  const selectedPendingUser = nonAdminUsers.find((user) => user._id === pendingDetailUserId) || null;
-  const selectedRoleUser = nonAdminUsers.find((user) => user._id === roleDetailUserId) || null;
+  const selectedPendingUser = visibleUsers.find((user) => user._id === pendingDetailUserId) || null;
+  const selectedRoleUser = visibleUsers.find((user) => user._id === roleDetailUserId) || null;
   let currentSection = adminSections['/admin/dashboard'];
 
   if (isPendingPath && isPendingDetailPath) {
@@ -276,7 +277,7 @@ export default function AdminUsers() {
 
       const existing = user.roles.find((role) => role.roleKey === roleKey);
       if (existing) {
-        if (roleKey === 'customer' && !user.roles.some((role) => role.roleKey === 'admin')) {
+        if (roleKey === 'customer') {
           return user;
         }
 
@@ -304,8 +305,8 @@ export default function AdminUsers() {
           ...user.roles,
           {
             roleKey,
-            roleStatus: 'active',
-            verificationStatus: 'verified',
+            roleStatus: roleKey === 'admin' ? 'active' : 'pending',
+            verificationStatus: roleKey === 'admin' ? 'verified' : 'pending',
             isPrimary: false
           }
         ]
@@ -347,9 +348,19 @@ export default function AdminUsers() {
   };
 
   const reviewApplication = async (userId, roleKey, action) => {
-    const reason = action === 'reject'
-      ? window.prompt(`Reason for rejecting ${roleKey} application:`) || ''
-      : '';
+    let reason = '';
+    if (action === 'reject') {
+      const promptValue = window.prompt(`Reason for rejecting ${roleKey} application:`);
+      if (promptValue === null) {
+        return;
+      }
+
+      reason = promptValue.trim();
+      if (!reason) {
+        setError('A rejection reason is required');
+        return;
+      }
+    }
 
     setBusyAction(`${action}-${userId}-${roleKey}`);
     setMessage('');
@@ -556,6 +567,7 @@ export default function AdminUsers() {
 
   const renderRoleSummaryCard = (user) => {
     const hasAdminRole = user.roles.some((role) => role.roleKey === 'admin');
+    const protectedAdmin = isProtectedAdmin(user);
     const pendingApplications = getPendingApplications(user);
     const isSelected = roleDetailUserId === user._id;
 
@@ -574,7 +586,8 @@ export default function AdminUsers() {
               {pendingApplications.length > 0 && (
                 <span className="badge badge-warning">{pendingApplications.length} pending</span>
               )}
-              {hasAdminRole && <span className="badge badge-info">Read only</span>}
+              {protectedAdmin && <span className="badge badge-warning">Protected admin</span>}
+              {!protectedAdmin && hasAdminRole && <span className="badge badge-info">Admin assigned</span>}
             </div>
           </div>
           <span className="badge badge-info">{formatLabel(user.primaryRole || user.activeRole)}</span>
@@ -587,7 +600,7 @@ export default function AdminUsers() {
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            disabled={hasAdminRole}
+            disabled={protectedAdmin}
             onClick={() => openRolePanel(user._id, 'edit')}
           >
             Edit
@@ -609,10 +622,10 @@ export default function AdminUsers() {
       );
     }
 
-    const hasAdminRole = selectedRoleUser.roles.some((role) => role.roleKey === 'admin');
+    const protectedAdmin = isProtectedAdmin(selectedRoleUser);
     const pendingApplications = getPendingApplications(selectedRoleUser);
     const switchableRoles = selectedRoleUser.roles.filter(canUseRole);
-    const readOnlyMode = !isRoleEditPath || hasAdminRole;
+    const readOnlyMode = !isRoleEditPath || protectedAdmin;
 
     return (
       <section className="form-card admin-user-detail-panel">
@@ -631,7 +644,7 @@ export default function AdminUsers() {
                 View
               </button>
             )}
-            {readOnlyMode && !hasAdminRole && (
+            {readOnlyMode && !protectedAdmin && (
               <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/admin/roles/${selectedRoleUser._id}/edit`)}>
                 Edit
               </button>
@@ -740,16 +753,31 @@ export default function AdminUsers() {
                     <h4>{formatLabel(role.roleKey)}</h4>
                     <div className="form-group" style={{ marginTop: '1rem' }}>
                       <label>Role Status</label>
-                      <select value={role.roleStatus} onChange={(e) => updateRoleField(selectedRoleUser._id, role.roleKey, 'roleStatus', e.target.value)}>
+                      <select
+                        value={role.roleStatus}
+                        disabled={role.roleKey === 'customer' || role.roleKey === 'admin'}
+                        onChange={(e) => updateRoleField(selectedRoleUser._id, role.roleKey, 'roleStatus', e.target.value)}
+                      >
                         {roleStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
                       </select>
                     </div>
                     <div className="form-group">
                       <label>Verification</label>
-                      <select value={role.verificationStatus} onChange={(e) => updateRoleField(selectedRoleUser._id, role.roleKey, 'verificationStatus', e.target.value)}>
+                      <select
+                        value={role.verificationStatus}
+                        disabled={role.roleKey === 'customer' || role.roleKey === 'admin'}
+                        onChange={(e) => updateRoleField(selectedRoleUser._id, role.roleKey, 'verificationStatus', e.target.value)}
+                      >
                         {verificationStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
                       </select>
                     </div>
+                    {(role.roleKey === 'customer' || role.roleKey === 'admin') && (
+                      <p style={{ color: 'var(--text-light)', marginBottom: '1rem' }}>
+                        {role.roleKey === 'customer'
+                          ? 'Customer access stays assigned to every account.'
+                          : 'Admin access is assigned directly and stays active when enabled.'}
+                      </p>
+                    )}
                     <label className="checkbox-chip">
                       <input type="checkbox" checked={role.isPrimary} onChange={() => setPrimaryRole(selectedRoleUser._id, role.roleKey)} />
                       Primary role
@@ -775,15 +803,15 @@ export default function AdminUsers() {
           </>
         )}
 
-        {hasAdminRole && (
+        {protectedAdmin && (
           <div className="alert alert-warning" style={{ marginTop: '1rem' }}>
-            Seeded admin accounts are read only in this workflow.
+            Protected admin accounts are read only in this workflow.
           </div>
         )}
 
         {pendingApplications.length > 0 && (
           <div className="alert alert-info" style={{ marginTop: '1rem' }}>
-            This user has {pendingApplications.length} pending application(s). Use the Pending Approvals page for approve/reject actions.
+            This user has {pendingApplications.length} pending application(s). Use the Pending Approvals page for approve or reject actions. The role editor will not bypass pending provider reviews.
           </div>
         )}
       </section>
@@ -792,8 +820,9 @@ export default function AdminUsers() {
 
   const renderUserSummaryCard = (user) => {
     const hasAdminRole = user.roles.some((role) => role.roleKey === 'admin');
+    const protectedAdmin = isProtectedAdmin(user);
     const pendingApplications = getPendingApplications(user);
-    const canDeleteUser = !hasAdminRole && currentUser?._id !== user._id && user.accountStatus !== 'deactivated';
+    const canDeleteUser = !protectedAdmin && currentUser?._id !== user._id && user.accountStatus !== 'deactivated';
     const isSelected = selectedUserId === user._id;
 
     return (
@@ -812,7 +841,8 @@ export default function AdminUsers() {
               {pendingApplications.length > 0 && (
                 <span className="badge badge-warning">{pendingApplications.length} pending</span>
               )}
-              {hasAdminRole && <span className="badge badge-info">Read only</span>}
+              {protectedAdmin && <span className="badge badge-warning">Protected admin</span>}
+              {!protectedAdmin && hasAdminRole && <span className="badge badge-info">Admin assigned</span>}
             </div>
           </div>
           <span className={`badge ${hasAdminRole ? 'badge-warning' : 'badge-info'}`}>
@@ -827,7 +857,7 @@ export default function AdminUsers() {
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            disabled={hasAdminRole}
+            disabled={protectedAdmin}
             onClick={() => openUserPanel(user._id, 'edit')}
           >
             Edit
@@ -859,10 +889,10 @@ export default function AdminUsers() {
       );
     }
 
-    const hasAdminRole = selectedUser.roles.some((role) => role.roleKey === 'admin');
+    const protectedAdmin = isProtectedAdmin(selectedUser);
     const pendingApplications = getPendingApplications(selectedUser);
     const switchableRoles = selectedUser.roles.filter(canUseRole);
-    const readOnlyMode = !isEditPath || hasAdminRole;
+    const readOnlyMode = !isEditPath || protectedAdmin;
 
     return (
       <section className="form-card admin-user-detail-panel">
@@ -881,7 +911,7 @@ export default function AdminUsers() {
                 View
               </button>
             )}
-            {readOnlyMode && !hasAdminRole && (
+            {readOnlyMode && !protectedAdmin && (
               <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/admin/users/${selectedUser._id}/edit`)}>
                 Edit
               </button>
@@ -1001,9 +1031,9 @@ export default function AdminUsers() {
           </>
         )}
 
-        {hasAdminRole && (
+        {protectedAdmin && (
           <div className="alert alert-warning" style={{ marginTop: '1rem' }}>
-            Seeded admin accounts are read only in this workflow.
+            Protected admin accounts are read only in this workflow.
           </div>
         )}
 
@@ -1134,7 +1164,7 @@ export default function AdminUsers() {
   );
 
   const renderUsersSection = () => (
-    nonAdminUsers.length > 0 ? (
+    visibleUsers.length > 0 ? (
       <section className="form-card">
         <div className="admin-user-filters">
           <div className="form-group">
@@ -1177,7 +1207,7 @@ export default function AdminUsers() {
   );
 
   const renderRolesSection = () => (
-    nonAdminUsers.length > 0 ? (
+    visibleUsers.length > 0 ? (
       <>
         <div className="stats-grid">
           {roleSummary.map((item) => (
@@ -1236,7 +1266,7 @@ export default function AdminUsers() {
         </section>
       </>
     ) : (
-      <div className="form-card admin-empty-state">No non-admin user records are available for role management.</div>
+      <div className="form-card admin-empty-state">No user records are available for role management.</div>
     )
   );
 

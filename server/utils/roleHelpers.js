@@ -3,7 +3,7 @@ const { computeProfileCompletion } = require('./profileHelpers');
 const ROLE_KEYS = ['customer', 'driver', 'staff', 'admin'];
 const PROVIDER_ROLE_KEYS = ['driver', 'staff'];
 const ACCOUNT_STATUSES = ['active', 'suspended', 'deactivated'];
-const ROLE_STATUSES = ['pending', 'active', 'verified', 'rejected', 'suspended', 'deactivated'];
+const ROLE_STATUSES = ['pending', 'active', 'rejected', 'suspended', 'deactivated'];
 const VERIFICATION_STATUSES = ['unverified', 'pending', 'verified', 'rejected'];
 const APPLICATION_STATUSES = ['pending', 'approved', 'rejected', 'withdrawn'];
 const PERMISSIONS = ['users.view', 'users.edit', 'roles.review', 'roles.assign', 'bookings.manage'];
@@ -37,13 +37,13 @@ const isBlockedRole = (assignment) => !assignment || ['rejected', 'suspended', '
 
 const canUseRole = (assignment) => (
   !!assignment
-  && ['active', 'verified'].includes(assignment.roleStatus)
+  && assignment.roleStatus === 'active'
   && assignment.verificationStatus === 'verified'
 );
 
 const canManageRoleProfile = (assignment) => (
   !!assignment
-  && ['pending', 'active', 'verified'].includes(assignment.roleStatus)
+  && ['pending', 'active'].includes(assignment.roleStatus)
   && ['pending', 'verified'].includes(assignment.verificationStatus)
 );
 
@@ -76,7 +76,8 @@ const normalizeRoleAssignment = (role = {}) => {
     });
   }
 
-  let roleStatus = ROLE_STATUSES.includes(role.roleStatus) ? role.roleStatus : 'pending';
+  const normalizedLegacyStatus = role.roleStatus === 'verified' ? 'active' : role.roleStatus;
+  let roleStatus = ROLE_STATUSES.includes(normalizedLegacyStatus) ? normalizedLegacyStatus : 'pending';
   let verificationStatus = VERIFICATION_STATUSES.includes(role.verificationStatus)
     ? role.verificationStatus
     : 'pending';
@@ -86,6 +87,10 @@ const normalizeRoleAssignment = (role = {}) => {
   }
 
   if (roleStatus === 'pending' && verificationStatus === 'verified') {
+    verificationStatus = 'pending';
+  }
+
+  if (roleStatus === 'active' && verificationStatus === 'rejected') {
     verificationStatus = 'pending';
   }
 
@@ -198,6 +203,14 @@ const validateManagedUserState = ({ accountStatus, roles, activeRole, primaryRol
     };
   }
 
+  const invalidActiveRole = nextRoles.find((role) => role.roleStatus === 'active' && role.verificationStatus !== 'verified');
+  if (invalidActiveRole) {
+    return {
+      valid: false,
+      message: `${invalidActiveRole.roleKey} must be verified before the role can be active`
+    };
+  }
+
   if (accountStatus === 'active' && !canUseRole(nextRoles.find((role) => role.roleKey === activeRole))) {
     return { valid: false, message: 'Active role must be active and verified while the account is active' };
   }
@@ -205,12 +218,37 @@ const validateManagedUserState = ({ accountStatus, roles, activeRole, primaryRol
   return { valid: true };
 };
 
-const getLatestProviderApplication = (user, roleKey) => (
-  user?.providerApplications?.find((item) => item.roleKey === roleKey) || null
+const sortProviderApplications = (applications = []) => (
+  [...applications].sort((left, right) => {
+    const leftDate = new Date(left?.submittedAt || left?.reviewedAt || 0).valueOf();
+    const rightDate = new Date(right?.submittedAt || right?.reviewedAt || 0).valueOf();
+    return rightDate - leftDate;
+  })
 );
 
-const upsertProviderApplication = (user, roleKey, applicationData) => {
-  const existing = getLatestProviderApplication(user, roleKey);
+const getProviderApplicationsForRole = (user, roleKey, statuses = null) => {
+  const allowedStatuses = Array.isArray(statuses) ? statuses : null;
+  return sortProviderApplications(
+    (user?.providerApplications || []).filter((item) => (
+      item.roleKey === roleKey
+      && (!allowedStatuses || allowedStatuses.includes(item.status))
+    ))
+  );
+};
+
+const getLatestProviderApplication = (user, roleKey, statuses = null) => (
+  getProviderApplicationsForRole(user, roleKey, statuses)[0] || null
+);
+
+const getLatestPendingProviderApplication = (user, roleKey) => (
+  getLatestProviderApplication(user, roleKey, ['pending'])
+);
+
+const getLatestApprovedProviderApplication = (user, roleKey) => (
+  getLatestProviderApplication(user, roleKey, ['approved'])
+);
+
+const createProviderApplication = (user, roleKey, applicationData) => {
   const nextData = {
     roleKey,
     status: 'pending',
@@ -221,24 +259,19 @@ const upsertProviderApplication = (user, roleKey, applicationData) => {
     applicationData
   };
 
-  if (existing) {
-    existing.status = nextData.status;
-    existing.submittedAt = nextData.submittedAt;
-    existing.reviewedAt = nextData.reviewedAt;
-    existing.reviewedBy = nextData.reviewedBy;
-    existing.rejectionReason = nextData.rejectionReason;
-    existing.applicationData = nextData.applicationData;
-    return existing;
-  }
-
   user.providerApplications.push(nextData);
   return user.providerApplications[user.providerApplications.length - 1];
 };
 
 const serializeUser = (userDoc) => {
   const rawUser = userDoc?.toObject ? userDoc.toObject() : { ...userDoc };
-  const roles = Array.isArray(rawUser.roles) ? rawUser.roles : [];
-  const activeRole = rawUser.role;
+  const roles = ensureSinglePrimaryRole(
+    (Array.isArray(rawUser.roles) ? rawUser.roles : []).map((role) => normalizeRoleAssignment(role)).filter(Boolean)
+  );
+  const preferredActiveRole = rawUser.role;
+  const activeRole = roles.find((item) => item.roleKey === preferredActiveRole)
+    ? preferredActiveRole
+    : (roles.find((item) => canUseRole(item))?.roleKey || roles[0]?.roleKey || null);
   const primaryRole = roles.find((item) => item.isPrimary)?.roleKey || roles[0]?.roleKey || null;
   const activeRoleAssignment = roles.find((item) => item.roleKey === activeRole);
   const unreadNotificationCount = (rawUser.notifications || []).filter((item) => !item.isRead).length;
@@ -268,7 +301,8 @@ const serializeUser = (userDoc) => {
     driverProfile: rawUser.driverProfile || {},
     staffProfile: rawUser.staffProfile || {},
     adminProfile: rawUser.adminProfile || {},
-    providerApplications: rawUser.providerApplications || [],
+    providerApplications: sortProviderApplications(rawUser.providerApplications || []),
+    isSystemAdmin: Boolean(rawUser.isSystemAdmin),
     unreadNotificationCount,
     lastLoginAt: rawUser.lastLoginAt || null,
     deactivatedAt: rawUser.deactivatedAt || null,
@@ -289,7 +323,10 @@ module.exports = {
   buildRoleAssignment,
   getRoleAssignment,
   getPrimaryRole,
+  getProviderApplicationsForRole,
   getLatestProviderApplication,
+  getLatestPendingProviderApplication,
+  getLatestApprovedProviderApplication,
   isBlockedRole,
   canUseRole,
   canManageRoleProfile,
@@ -300,6 +337,6 @@ module.exports = {
   normalizeRoleAssignment,
   validateManagedUserState,
   syncUserRoles,
-  upsertProviderApplication,
+  createProviderApplication,
   serializeUser
 };

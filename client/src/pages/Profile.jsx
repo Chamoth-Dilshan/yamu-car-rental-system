@@ -35,6 +35,7 @@ export default function Profile() {
     emergencyContactName: '',
     emergencyContactPhone: '',
     emergencyContactRelationship: '',
+    currentPassword: '',
     password: ''
   });
   const [customerProfile, setCustomerProfile] = useState({
@@ -107,6 +108,7 @@ export default function Profile() {
       emergencyContactName: user.emergencyContact?.name || '',
       emergencyContactPhone: user.emergencyContact?.phone || '',
       emergencyContactRelationship: user.emergencyContact?.relationship || '',
+      currentPassword: '',
       password: ''
     });
 
@@ -177,6 +179,13 @@ export default function Profile() {
           return;
         }
 
+        if (key === 'currentPassword') {
+          if (profile.password && value) {
+            formData.append(key, value);
+          }
+          return;
+        }
+
         if (value !== undefined && value !== null) {
           formData.append(key, value);
         }
@@ -191,7 +200,7 @@ export default function Profile() {
       });
       setUser(res.data);
       await refreshMe();
-      setProfile((prev) => ({ ...prev, password: '' }));
+      setProfile((prev) => ({ ...prev, currentPassword: '', password: '' }));
       setProfilePic(null);
       setMessage('Common profile updated successfully');
     } catch (err) {
@@ -433,6 +442,10 @@ export default function Profile() {
                 <textarea rows="3" value={profile.bio} onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))} />
               </div>
               <div className="form-group">
+                <label>Current Password</label>
+                <input type="password" value={profile.currentPassword} onChange={(e) => setProfile((prev) => ({ ...prev, currentPassword: e.target.value }))} />
+              </div>
+              <div className="form-group">
                 <label>New Password</label>
                 <input type="password" value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
               </div>
@@ -564,13 +577,17 @@ export default function Profile() {
                 className="btn btn-primary"
                 style={{ marginTop: '1rem' }}
                 type="button"
-                disabled={busyAction === 'apply-driver' || (driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified')}
+                disabled={
+                  busyAction === 'apply-driver'
+                  || driverApplication?.status === 'pending'
+                  || (driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified')
+                }
                 onClick={() => submitProviderApplication('driver', driverProfile)}
               >
                 {busyAction === 'apply-driver'
                   ? 'Submitting...'
                   : driverApplication?.status === 'pending'
-                    ? 'Re-submit Driver Application'
+                    ? 'Driver Application Pending'
                     : driverApplication?.status === 'rejected'
                       ? 'Re-apply for Driver Role'
                       : driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified'
@@ -661,13 +678,17 @@ export default function Profile() {
                 className="btn btn-primary"
                 style={{ marginTop: '1rem' }}
                 type="button"
-                disabled={busyAction === 'apply-staff' || (staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified')}
+                disabled={
+                  busyAction === 'apply-staff'
+                  || staffApplication?.status === 'pending'
+                  || (staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified')
+                }
                 onClick={() => submitProviderApplication('staff', staffProfile)}
               >
                 {busyAction === 'apply-staff'
                   ? 'Submitting...'
                   : staffApplication?.status === 'pending'
-                    ? 'Re-submit Staff Application'
+                    ? 'Staff Application Pending'
                     : staffApplication?.status === 'rejected'
                       ? 'Re-apply for Staff Role'
                       : staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified'

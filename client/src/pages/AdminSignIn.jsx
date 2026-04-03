@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function AdminSignIn() {
-  const { login, logout } = useAuth();
+  const { login, logout, switchRole } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
@@ -18,13 +18,22 @@ export default function AdminSignIn() {
       const nextUser = await login(form.email, form.password);
       const nextRole = nextUser.activeRole || nextUser.role;
 
+      if (nextRole === 'admin') {
+        navigate('/admin/dashboard');
+        return;
+      }
+
+      if ((nextUser.roles || []).some((role) => role.roleKey === 'admin')) {
+        await switchRole('admin');
+        navigate('/admin/dashboard');
+        return;
+      }
+
       if (nextRole !== 'admin') {
         logout();
         setError('Admin access only');
         return;
       }
-
-      navigate('/admin/dashboard');
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
     } finally {

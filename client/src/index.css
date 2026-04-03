@@ -236,8 +236,41 @@ input:focus, select:focus, textarea:focus {
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
 }
-.navbar .logo { font-size: 1.75rem; font-weight: 800; color: var(--white); letter-spacing: 1px; }
-.navbar .logo span { color: var(--accent); }
+.navbar .logo {
+  display: inline-flex;
+  align-items: center;
+  color: rgba(255,255,255,0.9);
+}
+.navbar .logo:hover {
+  color: var(--white);
+}
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+.brand-logo svg {
+  display: block;
+  width: 168px;
+  height: auto;
+}
+.brand-logo-outline,
+.brand-logo-wheel {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.brand-logo-outline { stroke-width: 2.6; }
+.brand-logo-wheel { stroke-width: 2.2; }
+.brand-logo-type {
+  fill: currentColor;
+  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-size: 18px;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: 4px;
+}
 .nav-links { display: flex; align-items: center; gap: 2rem; }
 .nav-links a {
   color: var(--gray-300);
@@ -430,11 +463,21 @@ input:focus, select:focus, textarea:focus {
 .footer ul li { margin-bottom: 0.75rem; }
 .footer a:hover { color: var(--accent); }
 .footer-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
   text-align: center;
   font-size: 0.85rem;
 }
+.footer-logo {
+  color: rgba(255,255,255,0.7);
+}
+.footer-logo svg {
+  width: 132px;
+}
 
-.dashboard-layout { display: flex; min-height: 100vh; padding-top: var(--navbar-height); }
+.dashboard-layout { display: flex; min-height: calc(100vh - var(--navbar-height)); padding-top: var(--navbar-height); }
 .sidebar {
   width: 260px;
   min-height: calc(100vh - var(--navbar-height));
@@ -1295,6 +1338,9 @@ input:focus, select:focus, textarea:focus {
   .auth-card { padding: 2rem; }
   .cta-banner .row { flex-direction: column; text-align: center; }
   .hero-panel-actions { flex-direction: column; }
+  .footer-bottom {
+    flex-direction: column;
+  }
   .admin-approval-item,
   .admin-list-item {
     flex-direction: column;
@@ -1314,4 +1360,6 @@ input:focus, select:focus, textarea:focus {
   .hero .text-box h1 { font-size: 1.75rem; }
   .hero .btn-group { flex-direction: column; }
   .container { padding: 0 1rem; }
+  .brand-logo svg { width: 138px; }
+  .footer-logo svg { width: 118px; }
 }

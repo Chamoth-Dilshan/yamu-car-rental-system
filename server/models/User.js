@@ -82,6 +82,10 @@ const userSchema = new mongoose.Schema({
     enum: ACCOUNT_STATUSES,
     default: 'active'
   },
+  isSystemAdmin: {
+    type: Boolean,
+    default: false
+  },
   verificationStatus: {
     type: String,
     enum: VERIFICATION_STATUSES,
