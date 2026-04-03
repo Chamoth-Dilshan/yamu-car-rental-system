@@ -7,6 +7,9 @@ export default function CampaignsAdmin() {
   const [campaigns, setCampaigns] = useState([]);
   const [form, setForm] = useState({ name: '', description: '', startDate: '', endDate: '', status: 'active' });
   const [editingId, setEditingId] = useState(null);
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [busyAction, setBusyAction] = useState('');
   const { user } = useAuth();
   
   useEffect(() => {
@@ -21,36 +24,48 @@ export default function CampaignsAdmin() {
       setCampaigns(res.data);
     } catch (err) {
       console.error(err);
-      alert('Failed to fetch campaigns');
+      setError('Failed to fetch campaigns');
     }
+  };
+
+  const clearMessages = () => {
+    setMessage('');
+    setError('');
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
+    clearMessages();
+    setBusyAction('save');
     try {
       if (editingId) {
         await api.put(`/pricing/campaigns/${editingId}`, form, {
           headers: { Authorization: `Bearer ${user.token}` }
         });
+        setMessage('Campaign updated successfully');
       } else {
         await api.post('/pricing/campaigns', form, {
           headers: { Authorization: `Bearer ${user.token}` }
         });
+        setMessage('Campaign created successfully');
       }
       setEditingId(null);
       setForm({ name: '', description: '', startDate: '', endDate: '', status: 'active' });
       fetchCampaigns();
     } catch (err) {
       console.error(err);
-      alert('Failed to save campaign');
+      setError('Failed to save campaign');
+    } finally {
+      setBusyAction('');
     }
   };
 
   const handleEdit = (c) => {
     setEditingId(c._id);
+    clearMessages();
     setForm({
       name: c.name,
-      description: c.description,
+      description: c.description || '',
       startDate: c.startDate ? new Date(c.startDate).toISOString().substring(0, 10) : '',
       endDate: c.endDate ? new Date(c.endDate).toISOString().substring(0, 10) : '',
       status: c.status
@@ -59,14 +74,19 @@ export default function CampaignsAdmin() {
 
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this campaign?')) return;
+    clearMessages();
+    setBusyAction(`delete-${id}`);
     try {
       await api.delete(`/pricing/campaigns/${id}`, {
         headers: { Authorization: `Bearer ${user.token}` }
       });
+      setMessage('Campaign deleted');
       fetchCampaigns();
     } catch (err) {
       console.error(err);
-      alert('Failed to delete campaign');
+      setError('Failed to delete campaign');
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -74,31 +94,27 @@ export default function CampaignsAdmin() {
     <div className="dashboard-layout page-content">
       <Sidebar />
       <main className="dashboard-content">
-        <div className="admin-container">
-          <div className="admin-header">
-            <h1>Campaign Management</h1>
-            <p>Manage marketing campaigns used for promotions.</p>
-          </div>
+        <div className="form-header">
+          <h2>Campaign Management</h2>
+          <p style={{ color: 'var(--text-light)' }}>Create and manage marketing campaigns used for promotions and discounts.</p>
+        </div>
 
-          <div className="admin-grid">
-            <div className="admin-card">
-              <h3>{editingId ? 'Edit Campaign' : 'Create Campaign'}</h3>
-              <form className="admin-form" onSubmit={handleSave}>
+        {message && <div className="alert alert-success">{message}</div>}
+        {error && <div className="alert alert-danger">{error}</div>}
+
+        <div className="admin-section-grid">
+          <section className="form-card admin-card">
+            <div className="card-header">
+              <div>
+                <h3>{editingId ? 'Edit Campaign' : 'Create Campaign'}</h3>
+                <p style={{ color: 'var(--text-light)' }}>Fill out the details to configure the campaign timeline.</p>
+              </div>
+            </div>
+            <form onSubmit={handleSave}>
+              <div className="form-row">
                 <div className="form-group">
-                  <label>Name</label>
-                  <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>Description</label>
-                  <input type="text" value={form.description} onChange={e => setForm({...form, description: e.target.value})} />
-                </div>
-                <div className="form-group">
-                  <label>Start Date</label>
-                  <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} required />
-                </div>
-                <div className="form-group">
-                  <label>End Date</label>
-                  <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} required />
+                  <label>Campaign Name</label>
+                  <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required placeholder="e.g. Summer Sale 2026" />
                 </div>
                 <div className="form-group">
                   <label>Status</label>
@@ -107,45 +123,67 @@ export default function CampaignsAdmin() {
                     <option value="inactive">Inactive</option>
                   </select>
                 </div>
-                <div className="form-actions">
-                  <button type="submit" className="button button-primary">Save</button>
-                  {editingId && <button type="button" className="button button-secondary" onClick={() => { setEditingId(null); setForm({ name: '', description: '', startDate: '', endDate: '', status: 'active' }); }}>Cancel</button>}
+              </div>
+              
+              <div className="form-group">
+                <label>Description (Optional)</label>
+                <input type="text" value={form.description} onChange={e => setForm({...form, description: e.target.value})} placeholder="Describe the campaign purpose" />
+              </div>
+              
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Start Date</label>
+                  <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} required />
                 </div>
-              </form>
-            </div>
+                <div className="form-group">
+                  <label>End Date</label>
+                  <input type="date" value={form.endDate} onChange={e => setForm({...form, endDate: e.target.value})} required />
+                </div>
+              </div>
 
-            <div className="admin-card">
-              <h3>Campaigns List</h3>
-              <div className="table-responsive">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Dates</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {campaigns.map(c => (
-                      <tr key={c._id}>
-                        <td>{c.name}</td>
-                        <td>{new Date(c.startDate).toLocaleDateString()} - {new Date(c.endDate).toLocaleDateString()}</td>
-                        <td>
-                          <span className={`status-badge status-${c.status}`}>{c.status}</span>
-                        </td>
-                        <td>
-                          <button className="button button-small button-outline" onClick={() => handleEdit(c)}>Edit</button>
-                          <button className="button button-small button-danger" onClick={() => handleDelete(c._id)} style={{marginLeft: '0.5rem'}}>Delete</button>
-                        </td>
-                      </tr>
-                    ))}
-                    {campaigns.length === 0 && <tr><td colSpan="4">No campaigns found.</td></tr>}
-                  </tbody>
-                </table>
+              <div style={{ marginTop: '1.5rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={busyAction === 'save'}>
+                  {busyAction === 'save' ? 'Saving...' : 'Save Campaign'}
+                </button>
+                {editingId && (
+                  <button type="button" className="btn btn-outline" style={{ marginLeft: '1rem' }} onClick={() => { setEditingId(null); setForm({ name: '', description: '', startDate: '', endDate: '', status: 'active' }); clearMessages(); }}>
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          </section>
+
+          <section className="form-card admin-card">
+            <div className="card-header">
+              <div>
+                <h3>Campaigns List</h3>
+                <p style={{ color: 'var(--text-light)' }}>All current and scheduled campaigns in the system.</p>
               </div>
             </div>
-          </div>
+            
+            {campaigns.length > 0 ? (
+              <div className="admin-stack">
+                {campaigns.map(c => (
+                  <div key={c._id} className="admin-list-item">
+                    <div>
+                      <h4 style={{ marginBottom: '0.2rem' }}>{c.name}</h4>
+                      <p style={{ fontSize: '0.85rem' }}>
+                        {new Date(c.startDate).toLocaleDateString()} to {new Date(c.endDate).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <div className="pill-row">
+                      <span className={`badge badge-${c.status === 'active' ? 'success' : 'warning'}`}>{c.status}</span>
+                      <button className="btn btn-outline btn-sm" onClick={() => handleEdit(c)}>Edit</button>
+                      <button className="btn btn-danger btn-sm" disabled={busyAction === `delete-${c._id}`} onClick={() => handleDelete(c._id)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="admin-empty-state">No campaigns found. Create one to get started.</div>
+            )}
+          </section>
         </div>
       </main>
     </div>

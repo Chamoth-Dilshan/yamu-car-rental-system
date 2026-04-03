@@ -16,12 +16,14 @@ export default function PricingSimulator() {
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const { user } = useAuth();
 
   const handleSimulate = async (e) => {
     e.preventDefault();
     setLoading(true);
     setResult(null);
+    setError('');
     try {
       const payload = {
         bookingDetails: {
@@ -41,7 +43,7 @@ export default function PricingSimulator() {
       setResult(res.data);
     } catch (err) {
       console.error(err);
-      alert('Failed to simulate price');
+      setError(err.response?.data?.message || 'Simulation logic failed. Check input bounds.');
     } finally {
       setLoading(false);
     }
@@ -51,31 +53,45 @@ export default function PricingSimulator() {
     <div className="dashboard-layout page-content">
       <Sidebar />
       <main className="dashboard-content">
-        <div className="admin-container" style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          <div className="admin-header">
-            <h1>Pricing Simulator</h1>
-            <p>Mock a booking to see how pricing rules and promotions apply. This tests the core Engine.</p>
-          </div>
+        <div className="form-header">
+          <h2>Pricing Simulator Engine</h2>
+          <p style={{ color: 'var(--text-light)' }}>Mock a user checkout scenario to test active rules and promo logic output directly from the backend.</p>
+        </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
-            <div className="admin-card">
-              <h3>Simulation Input (Mock Booking)</h3>
-              <form className="admin-form" onSubmit={handleSimulate}>
+        {error && <div className="alert alert-danger">{error}</div>}
+
+        <div className="admin-section-grid">
+          <section className="form-card admin-card">
+            <div className="card-header">
+              <div>
+                <h3>1. Input Test Data</h3>
+                <p style={{ color: 'var(--text-light)' }}>Simulate variables passed from the Booking Module.</p>
+              </div>
+            </div>
+            <form onSubmit={handleSimulate}>
+              <div className="form-row">
                 <div className="form-group">
                   <label>Daily Base Price ($)</label>
                   <input type="number" step="0.01" value={form.basePrice} onChange={e => setForm({...form, basePrice: e.target.value})} required />
                 </div>
-                
                 <div className="form-group">
-                  <label>Duration (Days)</label>
+                  <label>Total Duration (Days)</label>
                   <input type="number" value={form.duration} onChange={e => setForm({...form, duration: e.target.value})} required />
                 </div>
+              </div>
 
+              <div className="form-row">
                 <div className="form-group">
-                  <label>Start Date</label>
+                  <label>Booking Start Date</label>
                   <input type="date" value={form.startDate} onChange={e => setForm({...form, startDate: e.target.value})} required />
                 </div>
+                <div className="form-group">
+                  <label>Promo Code to Apply</label>
+                  <input type="text" value={form.promoCode} onChange={e => setForm({...form, promoCode: e.target.value})} placeholder="Optional override code" />
+                </div>
+              </div>
 
+              <div className="form-row">
                 <div className="form-group">
                   <label>Vehicle Category</label>
                   <select value={form.vehicleCategory} onChange={e => setForm({...form, vehicleCategory: e.target.value})}>
@@ -85,7 +101,6 @@ export default function PricingSimulator() {
                     <option value="SUV">SUV</option>
                   </select>
                 </div>
-
                 <div className="form-group">
                   <label>Booking Type</label>
                   <select value={form.bookingType} onChange={e => setForm({...form, bookingType: e.target.value})}>
@@ -93,63 +108,78 @@ export default function PricingSimulator() {
                     <option value="with-driver">With Driver</option>
                   </select>
                 </div>
+              </div>
 
-                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input type="checkbox" id="firstBooking" checked={form.isFirstBooking} onChange={e => setForm({...form, isFirstBooking: e.target.checked})} />
-                  <label htmlFor="firstBooking" style={{ margin: 0 }}>Is First Booking?</label>
-                </div>
+              <div className="form-group">
+                <label className="checkbox-chip">
+                  <input type="checkbox" checked={form.isFirstBooking} onChange={e => setForm({...form, isFirstBooking: e.target.checked})} />
+                  Simulate as First-Time User
+                </label>
+              </div>
 
-                <div className="form-group">
-                  <label>Promo Code to Apply</label>
-                  <input type="text" value={form.promoCode} onChange={e => setForm({...form, promoCode: e.target.value})} placeholder="Optional" />
-                </div>
-
-                <button type="submit" className="button button-primary" disabled={loading}>
-                  {loading ? 'Simulating...' : 'Calculate Final Price'}
+              <div style={{ marginTop: '2rem', borderTop: '1px solid var(--border)', paddingTop: '1.5rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={loading}>
+                  {loading ? 'Crunching Numbers...' : 'Run Pricing Engine Calculation'}
                 </button>
-              </form>
-            </div>
+              </div>
+            </form>
+          </section>
 
-            <div className="admin-card">
-              <h3>Simulation Result</h3>
-              {result ? (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #eee' }}>
-                    <span style={{ fontSize: '1.2rem', color: '#666' }}>Subtotal (Base x Duration):</span>
-                    <span style={{ fontSize: '1.2rem', fontWeight: 'bold' }}>${result.originalPrice.toFixed(2)}</span>
+          <section className="form-card admin-card">
+            <div className="card-header">
+              <div>
+                <h3>2. Calculation Output</h3>
+                <p style={{ color: 'var(--text-light)' }}>The resultant price breakdown map.</p>
+              </div>
+            </div>
+            
+            {result ? (
+              <div className="admin-stack" style={{ gap: '0' }}>
+                <div className="admin-list-item" style={{ borderBottom: 'none', borderRadius: 'var(--radius) var(--radius) 0 0', background: 'transparent' }}>
+                  <div>
+                    <h4>Raw Subtotal</h4>
+                    <p>Base price × Duration</p>
                   </div>
-                  
-                  <div style={{ marginBottom: '1rem' }}>
-                    <h4 style={{ marginBottom: '0.5rem' }}>Adjustments & Discounts:</h4>
-                    {result.breakdown.length === 0 ? (
-                      <p style={{ color: '#888', fontStyle: 'italic' }}>No rules or promotions applied.</p>
-                    ) : (
-                      <ul style={{ listStyle: 'none', padding: 0 }}>
-                        {result.breakdown.map((item, i) => (
-                          <li key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', color: item.impact < 0 ? 'green' : 'red' }}>
-                            <span>
-                              {item.type === 'error' ? '⚠️ ' : (item.impact < 0 ? '↓ ' : '↑ ')}
-                              {item.name}
+                  <strong style={{ fontSize: '1.25rem' }}>${result.originalPrice.toFixed(2)}</strong>
+                </div>
+
+                <div style={{ borderTop: '1px dashed var(--border)', borderBottom: '1px dashed var(--border)', padding: '1rem 0', margin: '0 1.25rem' }}>
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '1rem' }}>Applied Rule Stack</h4>
+                  {result.breakdown.length === 0 ? (
+                    <div className="admin-empty-state" style={{ padding: '0', textAlign: 'left' }}>No pricing rules or valid promotions attached.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {result.breakdown.map((item, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.95rem' }}>
+                            <span className={`badge badge-${item.type === 'error' ? 'danger' : (item.impact < 0 ? 'success' : 'warning')}`} style={{ marginRight: '0.5rem' }}>
+                              {item.type === 'error' ? 'ERR' : (item.impact < 0 ? 'DISCOUNT' : 'SURGE')}
                             </span>
-                            <span>{item.type === 'error' ? '' : (item.impact > 0 ? '+' : '')}{item.impact.toFixed(2)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                            {item.name}
+                          </span>
+                          <strong style={{ color: item.type === 'error' ? 'var(--danger)' : (item.impact < 0 ? 'var(--success)' : 'var(--warning)') }}>
+                            {item.type === 'error' ? '' : (item.impact > 0 ? '+' : '')}{item.impact.toFixed(2)}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2rem', paddingTop: '1rem', borderTop: '2px solid #ccc' }}>
-                    <span style={{ fontSize: '1.5rem', fontWeight: 'bold' }}>Final Payable:</span>
-                    <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#0d1b2a' }}>${result.finalPrice.toFixed(2)}</span>
+                <div className="admin-list-item" style={{ border: 'none', background: 'transparent', marginTop: '0.5rem' }}>
+                  <div>
+                    <h4 style={{ fontSize: '1.5rem', color: 'var(--primary)' }}>Final Invoice Total</h4>
+                    <p>Amount sent to payment gateway target.</p>
                   </div>
+                  <strong style={{ fontSize: '2rem', color: 'var(--primary)' }}>${result.finalPrice.toFixed(2)}</strong>
                 </div>
-              ) : (
-                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
-                  Run simulation to see results.
-                </div>
-              )}
-            </div>
-          </div>
+              </div>
+            ) : (
+              <div className="admin-empty-state" style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <p>Run the simulation on the left to view the engine's price decomposition.</p>
+              </div>
+            )}
+          </section>
         </div>
       </main>
     </div>
