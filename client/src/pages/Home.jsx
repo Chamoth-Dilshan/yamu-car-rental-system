@@ -1,26 +1,7 @@
-import { Link, Navigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-
-const featuredCars = [
-  {
-    name: 'City Compact',
-    tag: 'Best for daily errands',
-    price: '$28/day',
-    description: 'Fuel-efficient and easy to park for quick runs around town.'
-  },
-  {
-    name: 'Family SUV',
-    tag: 'Most popular choice',
-    price: '$52/day',
-    description: 'Spacious interior, strong AC, and room for luggage on longer drives.'
-  },
-  {
-    name: 'Executive Sedan',
-    tag: 'Business and airport trips',
-    price: '$46/day',
-    description: 'Comfort-focused travel with a polished look for meetings and pickups.'
-  }
-];
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import API from '../api/axios';
+import { formatCurrency } from '../utils/formatters';
 
 const bookingSteps = [
   {
@@ -38,25 +19,48 @@ const bookingSteps = [
     title: 'Track it in your dashboard',
     desc: 'Follow payment and booking status changes from customer, driver, or admin views.'
   }
-]
+];
 
 export default function Home() {
-  const { user } = useAuth();
-  const activeRole = user?.activeRole || user?.role;
-  const isAdmin = activeRole === 'admin';
+  const [featuredVehicles, setFeaturedVehicles] = useState([]);
+  const [featuredDrivers, setFeaturedDrivers] = useState([]);
 
-  if (isAdmin) {
-    return <Navigate to="/admin/dashboard" replace />;
-  }
+  useEffect(() => {
+    let active = true;
 
-  if (user && activeRole !== 'customer') {
-    return <Navigate to="/account" replace />;
-  }
+    Promise.all([
+      API.get('/vehicles', {
+        params: {
+          status: 'available'
+        }
+      }),
+      API.get('/driver-ads', {
+        params: {
+          availability: 'available'
+        }
+      })
+    ])
+      .then(([vehicleRes, driverRes]) => {
+        if (!active) {
+          return;
+        }
 
-  const primaryLink = user ? '/account' : '/signup';
-  const primaryText = user ? 'Open Account' : 'Create Account';
-  const secondaryLink = '/signin';
-  const secondaryText = user ? 'Sign In as Another User' : 'Sign In';
+        setFeaturedVehicles((vehicleRes.data.vehicles || []).slice(0, 3));
+        setFeaturedDrivers((driverRes.data.ads || []).slice(0, 3));
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setFeaturedVehicles([]);
+        setFeaturedDrivers([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <div className="page-content">
@@ -71,8 +75,8 @@ export default function Home() {
                 public driver ads, customer booking flows, and operational dashboards.
               </p>
               <div className="btn-group">
-                <Link to={primaryLink} className="btn btn-primary btn-lg">{primaryText}</Link>
-                <Link to={secondaryLink} className="btn btn-outline btn-lg">{secondaryText}</Link>
+                <Link to="/signup" className="btn btn-primary btn-lg">Create Account</Link>
+                <Link to="/signin" className="btn btn-outline btn-lg">Sign In</Link>
               </div>
               <div className="hero-points">
                 <span>Customer booking history with payment and status tracking</span>
@@ -178,10 +182,10 @@ export default function Home() {
               <h1>Reservation and booking management is now connected to real records instead of placeholder screens.</h1>
               <h3>Use the new vehicle, driver, customer, driver, and admin flows to demo the complete component.</h3>
             </div>
-            <Link to={primaryLink} className="btn btn-secondary btn-lg">Open Workspace</Link>
+            <Link to="/signup" className="btn btn-secondary btn-lg">Open Workspace</Link>
           </div>
         </div>
       </section>
     </div>
-  )
+  );
 }

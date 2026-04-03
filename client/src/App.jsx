@@ -113,7 +113,7 @@ export default function App() {
           )}
         />
         <Route
-          path="/admin/pending-approvals"
+          path="/admin/pending-approvals/*"
           element={(
             <ProtectedRoute roles={['admin']}>
               <AdminUsers />
@@ -121,7 +121,7 @@ export default function App() {
           )}
         />
         <Route
-          path="/admin/users"
+          path="/admin/users/*"
           element={(
             <ProtectedRoute roles={['admin']}>
               <AdminUsers />
@@ -129,7 +129,7 @@ export default function App() {
           )}
         />
         <Route
-          path="/admin/roles"
+          path="/admin/roles/*"
           element={(
             <ProtectedRoute roles={['admin']}>
               <AdminUsers />

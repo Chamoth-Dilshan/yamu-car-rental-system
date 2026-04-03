@@ -15,7 +15,7 @@ const adminSections = {
   },
   '/admin/pending-approvals': {
     title: 'Pending Approvals',
-    description: 'Review driver and staff applications that are waiting for an admin decision.'
+    description: 'Browse pending accounts first, then open a dedicated review page for each approval.'
   },
   '/admin/users': {
     title: 'User Management',
@@ -23,7 +23,7 @@ const adminSections = {
   },
   '/admin/roles': {
     title: 'Role Access',
-    description: 'Control customer, driver, and staff assignments, verification state, and primary role setup.'
+    description: 'Browse role-access cards first, then open a dedicated page to review or edit access.'
   }
 };
 
@@ -68,10 +68,17 @@ export default function AdminUsers() {
   const isUsersPath = location.pathname.startsWith('/admin/users');
   const isRolesPath = location.pathname.startsWith('/admin/roles');
   const isOverviewPath = !isPendingPath && !isUsersPath && !isRolesPath;
+  const pendingDetailMatch = location.pathname.match(/^\/admin\/pending-approvals\/([^/]+)\/?$/);
   const userDetailMatch = location.pathname.match(/^\/admin\/users\/([^/]+?)(?:\/(edit))?\/?$/);
+  const rolesDetailMatch = location.pathname.match(/^\/admin\/roles\/([^/]+?)(?:\/(edit))?\/?$/);
+  const pendingDetailUserId = pendingDetailMatch?.[1] || '';
   const selectedUserId = userDetailMatch?.[1] || '';
+  const roleDetailUserId = rolesDetailMatch?.[1] || '';
+  const isPendingDetailPath = Boolean(pendingDetailMatch);
   const isUserDetailPath = Boolean(userDetailMatch);
+  const isRolesDetailPath = Boolean(rolesDetailMatch);
   const isEditPath = userDetailMatch?.[2] === 'edit';
+  const isRoleEditPath = rolesDetailMatch?.[2] === 'edit';
 
   const pendingReviewUsers = users.filter((user) => getPendingApplications(user).length > 0);
   const orderedUsers = [...users].sort((left, right) => {
@@ -100,20 +107,51 @@ export default function AdminUsers() {
     return matchesSearch && matchesRole && matchesStatus;
   });
   const selectedUser = nonAdminUsers.find((user) => user._id === selectedUserId) || null;
-  const currentSection = isUsersPath && isUserDetailPath
-    ? {
+  const filteredPendingUsers = pendingReviewUsers.filter((user) => {
+    const matchesSearch = !normalizedSearch || [
+      user.fullName,
+      user.username,
+      user.email,
+      getUserNic(user)
+    ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
+    const matchesRole = roleFilter === 'all'
+      || getPendingApplications(user).some((application) => application.roleKey === roleFilter);
+    const matchesStatus = statusFilter === 'all'
+      || (statusFilter === 'active' && user.accountStatus === 'active')
+      || (statusFilter === 'inactive' && ['suspended', 'deactivated'].includes(user.accountStatus));
+
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+  const selectedPendingUser = nonAdminUsers.find((user) => user._id === pendingDetailUserId) || null;
+  const selectedRoleUser = nonAdminUsers.find((user) => user._id === roleDetailUserId) || null;
+  let currentSection = adminSections['/admin/dashboard'];
+
+  if (isPendingPath && isPendingDetailPath) {
+    currentSection = {
+      title: selectedPendingUser ? selectedPendingUser.fullName : 'Pending Approval',
+      description: 'Review this user\'s pending role applications and approve or reject them.'
+    };
+  } else if (isUsersPath && isUserDetailPath) {
+    currentSection = {
       title: selectedUser ? selectedUser.fullName : 'User Details',
       description: isEditPath
         ? 'Review and update this user record from one page.'
         : 'Review this user record and switch to edit when changes are needed.'
-    }
-    : (isPendingPath
-      ? adminSections['/admin/pending-approvals']
-      : isUsersPath
-        ? adminSections['/admin/users']
-        : isRolesPath
-          ? adminSections['/admin/roles']
-          : adminSections['/admin/dashboard']);
+    };
+  } else if (isRolesPath && isRolesDetailPath) {
+    currentSection = {
+      title: selectedRoleUser ? selectedRoleUser.fullName : 'Role Access',
+      description: isRoleEditPath
+        ? 'Update assigned roles, verification states, and primary-role ownership.'
+        : 'Review this user\'s assigned roles and current access state.'
+    };
+  } else if (isPendingPath) {
+    currentSection = adminSections['/admin/pending-approvals'];
+  } else if (isUsersPath) {
+    currentSection = adminSections['/admin/users'];
+  } else if (isRolesPath) {
+    currentSection = adminSections['/admin/roles'];
+  }
   const roleSummary = manageableRoles.map((roleKey) => ({
     roleKey,
     assignedCount: users.filter((user) => user.roles.some((role) => role.roleKey === roleKey)).length,
@@ -177,8 +215,26 @@ export default function AdminUsers() {
     navigate(mode === 'edit' ? `/admin/users/${userId}/edit` : `/admin/users/${userId}`);
   };
 
+  const openPendingPanel = (userId) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate(`/admin/pending-approvals/${userId}`);
+  };
+
+  const openRolePanel = (userId, mode) => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigate(mode === 'edit' ? `/admin/roles/${userId}/edit` : `/admin/roles/${userId}`);
+  };
+
   const closeUserPanel = () => {
     navigate('/admin/users');
+  };
+
+  const closePendingPanel = () => {
+    navigate('/admin/pending-approvals');
+  };
+
+  const closeRolePanel = () => {
+    navigate('/admin/roles');
   };
 
   const setPrimaryRole = (userId, primaryRole) => {
@@ -251,7 +307,7 @@ export default function AdminUsers() {
     }));
   };
 
-  const saveUser = async (user) => {
+  const saveUser = async (user, destination = `/admin/users/${user._id}`) => {
     setBusyAction(`save-${user._id}`);
     setMessage('');
     setError('');
@@ -274,9 +330,11 @@ export default function AdminUsers() {
       setUsers((prev) => prev.map((item) => item._id === user._id ? res.data : item));
       await refreshNotifications().catch(() => {});
       setMessage(`Updated ${res.data.fullName}`);
-      navigate(`/admin/users/${res.data._id}`);
+      navigate(destination.replace(user._id, res.data._id));
+      return res.data;
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update user');
+      return null;
     } finally {
       setBusyAction('');
     }
@@ -376,151 +434,343 @@ export default function AdminUsers() {
     </div>
   );
 
-  const renderUserCard = (user, mode = 'full') => {
-    const hasAdminRole = user.roles.some((role) => role.roleKey === 'admin');
+  const renderPendingSummaryCard = (user) => {
     const pendingApplications = getPendingApplications(user);
-    const switchableRoles = user.roles.filter(canUseRole);
-    const canDeleteUser = !hasAdminRole && currentUser?._id !== user._id;
-    const isRoleMode = mode === 'roles';
+    const isSelected = pendingDetailUserId === user._id;
 
     return (
-      <div key={user._id} className="form-card admin-card">
-        <div className="card-header">
+      <article
+        key={user._id}
+        className={`form-card admin-user-summary-card${isSelected ? ' active' : ''}`}
+      >
+        <div className="admin-user-summary-main">
           <div>
             <h3>{user.fullName}</h3>
-            <p style={{ color: 'var(--text-light)' }}>{user.email}</p>
-            <div className="pill-row" style={{ marginTop: '0.75rem' }}>
-              <span className="badge badge-info">Active role: {user.activeRole}</span>
-              <span className="badge badge-success">Primary role: {user.primaryRole}</span>
-              <span className="badge badge-warning">Account: {user.accountStatus}</span>
+            <p>{user.email}</p>
+            <div className="admin-user-summary-tags">
+              <span className="badge badge-warning">{pendingApplications.length} pending</span>
+              <span className={`badge ${getStatusBadgeClass(user.accountStatus)}`}>{formatLabel(user.accountStatus)}</span>
+              {pendingApplications.map((application) => (
+                <span key={application.roleKey} className="badge badge-info">{formatLabel(application.roleKey)}</span>
+              ))}
             </div>
           </div>
-          {canDeleteUser && mode === 'full' && (
-            <button className="btn btn-danger btn-sm" disabled={busyAction === `delete-${user._id}`} onClick={() => deleteUser(user._id)}>
-              {busyAction === `delete-${user._id}` ? 'Deleting...' : 'Delete'}
-            </button>
-          )}
+          <span className="badge badge-info">{formatLabel(user.activeRole)}</span>
         </div>
 
-        {pendingApplications.length > 0 && renderPendingApplications(user, pendingApplications, isRoleMode)}
+        <div className="admin-user-card-actions">
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => openPendingPanel(user._id)}>
+            Review
+          </button>
+        </div>
+      </article>
+    );
+  };
 
-        {isRoleMode ? (
-          <div className="form-row">
-            <div className="form-group">
-              <label>Username</label>
-              <input value={user.username || ''} disabled={hasAdminRole} onChange={(e) => updateField(user._id, 'username', e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label>Account Status</label>
-              <select value={user.accountStatus} disabled={hasAdminRole} onChange={(e) => updateField(user._id, 'accountStatus', e.target.value)}>
-                {accountStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-              </select>
+  const renderPendingDetailsPanel = () => {
+    if (!selectedPendingUser) {
+      return (
+        <section className="form-card admin-user-detail-panel admin-empty-state">
+          <p>Pending record not found.</p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={closePendingPanel}>
+            Back to Queue
+          </button>
+        </section>
+      );
+    }
+
+    const pendingApplications = getPendingApplications(selectedPendingUser);
+
+    return (
+      <section className="form-card admin-user-detail-panel">
+        <div className="card-header">
+          <div>
+            <h3>Pending Approval Review</h3>
+            <p style={{ color: 'var(--text-light)' }}>
+              Review submitted applications and decide whether each requested role should be approved or rejected.
+            </p>
+          </div>
+          <div className="pill-row">
+            <Link className="btn btn-outline btn-sm" to={`/admin/users/${selectedPendingUser._id}`}>Open User</Link>
+            <button type="button" className="btn btn-outline btn-sm" onClick={closePendingPanel}>
+              Back to Queue
+            </button>
+          </div>
+        </div>
+
+        <div className="pill-row" style={{ marginBottom: '1rem' }}>
+          <span className="badge badge-info">Active role: {selectedPendingUser.activeRole}</span>
+          <span className={`badge ${getStatusBadgeClass(selectedPendingUser.accountStatus)}`}>Account: {formatLabel(selectedPendingUser.accountStatus)}</span>
+          <span className="badge badge-warning">{pendingApplications.length} pending</span>
+        </div>
+
+        <div className="admin-user-detail-grid" style={{ marginBottom: '1rem' }}>
+          <div className="admin-data-item">
+            <span>Full Name</span>
+            <strong>{selectedPendingUser.fullName}</strong>
+          </div>
+          <div className="admin-data-item">
+            <span>Username</span>
+            <strong>{selectedPendingUser.username || '-'}</strong>
+          </div>
+          <div className="admin-data-item">
+            <span>Email</span>
+            <strong>{selectedPendingUser.email}</strong>
+          </div>
+          <div className="admin-data-item">
+            <span>NIC</span>
+            <strong>{getUserNic(selectedPendingUser)}</strong>
+          </div>
+          <div className="admin-data-item">
+            <span>Phone</span>
+            <strong>{selectedPendingUser.phone || 'Not provided'}</strong>
+          </div>
+          <div className="admin-data-item">
+            <span>City</span>
+            <strong>{selectedPendingUser.city || 'Not provided'}</strong>
+          </div>
+        </div>
+
+        {pendingApplications.length > 0
+          ? renderPendingApplications(selectedPendingUser, pendingApplications)
+          : <div className="admin-empty-state">This user has no pending applications right now.</div>}
+      </section>
+    );
+  };
+
+  const renderRoleSummaryCard = (user) => {
+    const hasAdminRole = user.roles.some((role) => role.roleKey === 'admin');
+    const pendingApplications = getPendingApplications(user);
+    const isSelected = roleDetailUserId === user._id;
+
+    return (
+      <article
+        key={user._id}
+        className={`form-card admin-user-summary-card${isSelected ? ' active' : ''}`}
+      >
+        <div className="admin-user-summary-main">
+          <div>
+            <h3>{user.fullName}</h3>
+            <p>{user.email}</p>
+            <div className="admin-user-summary-tags">
+              <span className={`badge ${getStatusBadgeClass(user.accountStatus)}`}>{formatLabel(user.accountStatus)}</span>
+              <span className="badge badge-info">{user.roles.length} assigned roles</span>
+              {pendingApplications.length > 0 && (
+                <span className="badge badge-warning">{pendingApplications.length} pending</span>
+              )}
+              {hasAdminRole && <span className="badge badge-info">Read only</span>}
             </div>
           </div>
+          <span className="badge badge-info">{formatLabel(user.primaryRole || user.activeRole)}</span>
+        </div>
+
+        <div className="admin-user-card-actions">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => openRolePanel(user._id, 'view')}>
+            View
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={hasAdminRole}
+            onClick={() => openRolePanel(user._id, 'edit')}
+          >
+            Edit
+          </button>
+        </div>
+      </article>
+    );
+  };
+
+  const renderRoleDetailsPanel = () => {
+    if (!selectedRoleUser) {
+      return (
+        <section className="form-card admin-user-detail-panel admin-empty-state">
+          <p>Role access record not found.</p>
+          <button type="button" className="btn btn-outline btn-sm" onClick={closeRolePanel}>
+            Back to Role Access
+          </button>
+        </section>
+      );
+    }
+
+    const hasAdminRole = selectedRoleUser.roles.some((role) => role.roleKey === 'admin');
+    const pendingApplications = getPendingApplications(selectedRoleUser);
+    const switchableRoles = selectedRoleUser.roles.filter(canUseRole);
+    const readOnlyMode = !isRoleEditPath || hasAdminRole;
+
+    return (
+      <section className="form-card admin-user-detail-panel">
+        <div className="card-header">
+          <div>
+            <h3>{readOnlyMode ? 'Role Access Details' : 'Edit Role Access'}</h3>
+            <p style={{ color: 'var(--text-light)' }}>
+              {readOnlyMode
+                ? 'Review assigned roles, verification states, and primary-role ownership.'
+                : 'Update role assignments and verification settings from one page.'}
+            </p>
+          </div>
+          <div className="pill-row">
+            {!readOnlyMode && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => navigate(`/admin/roles/${selectedRoleUser._id}`)}>
+                View
+              </button>
+            )}
+            {readOnlyMode && !hasAdminRole && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/admin/roles/${selectedRoleUser._id}/edit`)}>
+                Edit
+              </button>
+            )}
+            <Link className="btn btn-outline btn-sm" to={`/admin/users/${selectedRoleUser._id}`}>Open User</Link>
+            <button type="button" className="btn btn-outline btn-sm" onClick={closeRolePanel}>
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="pill-row" style={{ marginBottom: '1rem' }}>
+          <span className="badge badge-info">Active role: {selectedRoleUser.activeRole}</span>
+          <span className="badge badge-success">Primary role: {selectedRoleUser.primaryRole}</span>
+          <span className={`badge ${getStatusBadgeClass(selectedRoleUser.accountStatus)}`}>Account: {formatLabel(selectedRoleUser.accountStatus)}</span>
+        </div>
+
+        {readOnlyMode ? (
+          <>
+            <div className="admin-user-detail-grid" style={{ marginBottom: '1rem' }}>
+              <div className="admin-data-item">
+                <span>Full Name</span>
+                <strong>{selectedRoleUser.fullName}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Username</span>
+                <strong>{selectedRoleUser.username || '-'}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Email</span>
+                <strong>{selectedRoleUser.email}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Pending Applications</span>
+                <strong>{pendingApplications.length}</strong>
+              </div>
+            </div>
+            <div className="stats-grid admin-role-grid">
+              {selectedRoleUser.roles.map((role) => (
+                <div key={role.roleKey} className="card">
+                  <div className="card-body">
+                    <h4>{formatLabel(role.roleKey)}</h4>
+                    <p className="admin-summary-line">Role status: <strong>{formatLabel(role.roleStatus)}</strong></p>
+                    <p className="admin-summary-line">Verification: <strong>{formatLabel(role.verificationStatus)}</strong></p>
+                    <p className="admin-summary-line">Primary: <strong>{role.isPrimary ? 'Yes' : 'No'}</strong></p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <>
             <div className="form-row">
               <div className="form-group">
-                <label>Full Name</label>
-                <input value={user.fullName} disabled={hasAdminRole} onChange={(e) => updateField(user._id, 'fullName', e.target.value)} />
+                <label>Username</label>
+                <input value={selectedRoleUser.username || ''} onChange={(e) => updateField(selectedRoleUser._id, 'username', e.target.value)} />
               </div>
               <div className="form-group">
-                <label>Username</label>
-                <input value={user.username || ''} disabled={hasAdminRole} onChange={(e) => updateField(user._id, 'username', e.target.value)} />
+                <label>Account Status</label>
+                <select value={selectedRoleUser.accountStatus} onChange={(e) => updateField(selectedRoleUser._id, 'accountStatus', e.target.value)}>
+                  {accountStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
               </div>
             </div>
 
             <div className="form-row">
               <div className="form-group">
-                <label>Email</label>
-                <input value={user.email} disabled={hasAdminRole} onChange={(e) => updateField(user._id, 'email', e.target.value)} />
-              </div>
-              <div className="form-group">
-                <label>Account Status</label>
-                <select value={user.accountStatus} disabled={hasAdminRole} onChange={(e) => updateField(user._id, 'accountStatus', e.target.value)}>
-                  {accountStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                <label>Active Role</label>
+                <select value={selectedRoleUser.activeRole || ''} onChange={(e) => updateField(selectedRoleUser._id, 'activeRole', e.target.value)}>
+                  {(switchableRoles.length > 0 ? switchableRoles : selectedRoleUser.roles).map((role) => (
+                    <option key={role.roleKey} value={role.roleKey}>{role.roleKey}</option>
+                  ))}
                 </select>
               </div>
+              <div className="form-group">
+                <label>Primary Role</label>
+                <select value={selectedRoleUser.primaryRole || ''} onChange={(e) => setPrimaryRole(selectedRoleUser._id, e.target.value)}>
+                  {selectedRoleUser.roles.map((role) => (
+                    <option key={role.roleKey} value={role.roleKey}>{role.roleKey}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Assigned Roles</label>
+              <div className="checkbox-row">
+                {manageableRoles.map((roleKey) => {
+                  const checked = selectedRoleUser.roles.some((role) => role.roleKey === roleKey);
+                  const disabled = roleKey === 'customer';
+
+                  return (
+                    <label key={roleKey} className="checkbox-chip">
+                      <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleAssignedRole(selectedRoleUser._id, roleKey)} />
+                      {roleKey}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="stats-grid admin-role-grid">
+              {selectedRoleUser.roles.map((role) => (
+                <div key={role.roleKey} className="card">
+                  <div className="card-body">
+                    <h4>{formatLabel(role.roleKey)}</h4>
+                    <div className="form-group" style={{ marginTop: '1rem' }}>
+                      <label>Role Status</label>
+                      <select value={role.roleStatus} onChange={(e) => updateRoleField(selectedRoleUser._id, role.roleKey, 'roleStatus', e.target.value)}>
+                        {roleStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Verification</label>
+                      <select value={role.verificationStatus} onChange={(e) => updateRoleField(selectedRoleUser._id, role.roleKey, 'verificationStatus', e.target.value)}>
+                        {verificationStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                    </div>
+                    <label className="checkbox-chip">
+                      <input type="checkbox" checked={role.isPrimary} onChange={() => setPrimaryRole(selectedRoleUser._id, role.roleKey)} />
+                      Primary role
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pill-row">
+              <button
+                className="btn btn-primary"
+                type="button"
+                disabled={busyAction === `save-${selectedRoleUser._id}`}
+                onClick={() => saveUser(selectedRoleUser, `/admin/roles/${selectedRoleUser._id}`)}
+              >
+                {busyAction === `save-${selectedRoleUser._id}` ? 'Saving...' : 'Save Role Access'}
+              </button>
+              <button className="btn btn-outline" type="button" onClick={closeRolePanel}>
+                Close
+              </button>
             </div>
           </>
         )}
 
-        <div className="form-row">
-          <div className="form-group">
-            <label>Active Role</label>
-            <select value={user.activeRole || ''} disabled={hasAdminRole} onChange={(e) => updateField(user._id, 'activeRole', e.target.value)}>
-              {(switchableRoles.length > 0 ? switchableRoles : user.roles).map((role) => (
-                <option key={role.roleKey} value={role.roleKey}>{role.roleKey}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label>Primary Role</label>
-            <select value={user.primaryRole || ''} disabled={hasAdminRole} onChange={(e) => setPrimaryRole(user._id, e.target.value)}>
-              {user.roles.map((role) => (
-                <option key={role.roleKey} value={role.roleKey}>{role.roleKey}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {!hasAdminRole && (
-          <div className="form-group">
-            <label>Assigned Roles</label>
-            <div className="checkbox-row">
-              {manageableRoles.map((roleKey) => {
-                const checked = user.roles.some((role) => role.roleKey === roleKey);
-                const disabled = roleKey === 'customer';
-
-                return (
-                  <label key={roleKey} className="checkbox-chip">
-                    <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleAssignedRole(user._id, roleKey)} />
-                    {roleKey}
-                  </label>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="stats-grid admin-role-grid">
-          {user.roles.map((role) => (
-            <div key={role.roleKey} className="card">
-              <div className="card-body">
-                <h4>{role.roleKey}</h4>
-                <div className="form-group" style={{ marginTop: '1rem' }}>
-                  <label>Role Status</label>
-                  <select value={role.roleStatus} disabled={hasAdminRole} onChange={(e) => updateRoleField(user._id, role.roleKey, 'roleStatus', e.target.value)}>
-                    {roleStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Verification</label>
-                  <select value={role.verificationStatus} disabled={hasAdminRole} onChange={(e) => updateRoleField(user._id, role.roleKey, 'verificationStatus', e.target.value)}>
-                    {verificationStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                  </select>
-                </div>
-                <label className="checkbox-chip">
-                  <input type="checkbox" checked={role.isPrimary} disabled={hasAdminRole} onChange={() => setPrimaryRole(user._id, role.roleKey)} />
-                  Primary role
-                </label>
-              </div>
-            </div>
-          ))}
-        </div>
-
         {hasAdminRole && (
-          <div className="alert alert-warning">
-            Admin accounts remain DB-seeded and read-only in this workflow. Use the dedicated admin profile page for self-service admin details.
+          <div className="alert alert-warning" style={{ marginTop: '1rem' }}>
+            Seeded admin accounts are read only in this workflow.
           </div>
         )}
 
-        {!hasAdminRole && (
-          <button className="btn btn-primary" disabled={busyAction === `save-${user._id}`} onClick={() => saveUser(user)}>
-            {busyAction === `save-${user._id}` ? 'Saving...' : isRoleMode ? 'Save Role Access' : 'Save User'}
-          </button>
+        {pendingApplications.length > 0 && (
+          <div className="alert alert-info" style={{ marginTop: '1rem' }}>
+            This user has {pendingApplications.length} pending application(s). Use the Pending Approvals page for approve/reject actions.
+          </div>
         )}
-      </div>
+      </section>
     );
   };
 
@@ -812,57 +1062,56 @@ export default function AdminUsers() {
         </section>
       </div>
 
-      <section className="form-card">
-        <div className="card-header">
-          <div>
-            <h3>Admin Workflow</h3>
-            <p style={{ color: 'var(--text-light)' }}>Use the admin menu to move between approvals, user records, and role configuration.</p>
-          </div>
-          <Link className="btn btn-primary btn-sm" to="/admin/users">Open User Management</Link>
-        </div>
-        <div className="admin-stack">
-          <div className="admin-list-item">
-            <div>
-              <h4>Pending Approvals</h4>
-              <p>Review driver and staff applications before those roles become active.</p>
-            </div>
-          </div>
-          <div className="admin-list-item">
-            <div>
-              <h4>Users</h4>
-              <p>Browse compact user cards, then open focused view and edit panels only when needed.</p>
-            </div>
-          </div>
-          <div className="admin-list-item">
-            <div>
-              <h4>Role Access</h4>
-              <p>Control assigned roles, verification states, and primary-role ownership.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
     </>
   );
 
   const renderPendingSection = () => (
     pendingReviewUsers.length > 0 ? (
-      pendingReviewUsers.map((user) => (
-        <div key={user._id} className="form-card admin-card">
-          <div className="card-header">
-            <div>
-              <h3>{user.fullName}</h3>
-              <p style={{ color: 'var(--text-light)' }}>{user.email}</p>
-              <div className="pill-row" style={{ marginTop: '0.75rem' }}>
-                <span className="badge badge-info">Active role: {user.activeRole}</span>
-                <span className="badge badge-success">Primary role: {user.primaryRole}</span>
-              </div>
-            </div>
-            <Link className="btn btn-outline btn-sm" to={`/admin/users/${user._id}`}>Open User Record</Link>
+      <section className="form-card">
+        <div className="card-header">
+          <div>
+            <h3>Pending Approval Cards</h3>
+            <p style={{ color: 'var(--text-light)' }}>
+              Browse pending accounts first, then open a dedicated review page for approve or reject actions.
+            </p>
           </div>
-          {renderPendingApplications(user, getPendingApplications(user), true)}
+          <span className="badge badge-info">{filteredPendingUsers.length} users</span>
         </div>
-      ))
+        <div className="admin-user-filters">
+          <div className="form-group">
+            <label htmlFor="pending-search">Search</label>
+            <input
+              id="pending-search"
+              type="search"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="Search by name, email, username, or NIC"
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="pending-role-filter">Requested Role</label>
+            <select id="pending-role-filter" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+              <option value="all">All Roles</option>
+              {manageableRoles.map((role) => (
+                <option key={role} value={role}>{formatLabel(role)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label htmlFor="pending-status-filter">Status</label>
+            <select id="pending-status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="all">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div className="admin-user-grid">
+          {filteredPendingUsers.length > 0
+            ? filteredPendingUsers.map((user) => renderPendingSummaryCard(user))
+            : <div className="admin-empty-state">No pending approvals match the current search and filters.</div>}
+        </div>
+      </section>
     ) : (
       <div className="form-card admin-empty-state">No pending provider approvals right now.</div>
     )
@@ -871,15 +1120,6 @@ export default function AdminUsers() {
   const renderUsersSection = () => (
     nonAdminUsers.length > 0 ? (
       <section className="form-card">
-        <div className="card-header">
-          <div>
-            <h3>User Cards</h3>
-            <p style={{ color: 'var(--text-light)' }}>
-              Browse compact user cards, then open a dedicated page to view or edit a full record.
-            </p>
-          </div>
-          <span className="badge badge-info">{filteredUsers.length} users</span>
-        </div>
         <div className="admin-user-filters">
           <div className="form-group">
             <label htmlFor="user-search">Search</label>
@@ -921,21 +1161,67 @@ export default function AdminUsers() {
   );
 
   const renderRolesSection = () => (
-    <>
-      <div className="stats-grid">
-        {roleSummary.map((item) => (
-          <div key={item.roleKey} className="stat-card">
-            <div className="stat-info">
-              <h3>{item.usableCount}</h3>
-              <p>{formatLabel(item.roleKey)} roles usable</p>
+    nonAdminUsers.length > 0 ? (
+      <>
+        <div className="stats-grid">
+          {roleSummary.map((item) => (
+            <div key={item.roleKey} className="stat-card">
+              <div className="stat-info">
+                <h3>{item.usableCount}</h3>
+                <p>{formatLabel(item.roleKey)} roles usable</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <section className="form-card">
+          <div className="card-header">
+            <div>
+              <h3>Role Access Cards</h3>
+              <p style={{ color: 'var(--text-light)' }}>
+                Browse compact role-access cards, then open a dedicated page to review or edit each record.
+              </p>
+            </div>
+            <span className="badge badge-info">{filteredUsers.length} users</span>
+          </div>
+          <div className="admin-user-filters">
+            <div className="form-group">
+              <label htmlFor="role-search">Search</label>
+              <input
+                id="role-search"
+                type="search"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Search by name, email, username, or NIC"
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="role-role-filter">Role</label>
+              <select id="role-role-filter" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
+                <option value="all">All Roles</option>
+                {manageableRoles.map((role) => (
+                  <option key={role} value={role}>{formatLabel(role)}</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group">
+              <label htmlFor="role-status-filter">Status</label>
+              <select id="role-status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                <option value="all">All Statuses</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
             </div>
           </div>
-        ))}
-      </div>
-      {nonAdminUsers.length > 0 ? nonAdminUsers.map((user) => renderUserCard(user, 'roles')) : (
-        <div className="form-card admin-empty-state">No non-admin user records are available for role management.</div>
-      )}
-    </>
+          <div className="admin-user-grid">
+            {filteredUsers.length > 0
+              ? filteredUsers.map((user) => renderRoleSummaryCard(user))
+              : <div className="admin-empty-state">No role-access records match the current search and filters.</div>}
+          </div>
+        </section>
+      </>
+    ) : (
+      <div className="form-card admin-empty-state">No non-admin user records are available for role management.</div>
+    )
   );
 
   return (
@@ -951,9 +1237,9 @@ export default function AdminUsers() {
         {error && <div className="alert alert-danger">{error}</div>}
 
         {isOverviewPath && renderOverview()}
-        {isPendingPath && renderPendingSection()}
+        {isPendingPath && (isPendingDetailPath ? renderPendingDetailsPanel() : renderPendingSection())}
         {isUsersPath && (isUserDetailPath ? renderUserDetailsPanel() : renderUsersSection())}
-        {isRolesPath && renderRolesSection()}
+        {isRolesPath && (isRolesDetailPath ? renderRoleDetailsPanel() : renderRolesSection())}
       </main>
     </div>
   );

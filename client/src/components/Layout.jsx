@@ -1,17 +1,28 @@
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { buildUploadUrl } from '../api/config';
+import { formatDateTime } from '../utils/formatters';
 import Footer from './Footer';
 
 export default function Layout({ children }) {
-  const { user, logout } = useAuth();
+  const {
+    user,
+    logout,
+    notifications,
+    unreadNotificationCount,
+    markNotificationRead,
+    markAllNotificationsRead
+  } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const activeRole = user?.activeRole || user?.role;
+  const isCustomer = activeRole === 'customer';
+  const isDriver = activeRole === 'driver';
   const isAdmin = activeRole === 'admin';
   const hasHomePage = !user || activeRole === 'customer';
   const showFooter = location.pathname === '/signin';
   const logoTarget = isAdmin ? '/admin/dashboard' : user ? '/account' : '/';
+  const recentNotifications = (notifications || []).slice(0, 5);
 
   const handleLogout = () => {
     logout()
