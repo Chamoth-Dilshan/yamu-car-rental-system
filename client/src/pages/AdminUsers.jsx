@@ -1062,36 +1062,6 @@ export default function AdminUsers() {
         </section>
       </div>
 
-      <section className="form-card">
-        <div className="card-header">
-          <div>
-            <h3>Admin Workflow</h3>
-            <p style={{ color: 'var(--text-light)' }}>Use the admin menu to move between approvals, user records, and role configuration.</p>
-          </div>
-          <Link className="btn btn-primary btn-sm" to="/admin/users">Open User Management</Link>
-        </div>
-        <div className="admin-stack">
-          <div className="admin-list-item">
-            <div>
-              <h4>Pending Approvals</h4>
-              <p>Review driver and staff applications before those roles become active.</p>
-            </div>
-          </div>
-          <div className="admin-list-item">
-            <div>
-              <h4>Users</h4>
-              <p>Browse compact user cards, then open focused view and edit panels only when needed.</p>
-            </div>
-          </div>
-          <div className="admin-list-item">
-            <div>
-              <h4>Role Access</h4>
-              <p>Control assigned roles, verification states, and primary-role ownership.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
     </>
   );
 
@@ -1150,15 +1120,6 @@ export default function AdminUsers() {
   const renderUsersSection = () => (
     nonAdminUsers.length > 0 ? (
       <section className="form-card">
-        <div className="card-header">
-          <div>
-            <h3>User Cards</h3>
-            <p style={{ color: 'var(--text-light)' }}>
-              Browse compact user cards, then open a dedicated page to view or edit a full record.
-            </p>
-          </div>
-          <span className="badge badge-info">{filteredUsers.length} users</span>
-        </div>
         <div className="admin-user-filters">
           <div className="form-group">
             <label htmlFor="user-search">Search</label>
