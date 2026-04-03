@@ -7,7 +7,10 @@ const {
   updateStaffProfile,
   updateAdminProfile,
   applyForProviderRole,
-  withdrawProviderApplication
+  withdrawProviderApplication,
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead
 } = require('../controllers/userController');
 const { protect } = require('../middleware/auth');
 const upload = require('../middleware/upload');
@@ -22,6 +25,9 @@ router.put('/staff-profile', protect, updateStaffProfile);
 router.put('/admin-profile', protect, updateAdminProfile);
 router.post('/applications/:roleKey', protect, applyForProviderRole);
 router.put('/applications/:roleKey/withdraw', protect, withdrawProviderApplication);
+router.get('/notifications', protect, getNotifications);
+router.put('/notifications/read-all', protect, markAllNotificationsRead);
+router.put('/notifications/:notificationId/read', protect, markNotificationRead);
 
 module.exports = router;
 

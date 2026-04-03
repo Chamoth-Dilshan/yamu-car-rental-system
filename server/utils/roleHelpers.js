@@ -145,6 +145,7 @@ const serializeUser = (userDoc) => {
   const activeRole = rawUser.role;
   const primaryRole = roles.find((item) => item.isPrimary)?.roleKey || roles[0]?.roleKey || null;
   const activeRoleAssignment = roles.find((item) => item.roleKey === activeRole);
+  const unreadNotificationCount = (rawUser.notifications || []).filter((item) => !item.isRead).length;
 
   return {
     _id: rawUser._id,
@@ -168,6 +169,7 @@ const serializeUser = (userDoc) => {
     staffProfile: rawUser.staffProfile || {},
     adminProfile: rawUser.adminProfile || {},
     providerApplications: rawUser.providerApplications || [],
+    unreadNotificationCount,
     lastLoginAt: rawUser.lastLoginAt || null,
     createdAt: rawUser.createdAt,
     updatedAt: rawUser.updatedAt
