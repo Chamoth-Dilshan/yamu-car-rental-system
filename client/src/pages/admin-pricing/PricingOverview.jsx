@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/Sidebar';
+import PromotionCountdown from '../../components/PromotionCountdown';
 
 export default function PricingOverview() {
   const [campaigns, setCampaigns] = useState([]);
@@ -99,12 +100,15 @@ export default function PricingOverview() {
                 <div className="admin-stack">
                   {activePromotions.slice(0, 4).map((p) => (
                     <div key={p._id} className="admin-list-item" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <h4>{p.code}</h4>
                           <p style={{ fontSize: '0.85rem' }}>{p.title}</p>
                         </div>
-                        <span className="badge badge-success">{p.discountType === 'percentage' ? `${p.discountValue}%` : `$${p.discountValue}`}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                          <span className="badge badge-success">{p.discountType === 'percentage' ? `${p.discountValue}%` : `$${p.discountValue}`}</span>
+                          <PromotionCountdown endDate={p.endDate} />
+                        </div>
                       </div>
                     </div>
                   ))}

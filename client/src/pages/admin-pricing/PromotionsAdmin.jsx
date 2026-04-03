@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/Sidebar';
+import PromotionCountdown from '../../components/PromotionCountdown';
 
 export default function PromotionsAdmin() {
   const [promotions, setPromotions] = useState([]);
@@ -265,7 +266,10 @@ export default function PromotionsAdmin() {
                           </div>
                         )}
                       </div>
-                      <span className={`badge badge-${p.status === 'active' ? 'success' : 'warning'}`}>{p.status}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
+                        <span className={`badge badge-${p.status === 'active' ? 'success' : 'warning'}`}>{p.status}</span>
+                        {p.status === 'active' && <PromotionCountdown endDate={p.endDate} />}
+                      </div>
                     </div>
                     
                     <div className="admin-data-grid">
