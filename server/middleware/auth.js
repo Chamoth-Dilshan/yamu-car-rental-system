@@ -1,6 +1,12 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const { canUseRole, getRoleAssignment, getUsableRoleAssignments, syncUserRoles } = require('../utils/roleHelpers');
+const {
+  canUseRole,
+  getRoleAssignment,
+  getUsableRoleAssignments,
+  hasPermission,
+  syncUserRoles
+} = require('../utils/roleHelpers');
 
 const protect = async (req, res, next) => {
   let token;
@@ -45,12 +51,22 @@ const authorize = (...roles) => (req, res, next) => {
   next();
 };
 
+const authorizePermissions = (...permissions) => (req, res, next) => {
+  const missingPermission = permissions.find((permission) => !hasPermission(req.user, permission));
+
+  if (missingPermission) {
+    return res.status(403).json({ message: `Missing permission: ${missingPermission}` });
+  }
+
+  next();
+};
+
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || '30d'
   });
 };
 
-module.exports = { protect, authorize, generateToken };
+module.exports = { protect, authorize, authorizePermissions, generateToken };
 
 

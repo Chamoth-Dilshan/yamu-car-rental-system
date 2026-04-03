@@ -17,6 +17,16 @@ const {
   syncUserRoles,
   upsertProviderApplication
 } = require('../utils/roleHelpers');
+const {
+  mergeDriverDocuments,
+  mergeStaffDocuments,
+  normalizeEmergencyContact,
+  normalizePreferredLanguage,
+  parseDate,
+  trimValue
+} = require('../utils/profileHelpers');
+
+const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 
 const ensureUniqueIdentityFields = async (userId, email, username) => {
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -32,6 +42,35 @@ const ensureUniqueIdentityFields = async (userId, email, username) => {
   }
 
   return { normalizedEmail, normalizedUsername };
+};
+
+const getPlainObject = (value) => (value?.toObject ? value.toObject() : (value || {}));
+
+const buildDriverProfilePayload = (payload = {}, currentProfile = {}) => {
+  const current = getPlainObject(currentProfile);
+
+  return {
+    drivingLicenseNumber: trimValue(payload.drivingLicenseNumber, current.drivingLicenseNumber || ''),
+    licenseExpiryDate: parseDate(payload.licenseExpiryDate) || null,
+    nicId: trimValue(payload.nicId, current.nicId || ''),
+    serviceArea: trimValue(payload.serviceArea, current.serviceArea || ''),
+    providerDetails: trimValue(payload.providerDetails, current.providerDetails || ''),
+    documents: mergeDriverDocuments(payload.documents || {}, current.documents || {})
+  };
+};
+
+const buildStaffProfilePayload = (payload = {}, currentProfile = {}) => {
+  const current = getPlainObject(currentProfile);
+
+  return {
+    storeName: trimValue(payload.storeName, current.storeName || ''),
+    storeOwner: trimValue(payload.storeOwner, current.storeOwner || ''),
+    businessRegistrationNumber: trimValue(payload.businessRegistrationNumber, current.businessRegistrationNumber || ''),
+    storeAddress: trimValue(payload.storeAddress, current.storeAddress || ''),
+    storeContactNumber: trimValue(payload.storeContactNumber, current.storeContactNumber || ''),
+    storeEmail: trimValue(payload.storeEmail, current.storeEmail || ''),
+    documents: mergeStaffDocuments(payload.documents || {}, current.documents || {})
+  };
 };
 
 const getProfile = async (req, res) => {
@@ -64,14 +103,24 @@ const updateProfile = async (req, res) => {
       nextUsername
     );
 
-    user.fullName = req.body.fullName?.trim() || user.fullName;
+    if (req.body.password && String(req.body.password).length < 5) {
+      return res.status(400).json({ message: 'Password must be at least 5 characters long' });
+    }
+
+    user.fullName = trimValue(req.body.fullName, user.fullName);
     user.email = normalizedEmail;
     user.username = normalizedUsername;
-    user.phone = req.body.phone || '';
-    user.address = req.body.address || '';
-    user.city = req.body.city || '';
-    user.dob = req.body.dob || '';
-    user.bio = req.body.bio || '';
+    user.phone = trimValue(req.body.phone, '');
+    user.address = trimValue(req.body.address, '');
+    user.city = trimValue(req.body.city, '');
+    user.dob = trimValue(req.body.dob, '');
+    user.bio = trimValue(req.body.bio, '');
+    user.preferredLanguage = normalizePreferredLanguage(req.body.preferredLanguage, user.preferredLanguage || 'English');
+    user.emergencyContact = normalizeEmergencyContact({
+      name: req.body.emergencyContactName,
+      phone: req.body.emergencyContactPhone,
+      relationship: req.body.emergencyContactRelationship
+    });
 
     if (req.file) {
       user.profilePic = `profiles/${req.file.filename}`;
@@ -107,8 +156,8 @@ const updateCustomerProfile = async (req, res) => {
 
     user.customerProfile = {
       ...user.customerProfile,
-      preferences: req.body.preferences || '',
-      notes: req.body.notes || ''
+      preferences: trimValue(req.body.preferences, ''),
+      notes: trimValue(req.body.notes, '')
     };
 
     await user.save({ validateModifiedOnly: true });
@@ -136,20 +185,15 @@ const updateDriverProfile = async (req, res) => {
     }
 
     user.driverProfile = {
-      ...user.driverProfile,
-      drivingLicenseNumber: req.body.drivingLicenseNumber || '',
-      licenseExpiryDate: req.body.licenseExpiryDate || null,
-      nicId: req.body.nicId || '',
-      serviceArea: req.body.serviceArea || '',
-      providerDetails: req.body.providerDetails || ''
+      ...getPlainObject(user.driverProfile),
+      ...buildDriverProfilePayload(req.body, user.driverProfile)
     };
 
     const pendingApplication = getLatestProviderApplication(user, 'driver');
     if (pendingApplication?.status === 'pending') {
-      const driverProfileData = user.driverProfile?.toObject ? user.driverProfile.toObject() : user.driverProfile;
       pendingApplication.applicationData = {
         ...pendingApplication.applicationData,
-        ...driverProfileData
+        ...getPlainObject(user.driverProfile)
       };
       pendingApplication.submittedAt = new Date();
     }
@@ -179,21 +223,15 @@ const updateStaffProfile = async (req, res) => {
     }
 
     user.staffProfile = {
-      ...user.staffProfile,
-      storeName: req.body.storeName || '',
-      storeOwner: req.body.storeOwner || '',
-      businessRegistrationNumber: req.body.businessRegistrationNumber || '',
-      storeAddress: req.body.storeAddress || '',
-      storeContactNumber: req.body.storeContactNumber || '',
-      storeEmail: req.body.storeEmail || ''
+      ...getPlainObject(user.staffProfile),
+      ...buildStaffProfilePayload(req.body, user.staffProfile)
     };
 
     const pendingApplication = getLatestProviderApplication(user, 'staff');
     if (pendingApplication?.status === 'pending') {
-      const staffProfileData = user.staffProfile?.toObject ? user.staffProfile.toObject() : user.staffProfile;
       pendingApplication.applicationData = {
         ...pendingApplication.applicationData,
-        ...staffProfileData
+        ...getPlainObject(user.staffProfile)
       };
       pendingApplication.submittedAt = new Date();
     }
@@ -224,8 +262,8 @@ const updateAdminProfile = async (req, res) => {
 
     user.adminProfile = {
       ...user.adminProfile,
-      accessScope: req.body.accessScope || '',
-      controlNotes: req.body.controlNotes || ''
+      accessScope: trimValue(req.body.accessScope, ''),
+      controlNotes: trimValue(req.body.controlNotes, '')
     };
 
     await user.save({ validateModifiedOnly: true });
@@ -253,30 +291,17 @@ const applyForProviderRole = async (req, res) => {
     }
 
     if (!canUseRole(getRoleAssignment(user, 'customer'))) {
-      return res.status(403).json({ message: 'Only customers can apply for provider roles' });
+      return res.status(403).json({ message: 'Only accounts with active customer access can apply for provider roles' });
     }
 
     const roleAssignment = getRoleAssignment(user, roleKey);
-    if (roleAssignment && ['active', 'verified'].includes(roleAssignment.roleStatus) && roleAssignment.verificationStatus === 'verified') {
+    if (roleAssignment && canUseRole(roleAssignment)) {
       return res.status(400).json({ message: `Your ${roleKey} role is already approved` });
     }
 
     const applicationData = roleKey === 'driver'
-      ? {
-          drivingLicenseNumber: req.body.drivingLicenseNumber || '',
-          licenseExpiryDate: req.body.licenseExpiryDate || null,
-          nicId: req.body.nicId || '',
-          serviceArea: req.body.serviceArea || '',
-          providerDetails: req.body.providerDetails || ''
-        }
-      : {
-          storeName: req.body.storeName || '',
-          storeOwner: req.body.storeOwner || '',
-          businessRegistrationNumber: req.body.businessRegistrationNumber || '',
-          storeAddress: req.body.storeAddress || '',
-          storeContactNumber: req.body.storeContactNumber || '',
-          storeEmail: req.body.storeEmail || ''
-        };
+      ? buildDriverProfilePayload(req.body, user.driverProfile)
+      : buildStaffProfilePayload(req.body, user.staffProfile);
 
     const requiredFields = roleKey === 'driver'
       ? ['drivingLicenseNumber', 'nicId', 'serviceArea']
@@ -289,14 +314,14 @@ const applyForProviderRole = async (req, res) => {
 
     if (roleKey === 'driver') {
       user.driverProfile = {
-        ...user.driverProfile,
+        ...getPlainObject(user.driverProfile),
         ...applicationData
       };
     }
 
     if (roleKey === 'staff') {
       user.staffProfile = {
-        ...user.staffProfile,
+        ...getPlainObject(user.staffProfile),
         ...applicationData
       };
     }
@@ -316,15 +341,15 @@ const applyForProviderRole = async (req, res) => {
     syncUserRoles(user);
     appendNotification(user, {
       type: 'role',
-      title: `${roleKey.charAt(0).toUpperCase() + roleKey.slice(1)} application submitted`,
-      message: `Your ${roleKey} application is now pending admin review.`,
+      title: `${roleLabel(roleKey)} application submitted`,
+      message: `Your ${roleKey} application was sent for admin review. We will notify you once it is reviewed.`,
       link: '/apply-roles'
     });
     await user.save();
 
     await addNotificationToAdmins({
       type: 'role',
-      title: 'New provider role application',
+      title: 'Provider application submitted',
       message: `${user.fullName} submitted a ${roleKey} application for review.`,
       link: '/admin/pending-approvals'
     });

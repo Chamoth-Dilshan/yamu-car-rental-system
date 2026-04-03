@@ -6,21 +6,6 @@ const providerRoles = ['driver', 'staff'];
 
 const formatLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 
-const getCompletion = (user) => {
-  const checks = [
-    Boolean(user?.fullName),
-    Boolean(user?.username),
-    Boolean(user?.email),
-    Boolean(user?.phone),
-    Boolean(user?.city),
-    Boolean(user?.address),
-    Boolean(user?.dob),
-    Boolean(user?.bio)
-  ];
-
-  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-};
-
 export default function AccountOverview() {
   const { user } = useAuth();
   const providerApplications = (user?.providerApplications || []).filter((item) => providerRoles.includes(item.roleKey));
@@ -32,7 +17,7 @@ export default function AccountOverview() {
     { label: 'Approved Roles', value: String(usableRoleCount) },
     { label: 'Pending Requests', value: String(pendingCount) }
   ];
-  const profileCompletion = getCompletion(user);
+  const profileCompletion = user?.profileCompletion?.percent || 0;
   const nextAction = pendingCount > 0
     ? 'Track admin review for your pending provider request.'
     : providerApplications.some((item) => item.status === 'rejected')
@@ -85,6 +70,17 @@ export default function AccountOverview() {
                 <div>
                   <h4>Contact</h4>
                   <p>{user?.email} {user?.phone ? `| ${user.phone}` : ''}</p>
+                </div>
+              </div>
+              <div className="admin-list-item">
+                <div>
+                  <h4>Language & Emergency Contact</h4>
+                  <p>
+                    {user?.preferredLanguage || 'English'}
+                    {user?.emergencyContact?.name
+                      ? ` | ${user.emergencyContact.name}${user.emergencyContact.phone ? ` (${user.emergencyContact.phone})` : ''}`
+                      : ' | Emergency contact not set'}
+                  </p>
                 </div>
               </div>
               <div className="admin-list-item">

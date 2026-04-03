@@ -31,6 +31,10 @@ export default function Profile() {
     city: '',
     dob: '',
     bio: '',
+    preferredLanguage: 'English',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    emergencyContactRelationship: '',
     password: ''
   });
   const [customerProfile, setCustomerProfile] = useState({
@@ -42,7 +46,17 @@ export default function Profile() {
     licenseExpiryDate: '',
     nicId: '',
     serviceArea: '',
-    providerDetails: ''
+    providerDetails: '',
+    documents: {
+      nicDocument: {
+        reference: '',
+        note: ''
+      },
+      licenseProof: {
+        reference: '',
+        note: ''
+      }
+    }
   });
   const [staffProfile, setStaffProfile] = useState({
     storeName: '',
@@ -50,7 +64,13 @@ export default function Profile() {
     businessRegistrationNumber: '',
     storeAddress: '',
     storeContactNumber: '',
-    storeEmail: ''
+    storeEmail: '',
+    documents: {
+      businessRegistrationProof: {
+        reference: '',
+        note: ''
+      }
+    }
   });
   const [adminProfile, setAdminProfile] = useState({
     accessScope: '',
@@ -83,6 +103,10 @@ export default function Profile() {
       city: user.city || '',
       dob: user.dob || '',
       bio: user.bio || '',
+      preferredLanguage: user.preferredLanguage || 'English',
+      emergencyContactName: user.emergencyContact?.name || '',
+      emergencyContactPhone: user.emergencyContact?.phone || '',
+      emergencyContactRelationship: user.emergencyContact?.relationship || '',
       password: ''
     });
 
@@ -96,7 +120,17 @@ export default function Profile() {
       licenseExpiryDate: user.driverProfile?.licenseExpiryDate ? String(user.driverProfile.licenseExpiryDate).slice(0, 10) : '',
       nicId: user.driverProfile?.nicId || '',
       serviceArea: user.driverProfile?.serviceArea || '',
-      providerDetails: user.driverProfile?.providerDetails || ''
+      providerDetails: user.driverProfile?.providerDetails || '',
+      documents: {
+        nicDocument: {
+          reference: user.driverProfile?.documents?.nicDocument?.reference || '',
+          note: user.driverProfile?.documents?.nicDocument?.note || ''
+        },
+        licenseProof: {
+          reference: user.driverProfile?.documents?.licenseProof?.reference || '',
+          note: user.driverProfile?.documents?.licenseProof?.note || ''
+        }
+      }
     });
 
     setStaffProfile({
@@ -105,7 +139,13 @@ export default function Profile() {
       businessRegistrationNumber: user.staffProfile?.businessRegistrationNumber || '',
       storeAddress: user.staffProfile?.storeAddress || '',
       storeContactNumber: user.staffProfile?.storeContactNumber || '',
-      storeEmail: user.staffProfile?.storeEmail || ''
+      storeEmail: user.staffProfile?.storeEmail || '',
+      documents: {
+        businessRegistrationProof: {
+          reference: user.staffProfile?.documents?.businessRegistrationProof?.reference || '',
+          note: user.staffProfile?.documents?.businessRegistrationProof?.note || ''
+        }
+      }
     });
 
     setAdminProfile({
@@ -202,6 +242,33 @@ export default function Profile() {
   const staffProfileBlocked = staffRole && blockedProfileStatuses.includes(staffRole.roleStatus);
   const driverApplicationBlocked = driverRole && blockedApplicationStatuses.includes(driverRole.roleStatus);
   const staffApplicationBlocked = staffRole && blockedApplicationStatuses.includes(staffRole.roleStatus);
+  const profileCompletion = user?.profileCompletion?.percent || 0;
+
+  const updateDriverDocument = (documentKey, field, value) => {
+    setDriverProfile((prev) => ({
+      ...prev,
+      documents: {
+        ...prev.documents,
+        [documentKey]: {
+          ...prev.documents[documentKey],
+          [field]: value
+        }
+      }
+    }));
+  };
+
+  const updateStaffDocument = (documentKey, field, value) => {
+    setStaffProfile((prev) => ({
+      ...prev,
+      documents: {
+        ...prev.documents,
+        [documentKey]: {
+          ...prev.documents[documentKey],
+          [field]: value
+        }
+      }
+    }));
+  };
 
   return (
     <div className="dashboard-layout page-content">
@@ -221,6 +288,7 @@ export default function Profile() {
               <span className="badge badge-info">Active role: {user?.activeRole}</span>
               <span className="badge badge-success">Primary role: {user?.primaryRole}</span>
               <span className="badge badge-warning">Account: {user?.accountStatus}</span>
+              <span className="badge badge-info">Profile complete: {profileCompletion}%</span>
             </div>
           </div>
         </div>
@@ -319,9 +387,45 @@ export default function Profile() {
                 <input type="date" value={profile.dob} onChange={(e) => setProfile((prev) => ({ ...prev, dob: e.target.value }))} />
               </div>
             </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Preferred Language</label>
+                <select
+                  value={profile.preferredLanguage}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, preferredLanguage: e.target.value }))}
+                >
+                  <option value="English">English</option>
+                  <option value="Sinhala">Sinhala</option>
+                  <option value="Tamil">Tamil</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Emergency Contact Name</label>
+                <input
+                  value={profile.emergencyContactName}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactName: e.target.value }))}
+                />
+              </div>
+            </div>
             <div className="form-group">
               <label>Address</label>
               <input value={profile.address} onChange={(e) => setProfile((prev) => ({ ...prev, address: e.target.value }))} />
+            </div>
+            <div className="form-row">
+              <div className="form-group">
+                <label>Emergency Contact Phone</label>
+                <input
+                  value={profile.emergencyContactPhone}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactPhone: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label>Relationship</label>
+                <input
+                  value={profile.emergencyContactRelationship}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactRelationship: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="form-row">
               <div className="form-group">
@@ -415,6 +519,40 @@ export default function Profile() {
                 <label>Provider Onboarding Details</label>
                 <textarea rows="3" value={driverProfile.providerDetails} onChange={(e) => setDriverProfile((prev) => ({ ...prev, providerDetails: e.target.value }))} />
               </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>NIC / ID Document Reference</label>
+                  <input
+                    value={driverProfile.documents.nicDocument.reference}
+                    onChange={(e) => updateDriverDocument('nicDocument', 'reference', e.target.value)}
+                    placeholder="Reference or placeholder for future upload"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Driving License Proof Reference</label>
+                  <input
+                    value={driverProfile.documents.licenseProof.reference}
+                    onChange={(e) => updateDriverDocument('licenseProof', 'reference', e.target.value)}
+                    placeholder="Reference or placeholder for future upload"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>NIC / ID Review Notes</label>
+                  <input
+                    value={driverProfile.documents.nicDocument.note}
+                    onChange={(e) => updateDriverDocument('nicDocument', 'note', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>License Proof Notes</label>
+                  <input
+                    value={driverProfile.documents.licenseProof.note}
+                    onChange={(e) => updateDriverDocument('licenseProof', 'note', e.target.value)}
+                  />
+                </div>
+              </div>
               {driverRole && (
                 <button className="btn btn-secondary" type="submit" disabled={busyAction === 'driver' || driverProfileBlocked}>
                   {busyAction === 'driver' ? 'Saving...' : 'Save Driver Profile'}
@@ -493,6 +631,23 @@ export default function Profile() {
                 <div className="form-group">
                   <label>Store Address</label>
                   <input value={staffProfile.storeAddress} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeAddress: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Business Registration Proof Reference</label>
+                  <input
+                    value={staffProfile.documents.businessRegistrationProof.reference}
+                    onChange={(e) => updateStaffDocument('businessRegistrationProof', 'reference', e.target.value)}
+                    placeholder="Reference or placeholder for future upload"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Business Registration Notes</label>
+                  <input
+                    value={staffProfile.documents.businessRegistrationProof.note}
+                    onChange={(e) => updateStaffDocument('businessRegistrationProof', 'note', e.target.value)}
+                  />
                 </div>
               </div>
               {staffRole && (

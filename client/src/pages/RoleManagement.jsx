@@ -52,11 +52,25 @@ export default function RoleManagement() {
           </div>
           <div className="stat-card">
             <div className="stat-info">
-              <h3>{user?.roles?.length || 0}</h3>
-              <p>Assigned Roles</p>
+              <h3>{user?.permissions?.length || 0}</h3>
+              <p>Active Permissions</p>
             </div>
           </div>
         </div>
+
+        {user?.permissions?.length > 0 && (
+          <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="form-header">
+              <h2>Current Permissions</h2>
+              <p style={{ color: 'var(--text-light)' }}>Permissions come from your active role and will be used for future access checks.</p>
+            </div>
+            <div className="pill-row">
+              {user.permissions.map((permission) => (
+                <span key={permission} className="badge badge-info">{permission}</span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid-3">
           {user?.roles?.map((roleItem) => {

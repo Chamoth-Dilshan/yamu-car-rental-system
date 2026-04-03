@@ -8,6 +8,7 @@ const {
   PROVIDER_ROLE_KEYS,
   APPLICATION_STATUSES
 } = require('../utils/roleHelpers');
+const { DOCUMENT_STATUSES, SUPPORTED_LANGUAGES } = require('../utils/profileHelpers');
 
 const roleAssignmentSchema = new mongoose.Schema({
   roleKey: { type: String, enum: ROLE_KEYS, required: true },
@@ -36,6 +37,21 @@ const notificationSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 }, { _id: true });
 
+const documentMetadataSchema = new mongoose.Schema({
+  reference: { type: String, default: '' },
+  fileName: { type: String, default: '' },
+  originalName: { type: String, default: '' },
+  status: { type: String, enum: DOCUMENT_STATUSES, default: 'not_provided' },
+  note: { type: String, default: '' },
+  uploadedAt: { type: Date, default: null }
+}, { _id: false });
+
+const emergencyContactSchema = new mongoose.Schema({
+  name: { type: String, default: '' },
+  phone: { type: String, default: '' },
+  relationship: { type: String, default: '' }
+}, { _id: false });
+
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
@@ -51,6 +67,15 @@ const userSchema = new mongoose.Schema({
   phone: { type: String, default: '' },
   dob: { type: String, default: '' },
   bio: { type: String, default: '' },
+  preferredLanguage: {
+    type: String,
+    enum: SUPPORTED_LANGUAGES,
+    default: 'English'
+  },
+  emergencyContact: {
+    type: emergencyContactSchema,
+    default: () => ({})
+  },
   profilePic: { type: String, default: 'avatar.png' },
   accountStatus: {
     type: String,
@@ -69,18 +94,34 @@ const userSchema = new mongoose.Schema({
   },
   driverProfile: {
     drivingLicenseNumber: { type: String, default: '' },
-    licenseExpiryDate: { type: Date },
+    licenseExpiryDate: { type: Date, default: null },
     nicId: { type: String, default: '' },
     serviceArea: { type: String, default: '' },
-    providerDetails: { type: String, default: '' }
+    providerDetails: { type: String, default: '' },
+    documents: {
+      nicDocument: {
+        type: documentMetadataSchema,
+        default: () => ({})
+      },
+      licenseProof: {
+        type: documentMetadataSchema,
+        default: () => ({})
+      }
+    }
   },
   staffProfile: {
     storeName: { type: String, default: '' },
     storeOwner: { type: String, default: '' },
     businessRegistrationNumber: { type: String, default: '' },
     storeAddress: { type: String, default: '' },
-      storeContactNumber: { type: String, default: '' },
-      storeEmail: { type: String, default: '' }
+    storeContactNumber: { type: String, default: '' },
+    storeEmail: { type: String, default: '' },
+    documents: {
+      businessRegistrationProof: {
+        type: documentMetadataSchema,
+        default: () => ({})
+      }
+    }
   },
   adminProfile: {
     accessScope: { type: String, default: '' },
@@ -88,7 +129,8 @@ const userSchema = new mongoose.Schema({
   },
   providerApplications: [providerApplicationSchema],
   notifications: [notificationSchema],
-  lastLoginAt: { type: Date }
+  lastLoginAt: { type: Date, default: null },
+  deactivatedAt: { type: Date, default: null }
 }, {
   timestamps: true
 });

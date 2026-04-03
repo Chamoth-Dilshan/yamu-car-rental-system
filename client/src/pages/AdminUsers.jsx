@@ -53,10 +53,16 @@ const getStatusBadgeClass = (status) => {
   return 'badge-warning';
 };
 
+const getDocumentDetails = (documents = {}) => (
+  Object.entries(documents)
+    .map(([key, value]) => ({ key, value }))
+    .filter(({ value }) => value && (value.reference || value.fileName || value.note || value.status !== 'not_provided'))
+);
+
 export default function AdminUsers() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, refreshNotifications } = useAuth();
   const [users, setUsers] = useState([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -365,7 +371,7 @@ export default function AdminUsers() {
   };
 
   const deleteUser = async (userId) => {
-    if (!window.confirm('Delete this user?')) {
+    if (!window.confirm('Deactivate this user account?')) {
       return;
     }
 
@@ -374,14 +380,11 @@ export default function AdminUsers() {
     setError('');
 
     try {
-      await API.delete(`/admin/users/${userId}`);
-      setUsers((prev) => prev.filter((user) => user._id !== userId));
-      if (selectedUserId === userId) {
-        closeUserPanel();
-      }
-      setMessage('User deleted');
+      const res = await API.delete(`/admin/users/${userId}`);
+      setUsers((prev) => prev.map((user) => user._id === userId ? res.data.user : user));
+      setMessage(res.data.message || 'Account deactivated');
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete user');
+      setError(err.response?.data?.message || 'Failed to deactivate user');
     } finally {
       setBusyAction('');
     }
@@ -390,7 +393,9 @@ export default function AdminUsers() {
   const renderPendingApplications = (user, pendingApplications, compact = false) => (
     <div className="alert alert-info">
       {pendingApplications.map((application) => {
-        const applicationData = Object.entries(application.applicationData || {}).filter(([, value]) => value);
+        const applicationData = Object.entries(application.applicationData || {})
+          .filter(([field, value]) => field !== 'documents' && value);
+        const documentDetails = getDocumentDetails(application.applicationData?.documents || {});
 
         return (
           <div key={application.roleKey} className={`admin-approval-item${compact ? ' compact' : ''}`}>
@@ -405,6 +410,17 @@ export default function AdminUsers() {
                     <div key={field} className="admin-data-item">
                       <span>{formatLabel(field)}</span>
                       <strong>{String(value)}</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {documentDetails.length > 0 && (
+                <div className="admin-data-grid" style={{ marginTop: '0.75rem' }}>
+                  {documentDetails.map(({ key, value }) => (
+                    <div key={key} className="admin-data-item">
+                      <span>{formatLabel(key)}</span>
+                      <strong>{value.reference || value.fileName || 'Metadata added'}</strong>
+                      <small style={{ color: 'var(--text-light)' }}>Status: {formatLabel(value.status)}</small>
                     </div>
                   ))}
                 </div>
@@ -777,7 +793,7 @@ export default function AdminUsers() {
   const renderUserSummaryCard = (user) => {
     const hasAdminRole = user.roles.some((role) => role.roleKey === 'admin');
     const pendingApplications = getPendingApplications(user);
-    const canDeleteUser = !hasAdminRole && currentUser?._id !== user._id;
+    const canDeleteUser = !hasAdminRole && currentUser?._id !== user._id && user.accountStatus !== 'deactivated';
     const isSelected = selectedUserId === user._id;
 
     return (
@@ -823,7 +839,7 @@ export default function AdminUsers() {
               disabled={busyAction === `delete-${user._id}`}
               onClick={() => deleteUser(user._id)}
             >
-              {busyAction === `delete-${user._id}` ? 'Deleting...' : 'Delete'}
+              {busyAction === `delete-${user._id}` ? 'Deactivating...' : 'Deactivate'}
             </button>
           )}
         </div>

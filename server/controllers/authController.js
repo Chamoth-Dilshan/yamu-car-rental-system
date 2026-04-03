@@ -18,6 +18,10 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'Full name, email, and password are required' });
     }
 
+    if (String(password).length < 5) {
+      return res.status(400).json({ message: 'Password must be at least 5 characters long' });
+    }
+
     const normalizedEmail = String(email).trim().toLowerCase();
     const normalizedUsername = String(username || normalizedEmail).trim().toLowerCase();
 
@@ -112,6 +116,11 @@ const getMe = async (req, res) => {
 const switchRole = async (req, res) => {
   try {
     const { role } = req.body;
+
+    if (!role) {
+      return res.status(400).json({ message: 'Role is required' });
+    }
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
