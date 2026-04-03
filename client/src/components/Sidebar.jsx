@@ -1,16 +1,23 @@
-import { NavLink } from 'react-router-dom';
-import { buildUploadUrl } from '../api/config';
-import { useAuth } from '../context/AuthContext';
+import { NavLink } from 'react-router-dom'
+import { buildUploadUrl } from '../api/config'
+import { useAuth } from '../context/AuthContext'
 
 const menuItems = {
   customer: [
     { section: 'Account' },
     { to: '/account', label: 'Overview', end: true },
+    { to: '/bookings', label: 'My Bookings', end: true },
     { to: '/profile', label: 'Profile Details', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
-    { to: '/switch-roles', label: 'Switch Roles', end: true }
+    { to: '/switch-roles', label: 'Switch Roles', end: true },
+    { section: 'Discover' },
+    { to: '/cars', label: 'Explore Cars', end: true },
+    { to: '/drivers', label: 'Explore Drivers', end: true }
   ],
   driver: [
+    { section: 'Driver Workspace' },
+    { to: '/driver/ads', label: 'My Driver Ads', end: true },
+    { to: '/driver/bookings', label: 'Booking Requests', end: true },
     { section: 'Account' },
     { to: '/account', label: 'Overview', end: true },
     { to: '/profile', label: 'Profile Details', end: true },
@@ -31,14 +38,14 @@ const menuItems = {
     { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: false }
   ]
-};
+}
 
 export default function Sidebar() {
-  const { user } = useAuth();
-  const items = menuItems[user?.activeRole] || menuItems.customer;
+  const { user } = useAuth()
+  const items = menuItems[user?.activeRole] || menuItems.customer
   const avatarSrc = user?.profilePic && user.profilePic !== 'avatar.png'
     ? buildUploadUrl(user.profilePic)
-    : `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || 'User')}&background=f0a500&color=0d1b2a&bold=true`;
+    : `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || 'User')}&background=f0a500&color=0d1b2a&bold=true`
 
   return (
     <aside className="sidebar">
@@ -50,16 +57,16 @@ export default function Sidebar() {
       <nav className="sidebar-nav">
         {items.map((item) => {
           if (item.section) {
-            return <div key={item.section} className="sidebar-section-label">{item.section}</div>;
+            return <div key={item.section} className="sidebar-section-label">{item.section}</div>
           }
 
           return (
             <NavLink key={item.to} to={item.to} end={item.end}>
               {item.label}
             </NavLink>
-          );
+          )
         })}
       </nav>
     </aside>
-  );
+  )
 }

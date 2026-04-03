@@ -26,6 +26,16 @@ const providerApplicationSchema = new mongoose.Schema({
   applicationData: { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { _id: false });
 
+const notificationSchema = new mongoose.Schema({
+  type: { type: String, default: 'system' },
+  title: { type: String, required: true },
+  message: { type: String, required: true },
+  link: { type: String, default: '' },
+  isRead: { type: Boolean, default: false },
+  readAt: { type: Date, default: null },
+  createdAt: { type: Date, default: Date.now }
+}, { _id: true });
+
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
@@ -77,6 +87,7 @@ const userSchema = new mongoose.Schema({
     controlNotes: { type: String, default: '' }
   },
   providerApplications: [providerApplicationSchema],
+  notifications: [notificationSchema],
   lastLoginAt: { type: Date }
 }, {
   timestamps: true
