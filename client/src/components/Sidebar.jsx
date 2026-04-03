@@ -27,9 +27,9 @@ const menuItems = {
   admin: [
     { section: 'Admin Panel' },
     { to: '/admin/dashboard', label: 'Overview', end: true },
-    { to: '/admin/pending-approvals', label: 'Pending Approvals', end: true },
+    { to: '/admin/pending-approvals', label: 'Pending Approvals', end: false },
     { to: '/admin/users', label: 'Users', end: false },
-    { to: '/admin/roles', label: 'Role Access', end: true }
+    { to: '/admin/roles', label: 'Role Access', end: false }
   ]
 };
 
