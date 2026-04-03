@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const featuredCars = [
@@ -42,12 +42,21 @@ const bookingSteps = [
 
 export default function Home() {
   const { user } = useAuth();
-  const isAdmin = (user?.activeRole || user?.role) === 'admin';
+  const activeRole = user?.activeRole || user?.role;
+  const isAdmin = activeRole === 'admin';
 
-  const primaryLink = isAdmin ? '/admin/dashboard' : user ? '/account' : '/signup';
-  const primaryText = isAdmin ? 'Open Dashboard' : user ? 'Open Account' : 'Create Account';
-  const secondaryLink = isAdmin ? '/admin/signin' : '/signin';
-  const secondaryText = isAdmin ? 'Admin Login' : user ? 'Sign In as Another User' : 'Sign In';
+  if (isAdmin) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  if (user && activeRole !== 'customer') {
+    return <Navigate to="/account" replace />;
+  }
+
+  const primaryLink = user ? '/account' : '/signup';
+  const primaryText = user ? 'Open Account' : 'Create Account';
+  const secondaryLink = '/signin';
+  const secondaryText = user ? 'Sign In as Another User' : 'Sign In';
 
   return (
     <div className="page-content">

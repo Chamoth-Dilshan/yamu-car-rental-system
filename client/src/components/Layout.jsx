@@ -1,12 +1,17 @@
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { buildUploadUrl } from '../api/config';
 import Footer from './Footer';
 
 export default function Layout({ children }) {
   const { user, logout } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
-  const isAdmin = (user?.activeRole || user?.role) === 'admin';
+  const activeRole = user?.activeRole || user?.role;
+  const isAdmin = activeRole === 'admin';
+  const hasHomePage = !user || activeRole === 'customer';
+  const showFooter = location.pathname === '/signin';
+  const logoTarget = isAdmin ? '/admin/dashboard' : user ? '/account' : '/';
 
   const handleLogout = () => {
     logout();
@@ -23,10 +28,10 @@ export default function Layout({ children }) {
     <>
       <nav className="navbar">
         <div className="container">
-          <Link to="/" className="logo">YA<span>MU</span></Link>
+          <Link to={logoTarget} className="logo">YA<span>MU</span></Link>
 
           <div className="nav-links">
-            <NavLink to="/">Home</NavLink>
+            {hasHomePage && <NavLink to="/">Home</NavLink>}
             {user && !isAdmin && <NavLink to="/account">Account</NavLink>}
             {isAdmin && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
           </div>
@@ -59,7 +64,7 @@ export default function Layout({ children }) {
       </nav>
 
       <main>{children}</main>
-      <Footer />
+      {showFooter && <Footer />}
     </>
   );
 }

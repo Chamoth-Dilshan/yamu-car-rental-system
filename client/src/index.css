@@ -308,7 +308,7 @@ input:focus, select:focus, textarea:focus {
 .footer {
   background: var(--primary);
   color: var(--gray-300);
-  padding: 4rem 0 1.5rem;
+  padding: 1.5rem 0;
 }
 .footer-grid {
   display: grid;
@@ -321,8 +321,6 @@ input:focus, select:focus, textarea:focus {
 .footer ul li { margin-bottom: 0.75rem; }
 .footer a:hover { color: var(--accent); }
 .footer-bottom {
-  border-top: 1px solid rgba(255,255,255,0.08);
-  padding-top: 1.5rem;
   text-align: center;
   font-size: 0.85rem;
 }
