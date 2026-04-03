@@ -29,7 +29,12 @@ const menuItems = {
     { to: '/admin/dashboard', label: 'Overview', end: true },
     { to: '/admin/pending-approvals', label: 'Pending Approvals', end: true },
     { to: '/admin/users', label: 'Users', end: true },
-    { to: '/admin/roles', label: 'Role Access', end: true }
+    { to: '/admin/roles', label: 'Role Access', end: true },
+    { section: 'Pricing & Promos' },
+    { to: '/admin/campaigns', label: 'Campaigns', end: true },
+    { to: '/admin/promotions', label: 'Promotions', end: true },
+    { to: '/admin/pricing-rules', label: 'Pricing Rules', end: true },
+    { to: '/admin/pricing-simulator', label: 'Simulator', end: true }
   ]
 };
 

@@ -10,6 +10,10 @@ import SignIn from './pages/SignIn';
 import SignUp from './pages/SignUp';
 import Profile from './pages/Profile';
 import RoleManagement from './pages/RoleManagement';
+import CampaignsAdmin from './pages/admin-pricing/CampaignsAdmin';
+import PromotionsAdmin from './pages/admin-pricing/PromotionsAdmin';
+import PricingRulesAdmin from './pages/admin-pricing/PricingRulesAdmin';
+import PricingSimulator from './pages/admin-pricing/PricingSimulator';
 
 export default function App() {
   return (
@@ -50,6 +54,22 @@ export default function App() {
               <RoleManagement />
             </ProtectedRoute>
           )}
+        />
+        <Route
+          path="/admin/campaigns"
+          element={<ProtectedRoute roles={['admin']}><CampaignsAdmin /></ProtectedRoute>}
+        />
+        <Route
+          path="/admin/promotions"
+          element={<ProtectedRoute roles={['admin']}><PromotionsAdmin /></ProtectedRoute>}
+        />
+        <Route
+          path="/admin/pricing-rules"
+          element={<ProtectedRoute roles={['admin']}><PricingRulesAdmin /></ProtectedRoute>}
+        />
+        <Route
+          path="/admin/pricing-simulator"
+          element={<ProtectedRoute roles={['admin']}><PricingSimulator /></ProtectedRoute>}
         />
         <Route
           path="/admin/*"
