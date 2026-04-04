@@ -1,0 +1,33 @@
+$kind: http-request
+name: '11 - Staff Switch to Staff Role'
+method: PUT
+url: '{{baseUrl}}/api/auth/switch-role'
+order: 11000
+headers:
+  - key: Authorization
+    value: 'Bearer {{staffToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "role": "staff"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Role switch succeeds", () => {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Active role is now staff", () => {
+        const json = pm.response.json();
+        pm.expect(json.user.role).to.equal("staff");
+      });
+
+      const json = pm.response.json();
+      if (json.token) {
+        pm.environment.set("staffToken", json.token);
+      }

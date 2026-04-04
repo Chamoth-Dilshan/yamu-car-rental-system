@@ -1,0 +1,21 @@
+$kind: http-request
+name: Create Vehicle Booking
+method: POST
+url: '{{baseUrl}}/api/bookings/vehicle'
+order: 2000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "vehicleId": "{{vehicleId}}",
+      "pickupLocation": "Colombo Fort",
+      "destination": "Kandy",
+      "notes": "Please have the car ready by 8am",
+      "startDate": "2026-05-01",
+      "endDate": "2026-05-05"
+    }

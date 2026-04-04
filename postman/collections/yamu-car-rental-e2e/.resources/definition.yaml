@@ -1,0 +1,26 @@
+$kind: collection
+name: 'Yamu Car Rental - E2E Booking Lifecycle'
+description: |-
+  End-to-end collection runner flow that tests the full booking lifecycle.
+
+  ## Flow Overview
+  1. Health check
+  2. Admin login → get admin token
+  3. Register a new customer user
+  4. Admin approves the customer account
+  5. Customer logs in → get customer token
+  6. Register a new staff user
+  7. Admin approves the staff account
+  8. Staff logs in → get staff token
+  9. Staff creates a vehicle
+  10. Customer creates a vehicle booking
+  11. Staff confirms the booking
+  12. Customer marks payment as paid
+  13. Staff marks booking as completed
+  14. Verify final booking state
+  15. Cleanup: Admin deletes the booking
+
+  ## Prerequisites
+  - Local server running at {{baseUrl}} (default: http://localhost:5000)
+  - MongoDB seeded with admin account (admin@example.com / 12345)
+  - Environment: Yamu Car Rental - Local

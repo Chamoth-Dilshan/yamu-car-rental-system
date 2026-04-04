@@ -1,0 +1,50 @@
+$kind: http-request
+name: Create Driver Ad
+method: POST
+url: '{{baseUrl}}/api/driver-ads'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+body:
+  type: formdata
+  content:
+    - key: title
+      type: text
+      value: ''
+    - key: tagline
+      type: text
+      value: ''
+    - key: serviceLocation
+      type: text
+      value: ''
+    - key: languages
+      type: text
+      value: ''
+    - key: experienceYears
+      type: text
+      value: ''
+    - key: dailyRate
+      type: text
+      value: ''
+    - key: maxGroupSize
+      type: text
+      value: ''
+    - key: availability
+      type: text
+      value: ''
+    - key: visibility
+      type: text
+      value: ''
+    - key: preferredContact
+      type: text
+      value: ''
+    - key: specialties
+      type: text
+      value: ''
+    - key: description
+      type: text
+      value: ''
+    - key: photo
+      type: file
+      src: ''

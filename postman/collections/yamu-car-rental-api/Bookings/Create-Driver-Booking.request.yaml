@@ -1,0 +1,21 @@
+$kind: http-request
+name: Create Driver Booking
+method: POST
+url: '{{baseUrl}}/api/bookings/driver'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "driverAdId": "{{driverAdId}}",
+      "pickupLocation": "Colombo Fort",
+      "destination": "Galle",
+      "notes": "Early morning pickup",
+      "startDate": "2026-05-01",
+      "endDate": "2026-05-03"
+    }

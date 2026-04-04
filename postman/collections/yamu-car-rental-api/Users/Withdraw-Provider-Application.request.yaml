@@ -1,0 +1,8 @@
+$kind: http-request
+name: Withdraw Provider Application
+method: PUT
+url: '{{baseUrl}}/api/users/applications/{{roleKey}}/withdraw'
+order: 8000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'

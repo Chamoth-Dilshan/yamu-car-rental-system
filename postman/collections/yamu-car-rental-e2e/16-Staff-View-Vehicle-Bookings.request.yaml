@@ -1,0 +1,29 @@
+$kind: http-request
+name: '16 - Staff View Vehicle Bookings'
+method: GET
+url: '{{baseUrl}}/api/bookings/staff/list'
+order: 16000
+headers:
+  - key: Authorization
+    value: 'Bearer {{staffToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Staff can view vehicle bookings", () => {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Staff bookings list is returned", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("bookings");
+        pm.expect(json.bookings).to.be.an("array");
+      });
+
+      const json = pm.response.json();
+      const bookingId = pm.environment.get("e2eBookingId");
+      const found = (json.bookings || []).find(b => b._id === bookingId);
+
+      pm.test("E2E booking appears in staff booking list", () => {
+        pm.expect(found, "E2E booking not found in staff list").to.exist;
+      });

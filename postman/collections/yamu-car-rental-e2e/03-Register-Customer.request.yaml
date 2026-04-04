@@ -1,0 +1,40 @@
+$kind: http-request
+name: '03 - Register Customer'
+method: POST
+url: '{{baseUrl}}/api/auth/register'
+order: 3000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "fullName": "E2E Test Customer",
+      "email": "{{e2eCustomerEmail}}",
+      "password": "{{e2eCustomerPassword}}",
+      "username": "{{e2eCustomerUsername}}",
+      "phone": "+94771110001",
+      "address": "1 Test Lane, Colombo",
+      "city": "Colombo"
+    }
+scripts:
+  - type: beforeRequest
+    language: text/javascript
+    code: |-
+      const ts = Date.now();
+      pm.environment.set("e2eCustomerEmail", `e2e.customer.${ts}@test.com`);
+      pm.environment.set("e2eCustomerUsername", `e2ecustomer${ts}`);
+      pm.environment.set("e2eCustomerPassword", "E2eTest@123");
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Customer registration succeeds", () => {
+        pm.response.to.have.status(201);
+      });
+
+      pm.test("Registration returns confirmation message", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("message");
+        pm.expect(json.message).to.be.a("string");
+      });
