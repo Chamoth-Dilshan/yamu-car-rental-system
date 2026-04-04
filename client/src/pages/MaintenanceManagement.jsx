@@ -278,6 +278,7 @@ const MaintenanceManagement = () => {
     type: 'Routine Service',
     count: '',
     addedthings: '',
+    status: '', // Added status field
     totcost: ''
   });
 
@@ -315,7 +316,7 @@ const MaintenanceManagement = () => {
 
   const openAddForm = () => {
     setEditingId(null);
-    setFormData({ vehiclename: '', type: 'Routine Service', count: '', addedthings: '', totcost: '' });
+    setFormData({ vehiclename: '', type: 'Routine Service', count: '', addedthings: '', status: '', totcost: '' });
     setIsFormOpen(true);
   };
 
@@ -326,6 +327,7 @@ const MaintenanceManagement = () => {
       type: record.type,
       count: record.count,
       addedthings: record.addedthings,
+      status: record.status || '',
       totcost: record.totcost
     });
     setIsFormOpen(true);
@@ -339,6 +341,7 @@ const MaintenanceManagement = () => {
         type: formData.type,
         count: parseInt(formData.count) || 0,
         addedthings: formData.addedthings,
+        status: formData.status,
         totcost: parseFloat(formData.totcost) || 0
       };
 
@@ -429,6 +432,7 @@ const MaintenanceManagement = () => {
                     <th className="p-4 border-b text-center">Type</th>
                     <th className="p-4 border-b text-center">Count</th>
                     <th className="p-4 border-b">Added Parts</th>
+                    <th className="p-4 border-b">Status</th>
                     <th className="p-4 border-b text-right">Total Cost (Rs.)</th>
                     <th className="p-4 border-b text-center">Operations</th>
                   </tr>
@@ -447,6 +451,7 @@ const MaintenanceManagement = () => {
                         </td>
                         <td className="p-4 text-center">{record.count}</td>
                         <td className="p-4 text-slate-600 italic">{record.addedthings}</td>
+                        <td className="p-4">{record.status}</td>
                         <td className="p-4 text-right font-mono font-bold">{formatCurrency(record.totcost)}</td>
                         <td className="p-4 text-center">
                           <div className="flex justify-center gap-2">
@@ -462,7 +467,7 @@ const MaintenanceManagement = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan="6" className="p-4 text-center text-slate-500">No maintenance records found</td>
+                      <td colSpan="7" className="p-4 text-center text-slate-500">No maintenance records found</td>
                     </tr>
                   )}
                 </tbody>
@@ -533,6 +538,18 @@ const MaintenanceManagement = () => {
                   placeholder="e.g. Tires, Battery"
                   className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition"
                 ></textarea>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status</label>
+                <input 
+                  type="text"
+                  name="status" 
+                  value={formData.status} 
+                  onChange={handleInputChange} 
+                  placeholder="e.g. In Progress, Completed"
+                  className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition"
+                />
               </div>
 
               <div>
