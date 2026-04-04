@@ -1,0 +1,32 @@
+$kind: http-request
+name: '04 - Admin Get Users (Find Customer)'
+method: GET
+url: '{{baseUrl}}/api/admin/users'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{adminToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Admin can list users", () => {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Response is an array", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.be.an("array");
+      });
+
+      const json = pm.response.json();
+      const customerEmail = pm.environment.get("e2eCustomerEmail");
+      const customer = json.find(u => u.email === customerEmail);
+
+      pm.test("Newly registered customer is found in user list", () => {
+        pm.expect(customer, `Customer with email ${customerEmail} not found`).to.exist;
+      });
+
+      if (customer) {
+        pm.environment.set("e2eCustomerUserId", customer._id);
+      }

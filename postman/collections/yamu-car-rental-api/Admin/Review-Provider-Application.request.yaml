@@ -1,0 +1,17 @@
+$kind: http-request
+name: Review Provider Application
+method: PUT
+url: '{{baseUrl}}/api/admin/users/{{userId}}/applications/{{roleKey}}/review'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "action": "approve",
+      "rejectionReason": ""
+    }

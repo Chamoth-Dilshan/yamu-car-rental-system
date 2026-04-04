@@ -1,0 +1,5 @@
+$kind: http-request
+name: Get Vehicle by ID
+method: GET
+url: '{{baseUrl}}/api/vehicles/{{vehicleId}}'
+order: 2000

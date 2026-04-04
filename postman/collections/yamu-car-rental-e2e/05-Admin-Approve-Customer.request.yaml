@@ -1,0 +1,29 @@
+$kind: http-request
+name: '05 - Admin Approve Customer'
+method: PUT
+url: '{{baseUrl}}/api/admin/users/{{e2eCustomerUserId}}'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{adminToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "accountStatus": "active"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Admin can approve customer account", () => {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("User account status is now active", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("user");
+        pm.expect(json.user.accountStatus).to.equal("active");
+      });
