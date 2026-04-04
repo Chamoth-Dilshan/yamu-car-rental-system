@@ -83,6 +83,24 @@ const updateAdminBooking = async (req, res) => {
         return res.status(400).json({ message: 'Invalid booking status' })
       }
 
+      if (bookingStatus !== booking.bookingStatus) {
+        if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
+          return res.status(400).json({ message: 'Only pending vehicle bookings can be confirmed' })
+        }
+
+        if (bookingStatus === 'completed' && booking.bookingStatus !== 'confirmed') {
+          return res.status(400).json({ message: 'Only confirmed vehicle bookings can be completed' })
+        }
+
+        if (bookingStatus === 'cancelled' && !['pending', 'confirmed'].includes(booking.bookingStatus)) {
+          return res.status(400).json({ message: 'Only pending or confirmed vehicle bookings can be cancelled' })
+        }
+
+        if (bookingStatus === 'closed' && !['completed', 'cancelled'].includes(booking.bookingStatus)) {
+          return res.status(400).json({ message: 'Only completed or cancelled vehicle bookings can be closed' })
+        }
+      }
+
       booking.bookingStatus = bookingStatus
     }
 
