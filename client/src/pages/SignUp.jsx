@@ -27,13 +27,18 @@ export default function SignUp() {
     setError('');
 
     try {
-      await register({
+      const result = await register({
         fullName: form.fullName,
         username: form.username,
         email: form.email,
         password: form.password
       });
-      navigate('/account');
+      navigate('/signin', {
+        state: {
+          message: result?.message || 'Registration submitted. Wait for admin approval before signing in.'
+        },
+        replace: true
+      });
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {
@@ -45,12 +50,16 @@ export default function SignUp() {
     <div className="auth-page page-content">
       <div className="auth-card">
         <h1>Create Account</h1>
-        <p className="subtitle">Sign up as a customer first, then apply for driver or staff access after onboarding.</p>
+        <p className="subtitle">Sign up as a user first, then apply for driver or store access after onboarding.</p>
         {error && <div className="alert alert-danger">{error}</div>}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} autoComplete="off">
+          <input type="text" name="register-username" autoComplete="username" style={{ display: 'none' }} tabIndex={-1} />
+          <input type="password" name="register-password" autoComplete="new-password" style={{ display: 'none' }} tabIndex={-1} />
           <div className="form-group">
             <label>Full Name</label>
             <input
+              name="signup_full_name"
+              autoComplete="off"
               value={form.fullName}
               onChange={(e) => setForm((prev) => ({ ...prev, fullName: e.target.value }))}
               placeholder="Your full name"
@@ -60,6 +69,8 @@ export default function SignUp() {
           <div className="form-group">
             <label>Username</label>
             <input
+              name="signup_username"
+              autoComplete="off"
               value={form.username}
               onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
               placeholder="Choose a username"
@@ -69,6 +80,8 @@ export default function SignUp() {
             <label>Email</label>
             <input
               type="email"
+              name="signup_email"
+              autoComplete="off"
               value={form.email}
               onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
               placeholder="your@email.com"
@@ -79,9 +92,12 @@ export default function SignUp() {
             <label>Password</label>
             <input
               type="password"
+              name="signup_password"
+              autoComplete="new-password"
               value={form.password}
               onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-              placeholder="Enter a password"
+              placeholder="Create a password"
+              minLength={8}
               required
             />
           </div>
@@ -89,6 +105,8 @@ export default function SignUp() {
             <label>Confirm Password</label>
             <input
               type="password"
+              name="signup_confirm_password"
+              autoComplete="new-password"
               value={form.confirmPassword}
               onChange={(e) => setForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
               placeholder="Confirm password"

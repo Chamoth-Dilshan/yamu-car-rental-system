@@ -1,6 +1,9 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
+<<<<<<< HEAD
 const featuredCars = [
   {
     name: 'City Compact',
@@ -40,111 +43,142 @@ const bookingSteps = [
   }
 ];
 
+=======
+>>>>>>> 5e8b29af6d9c8f6ce80172e7cd8132363b7f2c04
 export default function Home() {
   const { user } = useAuth();
-  const isAdmin = (user?.activeRole || user?.role) === 'admin';
+  const [inventoryStats, setInventoryStats] = useState({
+    vehicles: 0,
+    drivers: 0
+  });
 
-  const primaryLink = isAdmin ? '/admin/dashboard' : user ? '/account' : '/signup';
-  const primaryText = isAdmin ? 'Open Dashboard' : user ? 'Open Account' : 'Create Account';
-  const secondaryLink = isAdmin ? '/admin/signin' : '/signin';
-  const secondaryText = isAdmin ? 'Admin Login' : user ? 'Sign In as Another User' : 'Sign In';
+  useEffect(() => {
+    let active = true;
+
+    Promise.all([
+      API.get('/vehicles', {
+        params: {
+          status: 'available'
+        }
+      }),
+      API.get('/driver-ads', {
+        params: {
+          availability: 'available'
+        }
+      })
+    ])
+      .then(([vehicleRes, driverRes]) => {
+        if (!active) {
+          return;
+        }
+
+        const vehicles = vehicleRes.data.vehicles || [];
+        const drivers = driverRes.data.ads || [];
+
+        setInventoryStats({
+          vehicles: vehicles.length,
+          drivers: drivers.length
+        });
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setInventoryStats({
+          vehicles: 0,
+          drivers: 0
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const primaryAction = user ? '/cars' : '/signup';
+  const primaryLabel = user ? 'Start Browsing Cars' : 'Create Client Account';
+  const secondaryAction = user ? '/bookings' : '/drivers';
+  const secondaryLabel = user ? 'View My Bookings' : 'Hire a Driver';
+  const vehicleCountLabel = inventoryStats.vehicles;
+  const driverCountLabel = inventoryStats.drivers;
 
   return (
-    <div className="page-content">
-      <section className="hero">
+    <div className="page-content home-page">
+      <section className="home-hero">
         <div className="container">
-          <div className="hero-grid">
-            <div className="text-box">
-              <h3>YAMU Car Rental</h3>
-              <h1>Rent the right <span>car</span> for your trip</h1>
-              <p>
-                Easy booking for daily travel, airport pickups, and weekend plans.
+          <div className="home-hero-grid">
+            <div className="home-hero-copy">
+              <h1>Rent a car or hire a driver with less hassle.</h1>
+              <p className="home-hero-lead">
+                Find the right option fast, compare clearly, and book in one place.
               </p>
-              <div className="btn-group">
-                <Link to={primaryLink} className="btn btn-primary btn-lg">{primaryText}</Link>
-                <a href="#fleet" className="btn btn-outline btn-lg">Browse Fleet</a>
-              </div>
-            </div>
 
-            <div className="hero-panel">
-              <div className="hero-panel-card">
-                <p className="hero-panel-label">Quick Booking</p>
-                <h2>Book in minutes</h2>
-                <div className="hero-stat-grid">
-                  <div>
-                    <strong>12+</strong>
-                    <span>cars ready</span>
-                  </div>
-                  <div>
-                    <strong>24/7</strong>
-                    <span>support</span>
-                  </div>
-                  <div>
-                    <strong>3 steps</strong>
-                    <span>to rent</span>
-                  </div>
+              <div className="home-hero-actions">
+                <Link to={primaryAction} className="btn btn-primary btn-lg">{primaryLabel}</Link>
+                <Link to={secondaryAction} className="btn btn-outline btn-lg">{secondaryLabel}</Link>
+              </div>
+
+              <div className="home-trust-row">
+                <div>
+                  <strong>{vehicleCountLabel}{vehicleCountLabel ? '+' : ''}</strong>
+                  <span>available vehicles</span>
                 </div>
-                <div className="hero-panel-actions">
-                  <Link to={secondaryLink} className="btn btn-secondary">{secondaryText}</Link>
-                  <Link to={primaryLink} className="btn btn-outline">Start Renting</Link>
+                <div>
+                  <strong>{driverCountLabel}{driverCountLabel ? '+' : ''}</strong>
+                  <span>published drivers</span>
+                </div>
+                <div>
+                  <strong>24/7</strong>
+                  <span>trip planning access</span>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
 
-      <section className="about-section" id="fleet">
-        <div className="container">
-          <div className="section-header">
-            <h3>Featured Vehicles</h3>
-            <h2>Simple options for the most common trips</h2>
-          </div>
-          <div className="fleet-grid">
-            {featuredCars.map((car) => (
-              <article key={car.name} className="fleet-card">
-                <span className="fleet-tag">{car.tag}</span>
-                <h3>{car.name}</h3>
-                <p>{car.description}</p>
-                <div className="fleet-card-footer">
-                  <strong>{car.price}</strong>
-                  <Link to={primaryLink}>Reserve</Link>
+            <div className="home-hero-panel">
+              <div className="home-itinerary-card">
+                <div className="home-itinerary-top">
+                  <div>
+                    <span className="home-panel-label">Trip Snapshot</span>
+                    <h2>Built for quick travel decisions.</h2>
+                  </div>
                 </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
 
-      <section className="process-section">
-        <div className="container">
-          <div className="section-header">
-            <h3>How It Works</h3>
-            <h2>Get a rental without extra friction</h2>
-          </div>
-          <div className="grid-3">
-            {bookingSteps.map((item) => (
-              <div key={item.num} className="process-item">
-                <h1 className="process-number">{item.num}</h1>
-                <h3 className="process-title">{item.title}</h3>
-                <p className="process-des">{item.desc}</p>
+                <div className="home-itinerary-route">
+                  <div>
+                    <span>Pickup</span>
+                    <strong>Bandaranaike Airport</strong>
+                  </div>
+                  <div className="home-route-line" />
+                  <div>
+                    <span>Destination</span>
+                    <strong>Colombo, Kandy, or beyond</strong>
+                  </div>
+                </div>
+
+                <div className="home-itinerary-grid">
+                  <article>
+                    <span>Need a car?</span>
+                    <strong>Compare self-drive rates</strong>
+                    <p>Check the essentials quickly.</p>
+                  </article>
+                  <article>
+                    <span>Need a driver?</span>
+                    <strong>Review experience and languages</strong>
+                    <p>Pick the right match for your trip.</p>
+                  </article>
+                </div>
+
+                <div className="home-itinerary-footer">
+                  <Link to="/cars" className="btn btn-secondary">Explore Cars</Link>
+                  <Link to="/drivers" className="btn btn-outline">Find Drivers</Link>
+                </div>
               </div>
-            ))}
+            </div>
           </div>
         </div>
       </section>
 
-      <section className="cta-banner">
-        <div className="container">
-          <div className="row" style={{ alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <h1>Plan the trip, choose the car, and keep your account ready for the next booking.</h1>
-              <h3>Start with a quick sign-up or return to your account to manage rental details.</h3>
-            </div>
-            <Link to={primaryLink} className="btn btn-secondary btn-lg">Get Started</Link>
-          </div>
-        </div>
-      </section>
     </div>
   );
 }

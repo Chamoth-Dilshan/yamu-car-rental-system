@@ -1,22 +1,24 @@
-# User Profile and Role Management
+# YAMU Reservation and Booking Management
 
-Standalone extraction of the `User profile and role management` component from the main YAMU project.
+This repo now covers the `Reservation / Booking Management` component for the wider YAMU car rental system.
 
 ## Scope
 
-This mini-project contains only:
+The project includes:
 
-- user registration and login
-- JWT-based authentication
-- user profile management
-- driver/staff profile fields
-- active role switching for assigned roles
-- admin user and role management
+- JWT authentication and role switching
+- user, driver, staff, and admin profile management
+- vehicle catalog and vehicle detail booking flow
+- customer booking history with payment and cancellation actions
+- public driver advertisement listing and driver detail request flow
+- driver-side advertisement management and booking request handling
+- admin booking management with filtering and status controls
 
 ## Structure
 
-- `server/` Express + MongoDB API
-- `client/` React + Vite UI
+- `server/` Express + MongoDB API with Mongoose models
+- `client/` React + Vite frontend
+- `scripts/run-service.cjs` root helper to run shared build and lint commands
 
 ## Run
 
@@ -38,20 +40,42 @@ npm install
 npm run dev
 ```
 
+### 3. Optional root commands
+
+```bash
+npm install
+npm run build
+npm run lint
+```
+
 ## Default Ports
 
 - API: `http://localhost:5001`
 - Client: `http://localhost:5174`
+
+## Main Routes
+
+- `/cars` vehicle listing
+- `/cars/:id` vehicle details and booking
+- `/drivers` public driver advertisement listing
+- `/drivers/:id` driver profile and request form
+- `/bookings` customer booking dashboard
+- `/driver/ads` driver advertisement workspace
+- `/driver/bookings` driver booking request dashboard
+- `/admin/bookings` admin booking management
 
 ## Seeded Accounts
 
 After `npm run seed` in `server/`:
 
 - Admin: `admin@example.com` / `12345`
-- Multi-role user: `alex@example.com` / `12345`
-- Staff user: `staff@example.com` / `12345`
+- Customer with vehicle bookings: `alex@example.com` / `12345`
+- Store workspace demo: `sahan@example.com` / `12345`
+- Driver workspace demo: `nadeesha@example.com` / `12345`
+- Customer with driver requests: `deshan@example.com` / `12345`
+- Pending driver applicant: `kasun@example.com` / `12345`
 
 ## Environment
 
-Create `server/.env` from `server/.env.example`.
+Create `server/.env` from `server/.env.example` and provide a valid MongoDB connection string plus JWT secret.
 
