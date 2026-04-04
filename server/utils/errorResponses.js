@@ -6,6 +6,27 @@ const getPublicError = (error, fallbackMessage = 'Server error') => {
     };
   }
 
+  if (error?.name === 'MulterError') {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return {
+        status: 400,
+        message: 'Each uploaded image must be 5 MB or smaller.'
+      };
+    }
+
+    return {
+      status: 400,
+      message: error.message || 'File upload failed.'
+    };
+  }
+
+  if (error?.message === 'Only image files are allowed') {
+    return {
+      status: 400,
+      message: error.message
+    };
+  }
+
   return {
     status: 500,
     message: error?.message || fallbackMessage

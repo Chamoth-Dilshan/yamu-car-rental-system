@@ -5,6 +5,7 @@ require('dotenv').config()
 
 const connectDB = require('./config/db')
 const app = express()
+const { sendServerError } = require('./utils/errorResponses')
 
 app.use(cors())
 app.use(express.json())
@@ -31,6 +32,14 @@ app.get('/api/health', (req, res) => {
     message: 'Reservation, profile, and role management API is running',
     database: readyStateLabels[require('mongoose').connection.readyState] || 'unknown'
   })
+})
+
+app.use((error, req, res, next) => {
+  if (!error) {
+    return next()
+  }
+
+  return sendServerError(res, error, 'Server error')
 })
 
 const PORT = process.env.PORT || 5001
