@@ -1,8 +1,0 @@
-$kind: http-request
-name: Mark Notification Read
-method: PUT
-url: '{{baseUrl}}/api/users/notifications/{{notificationId}}/read'
-order: 11000
-headers:
-  - key: Authorization
-    value: 'Bearer {{token}}'

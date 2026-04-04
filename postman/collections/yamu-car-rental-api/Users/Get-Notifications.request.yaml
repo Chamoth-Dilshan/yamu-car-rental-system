@@ -1,8 +1,0 @@
-$kind: http-request
-name: Get Notifications
-method: GET
-url: '{{baseUrl}}/api/users/notifications'
-order: 9000
-headers:
-  - key: Authorization
-    value: 'Bearer {{token}}'

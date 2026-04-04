@@ -1,8 +1,0 @@
-$kind: http-request
-name: Restore User
-method: PUT
-url: '{{baseUrl}}/api/admin/users/{{userId}}/restore'
-order: 6000
-headers:
-  - key: Authorization
-    value: 'Bearer {{token}}'
