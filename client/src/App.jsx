@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Home from './pages/Home'
-import AdminSignIn from './pages/AdminSignIn'
 import AdminUsers from './pages/AdminUsers'
 import AdminBookings from './pages/AdminBookings'
 import ApplyRoles from './pages/ApplyRoles'
@@ -30,7 +29,7 @@ export default function App() {
         <Route path="/drivers" element={<ExploreDrivers />} />
         <Route path="/drivers/:id" element={<DriverDetails />} />
         <Route path="/signin" element={<SignIn />} />
-        <Route path="/admin/signin" element={<AdminSignIn />} />
+        <Route path="/admin/signin" element={<Navigate to="/signin" replace />} />
         <Route path="/signup" element={<SignUp />} />
         <Route
           path="/account"

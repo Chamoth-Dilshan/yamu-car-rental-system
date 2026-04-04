@@ -81,7 +81,7 @@ const login = async (req, res) => {
     }
 
     if (['suspended', 'deactivated'].includes(user.accountStatus)) {
-      return res.status(403).json({ message: 'Your account is not active' });
+      return res.status(403).json({ message: 'Your account is suspended or deactivated' });
     }
 
     syncUserRoles(user);
@@ -137,7 +137,7 @@ const switchRole = async (req, res) => {
     }
 
     if (!canUseRole(roleAssignment)) {
-      return res.status(400).json({ message: 'Selected role is not active for use yet' });
+      return res.status(400).json({ message: 'Selected role is not active and verified yet' });
     }
 
     const previousRole = user.role;

@@ -24,7 +24,7 @@ const protect = async (req, res, next) => {
       }
 
       if (['suspended', 'deactivated'].includes(user.accountStatus)) {
-        return res.status(403).json({ message: 'Your account is not active' });
+        return res.status(403).json({ message: 'Your account is suspended or deactivated' });
       }
 
       syncUserRoles(user);

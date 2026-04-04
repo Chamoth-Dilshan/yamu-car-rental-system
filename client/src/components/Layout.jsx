@@ -22,13 +22,20 @@ export default function Layout({ children }) {
   const isDriver = activeRole === 'driver';
   const isAdmin = activeRole === 'admin';
   const hasHomePage = !user || activeRole === 'customer';
-  const showFooter = location.pathname === '/' || location.pathname === '/signin' || isCustomer;
+  const footerHiddenPaths = new Set(['/signin']);
+  const showFooter = !footerHiddenPaths.has(location.pathname) && (!user || isCustomer);
   const canManageProfile = hasPermission('profile.manage');
   const canViewUsers = hasPermission('users.view');
   const canReviewRoles = hasPermission('roles.review');
   const canAssignRoles = hasPermission('roles.assign');
   const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? '/account' : '/';
   const recentNotifications = (notifications || []).slice(0, 5);
+  const workflowNotificationCount = (notifications || []).filter((notification) => (
+    [notification.title, notification.message, notification.link]
+      .join(' ')
+      .toLowerCase()
+      .match(/profile|role|verification|approval|application|switch/)
+  )).length;
 
   const handleLogout = () => {
     logout()
@@ -83,7 +90,10 @@ export default function Layout({ children }) {
                   </button>
                   <div className="nav-notification-panel">
                     <div className="nav-notification-header">
-                      <strong>Notifications</strong>
+                      <div>
+                        <strong>Notifications</strong>
+                        <small>{workflowNotificationCount} profile or role updates</small>
+                      </div>
                       {unreadNotificationCount > 0 && (
                         <button type="button" onClick={() => markAllNotificationsRead()}>
                           Mark all read

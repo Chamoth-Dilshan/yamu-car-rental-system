@@ -69,13 +69,41 @@ const getBadgeClass = (tone) => {
       return 'badge badge-info';
   }
 };
+const hasDocumentReference = (document = {}) => Boolean(document?.fileName || document?.filePath);
+const calculateCompletionPercent = (items = []) => {
+  if (!items.length) {
+    return 0;
+  }
+
+  const completed = items.filter(Boolean).length;
+  return Math.round((completed / items.length) * 100);
+};
+const isRoleManagementNotification = (notification = {}) => {
+  const combinedText = [
+    notification.title,
+    notification.message,
+    notification.link
+  ].join(' ').toLowerCase();
+
+  return [
+    'profile',
+    'role',
+    'verification',
+    'approve',
+    'approval',
+    'application',
+    'switch',
+    'admin/users',
+    'admin/roles',
+    'pending-approvals'
+  ].some((token) => combinedText.includes(token));
+};
 
 export default function Profile() {
   const {
     user,
     setUser,
     notifications,
-    unreadNotificationCount,
     markNotificationRead,
     markAllNotificationsRead,
     refreshNotifications
@@ -297,7 +325,7 @@ export default function Profile() {
       const res = await API.post(`/users/applications/${roleKey}`, payload);
       setUser(res.data.user);
       await refreshNotifications().catch(() => {});
-      setMessage(`${roleLabel(roleKey)} application submitted for admin review`);
+      setMessage(`${roleLabel(roleKey)} application submitted for review`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to submit application');
     } finally {
@@ -318,6 +346,118 @@ export default function Profile() {
   const verificationCenter = user?.verificationCenter;
   const verificationItems = verificationCenter?.roleChecks || [];
   const currentVerification = verificationCenter?.currentRole;
+  const pendingApplicationsCount = (user?.providerApplications || []).filter((item) => item.status === 'pending').length;
+  const managedNotifications = useMemo(() => (
+    (notifications || []).filter((notification) => isRoleManagementNotification(notification))
+  ), [notifications]);
+  const unreadManagedNotificationsCount = managedNotifications.filter((notification) => !notification.isRead).length;
+  const switchableRolesCount = (user?.roles || []).filter((item) => item.roleStatus === 'active' && item.verificationStatus === 'verified').length;
+  const driverReadiness = calculateCompletionPercent([
+    driverProfile.drivingLicenseNumber,
+    driverProfile.licenseExpiryDate,
+    driverProfile.nicId,
+    driverProfile.serviceArea,
+    driverProfile.providerDetails,
+    hasDocumentReference(driverProfile.documents.nicDocument),
+    hasDocumentReference(driverProfile.documents.drivingLicenseDocument),
+    hasDocumentReference(driverProfile.documents.proofOfAddressDocument)
+  ]);
+  const staffReadiness = calculateCompletionPercent([
+    staffProfile.storeName,
+    staffProfile.storeOwner,
+    staffProfile.businessRegistrationNumber,
+    staffProfile.storeAddress,
+    staffProfile.storeContactNumber,
+    staffProfile.storeEmail,
+    hasDocumentReference(staffProfile.documents.businessRegistrationDocument),
+    hasDocumentReference(staffProfile.documents.proofOfAddressDocument)
+  ]);
+  const activeRoleRecord = (user?.roles || []).find((item) => item.roleKey === user?.activeRole);
+  const currentRoleReadiness = user?.activeRole === 'driver'
+    ? driverReadiness
+    : user?.activeRole === 'staff'
+      ? staffReadiness
+      : profileCompletion;
+
+  const buildOnboardingState = (roleKey, roleItem, applicationItem, readinessPercent, profileBlocked, applicationBlocked) => {
+    const roleName = roleLabel(roleKey);
+    const approved = roleItem?.roleStatus === 'active' && roleItem?.verificationStatus === 'verified';
+
+    if (profileBlocked || applicationBlocked) {
+      return {
+        tone: 'danger',
+        stateLabel: 'Needs admin follow-up',
+        helperTitle: `${roleName} access is blocked`,
+        helperText: `This ${roleName.toLowerCase()} record is suspended or rejected. Review the admin note before making more changes.`,
+        readinessPercent
+      };
+    }
+
+    if (approved) {
+      return {
+        tone: 'success',
+        stateLabel: 'Ready to use',
+        helperTitle: `${roleName} access is approved`,
+        helperText: 'Your role is active and verified. Keep the profile data current so future reviews stay smooth.',
+        readinessPercent
+      };
+    }
+
+    if (applicationItem?.status === 'pending') {
+      return {
+        tone: 'info',
+        stateLabel: 'Waiting for review',
+        helperTitle: `${roleName} request is pending`,
+        helperText: 'Admin review is in progress. Keep your details and document metadata updated in case changes are requested.',
+        readinessPercent
+      };
+    }
+
+    if (applicationItem?.status === 'rejected') {
+      return {
+        tone: 'warning',
+        stateLabel: 'Update and re-apply',
+        helperTitle: `${roleName} request needs updates`,
+        helperText: 'Review the rejection note, update the required details, then re-submit the role request.',
+        readinessPercent
+      };
+    }
+
+    if (roleItem) {
+      return {
+        tone: 'info',
+        stateLabel: 'Profile in progress',
+        helperTitle: `Finish the ${roleName.toLowerCase()} setup`,
+        helperText: 'Complete the profile details first, then submit the role request when the profile is ready.',
+        readinessPercent
+      };
+    }
+
+    return {
+      tone: 'warning',
+      stateLabel: 'Not started',
+      helperTitle: `Start the ${roleName.toLowerCase()} onboarding`,
+      helperText: 'Add the required details below before you send the request for approval.',
+      readinessPercent
+    };
+  };
+
+  const driverOnboardingState = buildOnboardingState(
+    'driver',
+    driverRole,
+    driverApplication,
+    driverReadiness,
+    driverProfileBlocked,
+    driverApplicationBlocked
+  );
+  const staffOnboardingState = buildOnboardingState(
+    'staff',
+    staffRole,
+    staffApplication,
+    staffReadiness,
+    staffProfileBlocked,
+    staffApplicationBlocked
+  );
 
   const updateDriverDocument = (documentKey, field, value) => {
     setDriverProfile((prev) => ({
@@ -399,11 +539,11 @@ export default function Profile() {
   );
 
   const renderAccountHealthWidget = () => (
-    <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+    <section className="profile-panel-card">
       <div className="card-header">
         <div>
           <h3>Account Health</h3>
-          <p style={{ color: 'var(--text-light)' }}>
+          <p className="profile-panel-copy">
             A compact summary of your account status, role readiness, and the next action blocking role progress.
           </p>
         </div>
@@ -412,18 +552,18 @@ export default function Profile() {
         </span>
       </div>
 
-      <div className="pill-row" style={{ marginBottom: '1rem' }}>
+      <div className="pill-row profile-panel-pills">
         <span className="badge badge-info">Active role: {accountHealth?.activeRoleLabel || roleLabel(user?.activeRole || 'customer')}</span>
         <span className="badge badge-success">Primary role: {accountHealth?.primaryRoleLabel || roleLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
         <span className="badge badge-warning">Profile: {accountHealth?.profileCompletionPercent ?? profileCompletion}%</span>
-        <span className="badge badge-info">Pending: {accountHealth?.pendingApplicationsCount ?? 0}</span>
-        <span className="badge badge-info">Unread: {accountHealth?.unreadNotificationsCount ?? unreadNotificationCount}</span>
+        <span className="badge badge-info">Pending: {accountHealth?.pendingApplicationsCount ?? pendingApplicationsCount}</span>
+        <span className="badge badge-info">Unread: {accountHealth?.unreadNotificationsCount ?? unreadManagedNotificationsCount}</span>
         <span className={getBadgeClass(accountHealth?.verificationTone)}>
           Verification: {accountHealth?.verificationStateLabel || currentVerification?.stateLabel || 'Not Started'}
         </span>
       </div>
 
-      <div className="admin-list-item">
+      <div className="admin-list-item profile-highlight-row">
         <div>
           <h4>
             Next role action
@@ -442,16 +582,16 @@ export default function Profile() {
           {accountHealth?.nextRoleAction?.stateLabel || 'All Set'}
         </span>
       </div>
-    </div>
+    </section>
   );
 
   const renderRoleHistoryTimeline = () => (
-    <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+    <section className="profile-panel-card">
       <div className="card-header">
         <div>
           <h3>Role History</h3>
-          <p style={{ color: 'var(--text-light)' }}>
-            Review how your role requests, approvals, switches, and primary-role changes happened over time.
+          <p className="profile-panel-copy">
+            Review how your role applications, approvals, switches, and primary-role changes happened over time.
           </p>
         </div>
         <span className="badge badge-info">{roleHistory.length} events</span>
@@ -480,50 +620,161 @@ export default function Profile() {
           ))}
         </div>
       ) : (
-        <div className="reservation-empty">No role history yet. Role requests, approvals, switches, and primary-role changes will appear here.</div>
+        <div className="reservation-empty">No role history yet. Role applications, approvals, switches, and primary-role changes will appear here.</div>
       )}
-    </div>
+    </section>
   );
 
   return (
-    <div className="dashboard-layout page-content">
+    <div className="dashboard-layout page-content profile-page">
       <Sidebar />
       <main className="dashboard-content">
-        <div className="form-header">
-          <h2>My Profile</h2>
-          <p style={{ color: 'var(--text-light)' }}>Manage your common account details, role-specific profiles, and provider onboarding.</p>
-        </div>
+        <section className="form-card profile-hero-card">
+          <div className="profile-hero-main">
+            <div className="profile-hero-identity">
+              <img className="profile-hero-avatar" src={avatarSrc} alt={user?.fullName} />
+              <div className="profile-hero-copy">
+                <span className="profile-hero-kicker">Profile Hub</span>
+                <h2>{user?.fullName}</h2>
+                <p>{user?.email}</p>
+                <div className="profile-hero-meta">
+                  <span className="badge badge-info">Active role: {roleLabel(user?.activeRole || 'customer')}</span>
+                  <span className="badge badge-success">Primary role: {roleLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
+                  <span className={getBadgeClass(getStatusTone(user?.accountStatus))}>Account: {formatStatusLabel(user?.accountStatus)}</span>
+                  <span className="badge badge-info">{switchableRolesCount} switchable role(s)</span>
+                </div>
+              </div>
+            </div>
 
-        <div className="profile-summary-card">
-          <img className="profile-summary-avatar" src={avatarSrc} alt={user?.fullName} />
-          <div>
-            <h3>{user?.fullName}</h3>
-            <p>{user?.email}</p>
-            <div className="pill-row" style={{ marginTop: '0.75rem' }}>
-              <span className="badge badge-info">Active role: {user?.activeRole}</span>
-              <span className="badge badge-success">Primary role: {user?.primaryRole}</span>
-              <span className="badge badge-warning">Account: {user?.accountStatus}</span>
-              <span className="badge badge-info">Profile complete: {profileCompletion}%</span>
+            <div className="profile-hero-aside">
+              <div className="profile-progress-card">
+                <div className="profile-progress-header">
+                  <strong>{profileCompletion}%</strong>
+                  <span>profile completion</span>
+                </div>
+                <div className="account-progress-track">
+                  <div className="account-progress-fill" style={{ width: `${profileCompletion}%` }} />
+                </div>
+                <p>{pendingApplicationsCount} pending role request(s) and {unreadManagedNotificationsCount} unread workflow notification(s).</p>
+              </div>
+
+              <div className="profile-hero-actions">
+                <a className="btn btn-primary btn-sm" href="#common-profile">Edit Common Profile</a>
+                <Link className="btn btn-outline btn-sm" to="/switch-roles">Switch Roles</Link>
+                <Link className="btn btn-outline btn-sm" to="/apply-roles">Open Role Requests</Link>
+                <a className="btn btn-outline btn-sm" href="#notifications">Open Notifications</a>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
         {(driverApplication?.status === 'pending' || staffApplication?.status === 'pending') && (
           <div className="alert alert-info">
-            A provider application is waiting for admin review. Pending roles stay visible for onboarding, but they cannot be used as active roles until approved.
+            A role application is waiting for admin review. Pending roles stay visible for onboarding, but they cannot be used as active roles until approved.
           </div>
         )}
 
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-danger">{error}</div>}
 
-        {renderAccountHealthWidget()}
+        <nav className="profile-section-nav" aria-label="Profile sections">
+          {[
+            ['#account-overview', 'Account Overview'],
+            ['#common-profile', 'Common Profile'],
+            ['#verification-status', 'Verification & Status'],
+            ['#customer-profile', 'Customer Profile'],
+            ['#driver-role', 'Driver Onboarding'],
+            ['#staff-role', 'Staff Onboarding'],
+            ['#admin-profile', 'Admin Profile'],
+            ['#notifications', 'Notifications'],
+            ['#role-history', 'Role History']
+          ].map(([href, label]) => (
+            <a key={href} href={href}>{label}</a>
+          ))}
+        </nav>
 
-        <div className="form-card" style={{ marginBottom: '1.5rem' }}>
-          <div className="card-header">
+        <div className="stats-grid profile-health-grid">
+          <div className="stat-card profile-stat-card">
+            <div className="stat-info">
+              <h3>{profileCompletion}%</h3>
+              <p>Profile completion</p>
+            </div>
+          </div>
+          <div className="stat-card profile-stat-card">
+            <div className="stat-info">
+              <h3>{pendingApplicationsCount}</h3>
+              <p>Pending applications</p>
+            </div>
+          </div>
+          <div className="stat-card profile-stat-card">
+            <div className="stat-info">
+              <h3>{unreadManagedNotificationsCount}</h3>
+              <p>Unread role notifications</p>
+            </div>
+          </div>
+          <div className="stat-card profile-stat-card">
+            <div className="stat-info">
+              <h3>{currentRoleReadiness}%</h3>
+              <p>Current role readiness</p>
+            </div>
+          </div>
+        </div>
+
+        <section id="account-overview" className="form-card profile-section-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="profile-section-heading">
             <div>
-              <h3>Verification Center</h3>
-              <p style={{ color: 'var(--text-light)' }}>
+              <h3>Account Overview</h3>
+              <p>Review profile health, account status, and the current role state before making changes.</p>
+            </div>
+          </div>
+
+          <div className="profile-overview-grid">
+            {renderAccountHealthWidget()}
+
+            <section className="profile-panel-card">
+              <div className="card-header">
+                <div>
+                  <h3>Account Snapshot</h3>
+                  <p className="profile-panel-copy">Key identity and role details in one compact view.</p>
+                </div>
+                <span className={getBadgeClass(getStatusTone(user?.accountStatus))}>{formatStatusLabel(user?.accountStatus)}</span>
+              </div>
+
+              <div className="admin-user-detail-grid">
+                <div className="admin-data-item">
+                  <span>Full name</span>
+                  <strong>{user?.fullName || 'Not provided'}</strong>
+                </div>
+                <div className="admin-data-item">
+                  <span>Username</span>
+                  <strong>{user?.username || 'Not provided'}</strong>
+                </div>
+                <div className="admin-data-item">
+                  <span>Phone</span>
+                  <strong>{user?.phone || 'Not provided'}</strong>
+                </div>
+                <div className="admin-data-item">
+                  <span>City</span>
+                  <strong>{user?.city || 'Not provided'}</strong>
+                </div>
+                <div className="admin-data-item">
+                  <span>Active role status</span>
+                  <strong>{formatStatusLabel(activeRoleRecord?.roleStatus || 'active')}</strong>
+                </div>
+                <div className="admin-data-item">
+                  <span>Active verification</span>
+                  <strong>{formatStatusLabel(activeRoleRecord?.verificationStatus || 'not_started')}</strong>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section id="verification-status" className="form-card profile-section-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="profile-section-heading">
+            <div>
+              <h3>Verification &amp; Status</h3>
+              <p className="profile-section-helper">
                 Check your account status, role verification, and provider application progress before switching roles or applying for review.
               </p>
             </div>
@@ -532,7 +783,26 @@ export default function Profile() {
             </span>
           </div>
 
-          <div className="pill-row" style={{ marginBottom: '1rem' }}>
+          <div className="role-onboarding-summary-grid">
+            <div className="admin-data-item">
+              <span>Current role</span>
+              <strong>{roleLabel(user?.activeRole || 'customer')}</strong>
+            </div>
+            <div className="admin-data-item">
+              <span>Primary role</span>
+              <strong>{roleLabel(user?.primaryRole || user?.activeRole || 'customer')}</strong>
+            </div>
+            <div className="admin-data-item">
+              <span>Current verification</span>
+              <strong>{currentVerification?.stateLabel || 'Not Started'}</strong>
+            </div>
+            <div className="admin-data-item">
+              <span>Profile completion</span>
+              <strong>{profileCompletion}%</strong>
+            </div>
+          </div>
+
+          <div className="pill-row profile-panel-pills">
             <span className="badge badge-info">Current role: {roleLabel(user?.activeRole || 'customer')}</span>
             <span className={getBadgeClass(currentVerification?.tone)}>
               Current verification: {currentVerification?.stateLabel || 'Not Started'}
@@ -540,7 +810,7 @@ export default function Profile() {
             <span className="badge badge-warning">Profile completion: {profileCompletion}%</span>
           </div>
 
-          <p style={{ color: 'var(--text-light)', marginBottom: '1rem' }}>
+          <p className="profile-section-helper">
             {verificationCenter?.accountGuidance || 'Complete your account details and keep role documents current so admin reviews move smoothly.'}
           </p>
 
@@ -552,14 +822,14 @@ export default function Profile() {
 
           <div className="admin-stack">
             {verificationItems.map((item) => (
-              <div key={item.roleKey} className="admin-list-item" style={{ alignItems: 'flex-start' }}>
+              <div key={item.roleKey} className="admin-list-item profile-status-item">
                 <div style={{ flex: 1 }}>
                   <h4>
                     {item.roleLabel}
                     {item.roleKey === user?.activeRole ? ' (Current Role)' : ''}
                   </h4>
                   <p style={{ marginBottom: '0.75rem' }}>{item.guidance}</p>
-                  <div className="pill-row" style={{ marginBottom: '0.75rem' }}>
+                  <div className="pill-row profile-panel-pills">
                     <span className={getBadgeClass(item.tone)}>{item.stateLabel}</span>
                     <span className={getBadgeClass(getStatusTone(item.roleStatus))}>Role status: {formatStatusLabel(item.roleStatus)}</span>
                     <span className={getBadgeClass(getStatusTone(item.verificationStatus))}>Verification: {formatStatusLabel(item.verificationStatus)}</span>
@@ -586,7 +856,7 @@ export default function Profile() {
                   )}
 
                   {item.lastReviewedAt && (
-                    <p style={{ color: 'var(--text-light)' }}>
+                    <p className="profile-section-helper">
                       Last review: {formatDateTime(item.lastReviewedAt)}
                     </p>
                   )}
@@ -594,17 +864,17 @@ export default function Profile() {
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div id="notifications" className="form-card" style={{ marginBottom: '1.5rem' }}>
-          <div className="card-header">
+        <div id="notifications" className="form-card profile-section-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="profile-section-heading">
             <div>
               <h3>Notifications</h3>
-              <p style={{ color: 'var(--text-light)' }}>Track booking updates, admin actions, and role workflow changes from one feed.</p>
+              <p>Focused updates for profile edits, role applications, approvals, verification changes, and switching access.</p>
             </div>
             <div className="pill-row">
-              <span className="badge badge-info">{unreadNotificationCount} unread</span>
-              {notifications.length > 0 && (
+              <span className="badge badge-info">{unreadManagedNotificationsCount} unread</span>
+              {managedNotifications.length > 0 && (
                 <button className="btn btn-outline btn-sm" type="button" onClick={() => markAllNotificationsRead()}>
                   Mark All Read
                 </button>
@@ -612,45 +882,92 @@ export default function Profile() {
             </div>
           </div>
 
-          {notifications.length > 0 ? (
-            <div className="notification-feed">
-              {notifications.map((notification) => (
-                <div key={notification._id} className={`notification-card${notification.isRead ? '' : ' unread'}`}>
-                  <div className="notification-card-copy">
-                    <strong>{notification.title}</strong>
-                    <p>{notification.message}</p>
-                    <small>{formatDateTime(notification.createdAt)}</small>
-                  </div>
-                  <div className="notification-card-actions">
-                    {!notification.isRead && (
-                      <button
-                        className="btn btn-outline btn-sm"
-                        type="button"
-                        onClick={() => markNotificationRead(notification._id)}
-                      >
-                        Mark Read
-                      </button>
-                    )}
-                    {notification.link && (
-                      <Link className="btn btn-primary btn-sm" to={notification.link}>
-                        Open
-                      </Link>
-                    )}
-                  </div>
+          <div className="profile-overview-grid">
+            <section className="profile-panel-card">
+              <div className="card-header">
+                <div>
+                  <h3>Top Preview</h3>
+                  <p className="profile-panel-copy">Unread items and recent workflow updates appear here first.</p>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="reservation-empty">No notifications yet. Booking and review actions will appear here.</div>
-          )}
+              </div>
+
+              {managedNotifications.length > 0 ? (
+                <div className="notification-feed">
+                  {managedNotifications.slice(0, 3).map((notification) => (
+                    <div key={notification._id} className={`notification-card${notification.isRead ? '' : ' unread'}`}>
+                      <div className="notification-card-copy">
+                        <strong>{notification.title}</strong>
+                        <p>{notification.message}</p>
+                        <small>{formatDateTime(notification.createdAt)}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="reservation-empty">No profile or role workflow notifications yet.</div>
+              )}
+            </section>
+
+            <section className="profile-panel-card">
+              <div className="card-header">
+                <div>
+                  <h3>Notification Center</h3>
+                  <p className="profile-panel-copy">Open, mark read, and clear profile-related updates from one feed.</p>
+                </div>
+              </div>
+
+              {managedNotifications.length > 0 ? (
+                <div className="notification-feed">
+                  {managedNotifications.map((notification) => (
+                    <div key={notification._id} className={`notification-card${notification.isRead ? '' : ' unread'}`}>
+                      <div className="notification-card-copy">
+                        <strong>{notification.title}</strong>
+                        <p>{notification.message}</p>
+                        <small>{formatDateTime(notification.createdAt)}</small>
+                      </div>
+                      <div className="notification-card-actions">
+                        {!notification.isRead && (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            type="button"
+                            onClick={() => markNotificationRead(notification._id)}
+                          >
+                            Mark Read
+                          </button>
+                        )}
+                        {notification.link && (
+                          <Link className="btn btn-primary btn-sm" to={notification.link}>
+                            Open
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="reservation-empty">No notifications yet. Role and profile actions will appear here.</div>
+              )}
+            </section>
+          </div>
         </div>
 
-        {renderRoleHistoryTimeline()}
+        <section id="role-history" className="form-card profile-section-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="profile-section-heading">
+            <div>
+              <h3>Role History</h3>
+              <p>Review the full timeline of applications, approvals, switches, and role ownership changes.</p>
+            </div>
+          </div>
+          {renderRoleHistoryTimeline()}
+        </section>
 
-        <div className="form-card" style={{ marginBottom: '1.5rem' }}>
-          <div className="form-header">
-            <h2>Common Profile</h2>
-            <p style={{ color: 'var(--text-light)' }}>These details belong to your account regardless of the active role.</p>
+        <div id="common-profile" className="form-card profile-section-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="profile-section-heading">
+            <div>
+              <h3>Common Profile</h3>
+              <p>These details belong to your account regardless of the active role and drive overall completion.</p>
+            </div>
+            <span className="badge badge-warning">{profileCompletion}% complete</span>
           </div>
           <form onSubmit={saveBasicProfile}>
             <div className="form-row">
@@ -741,17 +1058,21 @@ export default function Profile() {
               <label>Profile Picture</label>
               <input type="file" accept="image/*" onChange={(e) => setProfilePic(e.target.files?.[0] || null)} />
             </div>
-            <button className="btn btn-primary" type="submit" disabled={busyAction === 'basic'}>
-              {busyAction === 'basic' ? 'Saving...' : 'Save Common Profile'}
-            </button>
+            <div className="profile-form-actions">
+              <button className="btn btn-primary" type="submit" disabled={busyAction === 'basic'}>
+                {busyAction === 'basic' ? 'Saving...' : 'Save Common Profile'}
+              </button>
+            </div>
           </form>
         </div>
 
         {customerRole && (
-          <div className="form-card" style={{ marginBottom: '1.5rem' }}>
-            <div className="form-header">
-              <h2>Customer Profile</h2>
-              <p style={{ color: 'var(--text-light)' }}>Customer-specific details stay available for booking-side workflows in the wider Yamu system.</p>
+          <div id="customer-profile" className="form-card profile-section-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="profile-section-heading">
+              <div>
+                <h3>Customer Profile</h3>
+                <p>Customer-specific details stay available for booking-side workflows in the wider Yamu system.</p>
+              </div>
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();
@@ -766,20 +1087,50 @@ export default function Profile() {
                 <label>Notes</label>
                 <textarea rows="3" value={customerProfile.notes} onChange={(e) => setCustomerProfile((prev) => ({ ...prev, notes: e.target.value }))} />
               </div>
-              <button className="btn btn-primary" type="submit" disabled={busyAction === 'customer'}>
-                {busyAction === 'customer' ? 'Saving...' : 'Save Customer Profile'}
-              </button>
+              <div className="profile-form-actions">
+                <button className="btn btn-primary" type="submit" disabled={busyAction === 'customer'}>
+                  {busyAction === 'customer' ? 'Saving...' : 'Save Customer Profile'}
+                </button>
+              </div>
             </form>
           </div>
         )}
 
         {(customerRole || driverRole) && (
-          <div id="driver-role" className="form-card" style={{ marginBottom: '1.5rem' }}>
-            <div className="form-header">
-              <h2>Driver Role Onboarding</h2>
-              <p style={{ color: 'var(--text-light)' }}>Use this section to maintain the driver profile and submit or re-submit the provider request.</p>
+          <div id="driver-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="profile-section-heading">
+              <div>
+                <h3>Driver Onboarding</h3>
+                <p>Maintain the driver profile, review application state, and manage the next action from one card.</p>
+              </div>
+              <span className={getBadgeClass(driverOnboardingState.tone)}>{driverOnboardingState.stateLabel}</span>
             </div>
-            <div className="pill-row" style={{ marginBottom: '1rem' }}>
+
+            <div className="role-onboarding-summary-grid">
+              <div className="admin-data-item">
+                <span>Readiness</span>
+                <strong>{driverOnboardingState.readinessPercent}%</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Role status</span>
+                <strong>{formatStatusLabel(driverRole?.roleStatus || 'not_assigned')}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Verification</span>
+                <strong>{formatStatusLabel(driverRole?.verificationStatus || 'unverified')}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Application</span>
+                <strong>{formatStatusLabel(driverApplication?.status || 'not_submitted')}</strong>
+              </div>
+            </div>
+
+            <div className={`profile-next-step profile-next-step-${driverOnboardingState.tone}`}>
+              <strong>{driverOnboardingState.helperTitle}</strong>
+              <p>{driverOnboardingState.helperText}</p>
+            </div>
+
+            <div className="pill-row profile-panel-pills">
               <span className="badge badge-info">Role status: {driverRole?.roleStatus || 'not assigned'}</span>
               <span className="badge badge-warning">Verification: {driverRole?.verificationStatus || 'unverified'}</span>
               <span className="badge badge-success">Application: {driverApplication?.status || 'not submitted'}</span>
@@ -880,45 +1231,76 @@ export default function Profile() {
                 </div>
               </div>
               {renderDocumentMeta(driverProfile.documents.proofOfAddressDocument)}
-              {driverRole && (
-                <button className="btn btn-secondary" type="submit" disabled={busyAction === 'driver' || driverProfileBlocked}>
-                  {busyAction === 'driver' ? 'Saving...' : 'Save Driver Profile'}
-                </button>
-              )}
+              <div className="profile-form-actions">
+                {driverRole && (
+                  <button className="btn btn-secondary" type="submit" disabled={busyAction === 'driver' || driverProfileBlocked}>
+                    {busyAction === 'driver' ? 'Saving...' : 'Save Driver Profile'}
+                  </button>
+                )}
+              </div>
             </form>
             {customerRole && !driverApplicationBlocked && (
-              <button
-                className="btn btn-primary"
-                style={{ marginTop: '1rem' }}
-                type="button"
-                disabled={
-                  busyAction === 'apply-driver'
-                  || driverApplication?.status === 'pending'
-                  || (driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified')
-                }
-                onClick={() => submitProviderApplication('driver', driverProfile)}
-              >
-                {busyAction === 'apply-driver'
-                  ? 'Submitting...'
-                  : driverApplication?.status === 'pending'
-                    ? 'Driver Application Pending'
-                    : driverApplication?.status === 'rejected'
-                      ? 'Re-apply for Driver Role'
-                      : driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified'
-                        ? 'Driver Role Approved'
-                        : 'Apply for Driver Role'}
-              </button>
+              <div className="profile-form-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={
+                    busyAction === 'apply-driver'
+                    || driverApplication?.status === 'pending'
+                    || (driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified')
+                  }
+                  onClick={() => submitProviderApplication('driver', driverProfile)}
+                >
+                  {busyAction === 'apply-driver'
+                    ? 'Submitting...'
+                    : driverApplication?.status === 'pending'
+                      ? 'Driver Application Pending'
+                      : driverApplication?.status === 'rejected'
+                        ? 'Re-apply for Driver Role'
+                        : driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified'
+                          ? 'Driver Role Approved'
+                          : 'Apply for Driver Role'}
+                </button>
+              </div>
             )}
           </div>
         )}
 
         {(customerRole || staffRole) && (
-          <div id="staff-role" className="form-card" style={{ marginBottom: '1.5rem' }}>
-            <div className="form-header">
-              <h2>Staff Role Onboarding</h2>
-              <p style={{ color: 'var(--text-light)' }}>Maintain rental center information and submit the staff provider request from here.</p>
+          <div id="staff-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="profile-section-heading">
+              <div>
+                <h3>Staff Onboarding</h3>
+                <p>Maintain rental center information, document placeholders, and the staff provider request in one place.</p>
+              </div>
+              <span className={getBadgeClass(staffOnboardingState.tone)}>{staffOnboardingState.stateLabel}</span>
             </div>
-            <div className="pill-row" style={{ marginBottom: '1rem' }}>
+
+            <div className="role-onboarding-summary-grid">
+              <div className="admin-data-item">
+                <span>Readiness</span>
+                <strong>{staffOnboardingState.readinessPercent}%</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Role status</span>
+                <strong>{formatStatusLabel(staffRole?.roleStatus || 'not_assigned')}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Verification</span>
+                <strong>{formatStatusLabel(staffRole?.verificationStatus || 'unverified')}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Application</span>
+                <strong>{formatStatusLabel(staffApplication?.status || 'not_submitted')}</strong>
+              </div>
+            </div>
+
+            <div className={`profile-next-step profile-next-step-${staffOnboardingState.tone}`}>
+              <strong>{staffOnboardingState.helperTitle}</strong>
+              <p>{staffOnboardingState.helperText}</p>
+            </div>
+
+            <div className="pill-row profile-panel-pills">
               <span className="badge badge-info">Role status: {staffRole?.roleStatus || 'not assigned'}</span>
               <span className="badge badge-warning">Verification: {staffRole?.verificationStatus || 'unverified'}</span>
               <span className="badge badge-success">Application: {staffApplication?.status || 'not submitted'}</span>
@@ -1002,43 +1384,48 @@ export default function Profile() {
                 </div>
               </div>
               {renderDocumentMeta(staffProfile.documents.proofOfAddressDocument)}
-              {staffRole && (
-                <button className="btn btn-secondary" type="submit" disabled={busyAction === 'staff' || staffProfileBlocked}>
-                  {busyAction === 'staff' ? 'Saving...' : 'Save Staff Profile'}
-                </button>
-              )}
+              <div className="profile-form-actions">
+                {staffRole && (
+                  <button className="btn btn-secondary" type="submit" disabled={busyAction === 'staff' || staffProfileBlocked}>
+                    {busyAction === 'staff' ? 'Saving...' : 'Save Staff Profile'}
+                  </button>
+                )}
+              </div>
             </form>
             {customerRole && !staffApplicationBlocked && (
-              <button
-                className="btn btn-primary"
-                style={{ marginTop: '1rem' }}
-                type="button"
-                disabled={
-                  busyAction === 'apply-staff'
-                  || staffApplication?.status === 'pending'
-                  || (staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified')
-                }
-                onClick={() => submitProviderApplication('staff', staffProfile)}
-              >
-                {busyAction === 'apply-staff'
-                  ? 'Submitting...'
-                  : staffApplication?.status === 'pending'
-                    ? 'Staff Application Pending'
-                    : staffApplication?.status === 'rejected'
-                      ? 'Re-apply for Staff Role'
-                      : staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified'
-                        ? 'Staff Role Approved'
-                        : 'Apply for Staff Role'}
-              </button>
+              <div className="profile-form-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={
+                    busyAction === 'apply-staff'
+                    || staffApplication?.status === 'pending'
+                    || (staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified')
+                  }
+                  onClick={() => submitProviderApplication('staff', staffProfile)}
+                >
+                  {busyAction === 'apply-staff'
+                    ? 'Submitting...'
+                    : staffApplication?.status === 'pending'
+                      ? 'Staff Application Pending'
+                      : staffApplication?.status === 'rejected'
+                        ? 'Re-apply for Staff Role'
+                        : staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified'
+                          ? 'Staff Role Approved'
+                          : 'Apply for Staff Role'}
+                </button>
+              </div>
             )}
           </div>
         )}
 
         {adminRole && (
-          <div className="form-card">
-            <div className="form-header">
-              <h2>Admin Profile</h2>
-              <p style={{ color: 'var(--text-light)' }}>Reserved for seeded administrators and internal control notes.</p>
+          <div id="admin-profile" className="form-card profile-section-card">
+            <div className="profile-section-heading">
+              <div>
+                <h3>Admin Profile</h3>
+                <p>Reserved for seeded administrators and internal control notes.</p>
+              </div>
             </div>
             <form onSubmit={(e) => {
               e.preventDefault();
@@ -1053,9 +1440,11 @@ export default function Profile() {
                 <label>Control Notes</label>
                 <textarea rows="4" value={adminProfile.controlNotes} onChange={(e) => setAdminProfile((prev) => ({ ...prev, controlNotes: e.target.value }))} />
               </div>
-              <button className="btn btn-primary" type="submit" disabled={busyAction === 'admin'}>
-                {busyAction === 'admin' ? 'Saving...' : 'Save Admin Profile'}
-              </button>
+              <div className="profile-form-actions">
+                <button className="btn btn-primary" type="submit" disabled={busyAction === 'admin'}>
+                  {busyAction === 'admin' ? 'Saving...' : 'Save Admin Profile'}
+                </button>
+              </div>
             </form>
           </div>
         )}

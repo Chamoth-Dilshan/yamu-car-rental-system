@@ -7,8 +7,8 @@ const menuItems = {
     { section: 'Account' },
     { to: '/account', label: 'Overview', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
-    { to: '/profile', label: 'Profile Details', end: true },
-    { to: '/apply-roles', label: 'Role Applications', end: true },
+    { to: '/profile', label: 'Profile Hub', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true },
     { section: 'Discover' },
     { to: '/cars', label: 'Explore Cars', end: true },
@@ -20,15 +20,15 @@ const menuItems = {
     { to: '/driver/bookings', label: 'Booking Requests', end: true },
     { section: 'Account' },
     { to: '/account', label: 'Overview', end: true },
-    { to: '/profile', label: 'Profile Details', end: true },
-    { to: '/apply-roles', label: 'Role Applications', end: true },
+    { to: '/profile', label: 'Profile Hub', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   staff: [
     { section: 'Account' },
     { to: '/account', label: 'Overview', end: true },
-    { to: '/profile', label: 'Profile Details', end: true },
-    { to: '/apply-roles', label: 'Role Applications', end: true },
+    { to: '/profile', label: 'Profile Hub', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   admin: [
@@ -38,7 +38,7 @@ const menuItems = {
     { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: false },
     { section: 'Account' },
-    { to: '/profile', label: 'Profile Details', end: true },
+    { to: '/profile', label: 'Profile Hub', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ]
 }
@@ -79,6 +79,7 @@ export default function Sidebar() {
         <img src={avatarSrc} alt={user?.fullName} />
         <h4>{user?.fullName}</h4>
         <span>{user?.activeRole}</span>
+        <small>{user?.primaryRole ? `Primary: ${user.primaryRole}` : 'Primary role pending'}</small>
       </div>
       <nav className="sidebar-nav">
         {items.map((item) => {

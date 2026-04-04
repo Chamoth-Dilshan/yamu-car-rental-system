@@ -275,6 +275,21 @@ export default function AdminUsers() {
   const selectedPendingUser = visibleUsers.find((user) => user._id === pendingDetailUserId) || null;
   const selectedRoleUser = visibleUsers.find((user) => user._id === roleDetailUserId) || null;
   const timelineUserId = selectedUserId || roleDetailUserId || '';
+  const usersSectionStats = [
+    { label: 'Visible Users', value: filteredUsers.length },
+    { label: 'Inactive Accounts', value: filteredUsers.filter((item) => ['suspended', 'deactivated'].includes(item.accountStatus)).length },
+    { label: 'Pending Reviews', value: filteredUsers.reduce((total, item) => total + getPendingApplications(item).length, 0) }
+  ];
+  const pendingSectionStats = [
+    { label: 'Visible Reviews', value: filteredPendingUsers.length },
+    { label: 'Queue Items', value: filteredPendingUsers.reduce((total, item) => total + getPendingApplications(item).length, 0) },
+    { label: 'Ready Accounts', value: filteredPendingUsers.filter((item) => item.accountStatus === 'active').length }
+  ];
+  const roleSectionStats = [
+    { label: 'Visible Records', value: filteredUsers.length },
+    { label: 'Switchable Roles', value: filteredUsers.reduce((total, item) => total + item.roles.filter(canUseRole).length, 0) },
+    { label: 'Pending Role Requests', value: filteredUsers.reduce((total, item) => total + getPendingApplications(item).length, 0) }
+  ];
   const showSectionHeader = !(
     (isPendingPath && !isPendingDetailPath)
     || (isUsersPath && !isUserDetailPath)
@@ -756,7 +771,7 @@ export default function AdminUsers() {
         <div>
           <h3>Role History</h3>
           <p style={{ color: 'var(--text-light)' }}>
-            Review role requests, approvals, switches, suspensions, reactivations, and primary-role changes for this account.
+            Review role applications, approvals, switches, suspensions, reactivations, and primary-role changes for this account.
           </p>
         </div>
         <span className="badge badge-info">{roleHistoryItems.length} events</span>
@@ -806,12 +821,28 @@ export default function AdminUsers() {
             <div className="admin-user-summary-tags">
               <span className="badge badge-warning">{pendingApplications.length} pending</span>
               <span className={`badge ${getStatusBadgeClass(user.accountStatus)}`}>{formatLabel(user.accountStatus)}</span>
+              <span className="badge badge-info">Primary: {formatLabel(user.primaryRole || user.activeRole)}</span>
               {pendingApplications.map((application) => (
                 <span key={application.roleKey} className="badge badge-info">{formatLabel(application.roleKey)}</span>
               ))}
             </div>
           </div>
           <span className="badge badge-info">{formatLabel(user.activeRole)}</span>
+        </div>
+
+        <div className="admin-card-stat-row">
+          <div className="admin-mini-stat">
+            <span>Profile</span>
+            <strong>{user.profileCompletion?.percent || 0}%</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Assigned roles</span>
+            <strong>{user.roles.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Queue focus</span>
+            <strong>{pendingApplications.map((application) => formatLabel(application.roleKey)).join(', ')}</strong>
+          </div>
         </div>
 
         <div className="admin-user-card-actions">
@@ -843,7 +874,7 @@ export default function AdminUsers() {
     const pendingApplications = getPendingApplications(selectedPendingUser);
 
     return (
-      <section className="form-card admin-user-detail-panel">
+      <section className="form-card admin-user-detail-panel admin-detail-shell">
         <div className="card-header">
           <div>
             <h3>Pending Approval Review</h3>
@@ -864,6 +895,21 @@ export default function AdminUsers() {
           <span className={`badge ${getStatusBadgeClass(selectedPendingUser.accountStatus)}`}>Account: {formatLabel(selectedPendingUser.accountStatus)}</span>
           <span className="badge badge-warning">{pendingApplications.length} pending</span>
           <span className="badge badge-info">Profile complete: {selectedPendingUser.profileCompletion?.percent || 0}%</span>
+        </div>
+
+        <div className="admin-card-stat-row admin-card-stat-row-detail">
+          <div className="admin-mini-stat">
+            <span>Pending roles</span>
+            <strong>{pendingApplications.map((application) => formatLabel(application.roleKey)).join(', ') || 'None'}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Primary role</span>
+            <strong>{formatLabel(selectedPendingUser.primaryRole || selectedPendingUser.activeRole)}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Assigned roles</span>
+            <strong>{selectedPendingUser.roles.length}</strong>
+          </div>
         </div>
 
         <div className="admin-user-detail-grid" style={{ marginBottom: '1rem' }}>
@@ -905,11 +951,12 @@ export default function AdminUsers() {
     const protectedAdmin = isProtectedAdmin(user);
     const pendingApplications = getPendingApplications(user);
     const isSelected = roleDetailUserId === user._id;
+    const switchableRoles = user.roles.filter(canUseRole);
 
     return (
       <article
         key={user._id}
-        className={`form-card admin-user-summary-card${isSelected ? ' active' : ''}`}
+        className={`form-card admin-user-summary-card admin-role-summary-card${isSelected ? ' active' : ''}`}
       >
         <div className="admin-user-summary-main">
           <div>
@@ -926,6 +973,21 @@ export default function AdminUsers() {
             </div>
           </div>
           <span className="badge badge-info">{formatLabel(user.primaryRole || user.activeRole)}</span>
+        </div>
+
+        <div className="admin-card-stat-row">
+          <div className="admin-mini-stat">
+            <span>Assigned roles</span>
+            <strong>{user.roles.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Switchable</span>
+            <strong>{switchableRoles.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Active / Primary</span>
+            <strong>{formatLabel(user.activeRole)} / {formatLabel(user.primaryRole || user.activeRole)}</strong>
+          </div>
         </div>
 
         <div className="admin-user-card-actions">
@@ -963,7 +1025,7 @@ export default function AdminUsers() {
     const readOnlyMode = !isRoleEditPath || protectedAdmin || !canAssignRolesPermission;
 
     return (
-      <section className="form-card admin-user-detail-panel">
+      <section className={`form-card admin-user-detail-panel admin-detail-shell${readOnlyMode ? ' view-mode' : ' edit-mode'}`}>
         <div className="card-header">
           <div>
             <h3>{readOnlyMode ? 'Role Access Details' : 'Edit Role Access'}</h3>
@@ -992,9 +1054,25 @@ export default function AdminUsers() {
         </div>
 
         <div className="pill-row" style={{ marginBottom: '1rem' }}>
+          <span className={`badge ${readOnlyMode ? 'badge-info' : 'badge-warning'}`}>{readOnlyMode ? 'View mode' : 'Edit mode'}</span>
           <span className="badge badge-info">Active role: {selectedRoleUser.activeRole}</span>
           <span className="badge badge-success">Primary role: {selectedRoleUser.primaryRole}</span>
           <span className={`badge ${getStatusBadgeClass(selectedRoleUser.accountStatus)}`}>Account: {formatLabel(selectedRoleUser.accountStatus)}</span>
+        </div>
+
+        <div className="admin-card-stat-row admin-card-stat-row-detail">
+          <div className="admin-mini-stat">
+            <span>Assigned roles</span>
+            <strong>{selectedRoleUser.roles.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Switchable roles</span>
+            <strong>{switchableRoles.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Pending requests</span>
+            <strong>{pendingApplications.length}</strong>
+          </div>
         </div>
 
         {readOnlyMode ? (
@@ -1019,9 +1097,23 @@ export default function AdminUsers() {
             </div>
             <div className="stats-grid admin-role-grid">
               {selectedRoleUser.roles.map((role) => (
-                <div key={role.roleKey} className="card">
+                <div key={role.roleKey} className="card admin-role-visual-card">
                   <div className="card-body">
                     <h4>{formatLabel(role.roleKey)}</h4>
+                    <div className="pill-row profile-panel-pills">
+                      <span className={`badge ${getStatusBadgeClass(role.roleStatus === 'active' ? 'active' : role.roleStatus === 'deactivated' ? 'deactivated' : 'pending')}`}>
+                        {formatLabel(role.roleStatus)}
+                      </span>
+                      <span className={`badge ${role.verificationStatus === 'verified' ? 'badge-success' : role.verificationStatus === 'rejected' ? 'badge-danger' : 'badge-warning'}`}>
+                        {formatLabel(role.verificationStatus)}
+                      </span>
+                      <span className={`badge ${role.isPrimary ? 'badge-success' : 'badge-info'}`}>
+                        {role.isPrimary ? 'Primary' : 'Assigned'}
+                      </span>
+                      <span className={`badge ${canUseRole(role) ? 'badge-success' : 'badge-warning'}`}>
+                        {canUseRole(role) ? 'Switchable' : 'Restricted'}
+                      </span>
+                    </div>
                     <p className="admin-summary-line">Role status: <strong>{formatLabel(role.roleStatus)}</strong></p>
                     <p className="admin-summary-line">Verification: <strong>{formatLabel(role.verificationStatus)}</strong></p>
                     <p className="admin-summary-line">Primary: <strong>{role.isPrimary ? 'Yes' : 'No'}</strong></p>
@@ -1083,9 +1175,17 @@ export default function AdminUsers() {
 
             <div className="stats-grid admin-role-grid">
               {selectedRoleUser.roles.map((role) => (
-                <div key={role.roleKey} className="card">
+                <div key={role.roleKey} className="card admin-role-visual-card">
                   <div className="card-body">
                     <h4>{formatLabel(role.roleKey)}</h4>
+                    <div className="pill-row profile-panel-pills" style={{ marginBottom: '1rem' }}>
+                      <span className={`badge ${role.isPrimary ? 'badge-success' : 'badge-info'}`}>
+                        {role.isPrimary ? 'Primary role' : 'Assigned role'}
+                      </span>
+                      <span className={`badge ${canUseRole(role) ? 'badge-success' : 'badge-warning'}`}>
+                        {canUseRole(role) ? 'Switchable now' : 'Needs updates'}
+                      </span>
+                    </div>
                     <div className="form-group" style={{ marginTop: '1rem' }}>
                       <label>Role Status</label>
                       <select
@@ -1162,11 +1262,12 @@ export default function AdminUsers() {
     const canDeactivateUser = canEditUsersPermission && !protectedAdmin && currentUser?._id !== user._id && user.accountStatus !== 'deactivated';
     const canRestoreUser = canEditUsersPermission && !protectedAdmin && user.accountStatus === 'deactivated';
     const isSelected = selectedUserId === user._id;
+    const usableRoles = user.roles.filter(canUseRole);
 
     return (
       <article
         key={user._id}
-        className={`form-card admin-user-summary-card${isSelected ? ' active' : ''}`}
+        className={`form-card admin-user-summary-card admin-user-summary-shell${isSelected ? ' active' : ''}`}
       >
         <div className="admin-user-summary-main">
           <div>
@@ -1186,6 +1287,21 @@ export default function AdminUsers() {
           <span className={`badge ${hasAdminRole ? 'badge-warning' : 'badge-info'}`}>
             {formatLabel(user.activeRole)}
           </span>
+        </div>
+
+        <div className="admin-card-stat-row">
+          <div className="admin-mini-stat">
+            <span>Primary role</span>
+            <strong>{formatLabel(user.primaryRole || user.activeRole)}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Usable roles</span>
+            <strong>{usableRoles.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Profile</span>
+            <strong>{user.profileCompletion?.percent || 0}%</strong>
+          </div>
         </div>
 
         <div className="admin-user-card-actions">
@@ -1243,7 +1359,7 @@ export default function AdminUsers() {
     const readOnlyMode = !isEditPath || protectedAdmin || !canEditUsersPermission;
 
     return (
-      <section className="form-card admin-user-detail-panel">
+      <section className={`form-card admin-user-detail-panel admin-detail-shell${readOnlyMode ? ' view-mode' : ' edit-mode'}`}>
         <div className="card-header">
           <div>
             <h3>{readOnlyMode ? 'User Details' : 'Edit User'}</h3>
@@ -1271,9 +1387,25 @@ export default function AdminUsers() {
         </div>
 
         <div className="pill-row" style={{ marginBottom: '1rem' }}>
+          <span className={`badge ${readOnlyMode ? 'badge-info' : 'badge-warning'}`}>{readOnlyMode ? 'View mode' : 'Edit mode'}</span>
           <span className="badge badge-info">Active role: {selectedUser.activeRole}</span>
           <span className="badge badge-success">Primary role: {selectedUser.primaryRole}</span>
           <span className="badge badge-warning">Account: {selectedUser.accountStatus}</span>
+        </div>
+
+        <div className="admin-card-stat-row admin-card-stat-row-detail">
+          <div className="admin-mini-stat">
+            <span>Assigned roles</span>
+            <strong>{selectedUser.roles.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Switchable roles</span>
+            <strong>{switchableRoles.length}</strong>
+          </div>
+          <div className="admin-mini-stat">
+            <span>Pending applications</span>
+            <strong>{pendingApplications.length}</strong>
+          </div>
         </div>
 
         {canEditUsersPermission && !protectedAdmin && currentUser?._id !== selectedUser._id && (
@@ -1488,6 +1620,20 @@ export default function AdminUsers() {
   const renderPendingSection = () => (
     pendingReviewUsers.length > 0 ? (
       <section className="form-card">
+        <div className="admin-filter-heading">
+          <div>
+            <h3>Pending Approval Queue</h3>
+            <p className="profile-section-helper">Filter the queue, then open a focused review panel for each user.</p>
+          </div>
+        </div>
+        <div className="admin-card-stat-row admin-card-stat-row-detail">
+          {pendingSectionStats.map((item) => (
+            <div key={item.label} className="admin-mini-stat">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
         <div className="admin-user-filters">
           <div className="form-group">
             <label htmlFor="pending-search">Search</label>
@@ -1531,6 +1677,20 @@ export default function AdminUsers() {
   const renderUsersSection = () => (
     visibleUsers.length > 0 ? (
       <section className="form-card">
+        <div className="admin-filter-heading">
+          <div>
+            <h3>User Directory</h3>
+            <p className="profile-section-helper">Search, filter, and jump into a focused detail panel for each account.</p>
+          </div>
+        </div>
+        <div className="admin-card-stat-row admin-card-stat-row-detail">
+          {usersSectionStats.map((item) => (
+            <div key={item.label} className="admin-mini-stat">
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
         <div className="admin-user-filters">
           <div className="form-group">
             <label htmlFor="user-search">Search</label>
@@ -1574,25 +1734,23 @@ export default function AdminUsers() {
   const renderRolesSection = () => (
     visibleUsers.length > 0 ? (
       <>
-        <div className="stats-grid">
-          {roleSummary.map((item) => (
-            <div key={item.roleKey} className="stat-card">
-              <div className="stat-info">
-                <h3>{item.usableCount}</h3>
-                <p>{formatLabel(item.roleKey)} roles usable</p>
-              </div>
-            </div>
-          ))}
-        </div>
         <section className="form-card">
-          <div className="card-header">
+          <div className="admin-filter-heading">
             <div>
               <h3>Role Access Cards</h3>
-              <p style={{ color: 'var(--text-light)' }}>
+              <p className="profile-section-helper">
                 Browse compact role-access cards, then open a dedicated page to review or edit each record.
               </p>
             </div>
             <span className="badge badge-info">{filteredUsers.length} users</span>
+          </div>
+          <div className="admin-card-stat-row admin-card-stat-row-detail">
+            {roleSectionStats.map((item) => (
+              <div key={item.label} className="admin-mini-stat">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
           </div>
           <div className="admin-user-filters">
             <div className="form-group">

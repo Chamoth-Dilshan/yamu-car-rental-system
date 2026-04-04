@@ -123,7 +123,7 @@ const buildRoleHistoryItemsFromLog = (log, targetUserId) => {
         id: `${log._id}-requested`,
         type: 'role_requested',
         roleKey,
-        title: `${roleLabel(roleKey)} role requested`,
+        title: `${roleLabel(roleKey)} application submitted`,
         description: `${actorName} submitted a ${roleKey} application for review.`,
         actor,
         createdAt: log.createdAt
