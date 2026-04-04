@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
-import { formatRoleLabel } from '../utils/roles';
+import { formatRoleLabel, getProfilePathForRole } from '../utils/roles';
 
 const providerRoles = ['driver', 'staff'];
 
@@ -20,6 +20,7 @@ export default function AccountOverview() {
     { label: 'Pending Applications', value: String(pendingCount) }
   ];
   const profileCompletion = user?.profileCompletion?.percent || 0;
+  const profilePath = getProfilePathForRole(user?.activeRole || user?.role);
   const nextAction = accountHealth?.nextRoleAction?.guidance || (
     pendingCount > 0
       ? 'Track admin review for your pending provider request.'
@@ -84,7 +85,7 @@ export default function AccountOverview() {
               )}
             </div>
             <div className="pill-row">
-              <Link to="/profile" className="btn btn-outline btn-sm">Profile</Link>
+              <Link to={profilePath} className="btn btn-outline btn-sm">Profile</Link>
               <Link to="/apply-roles" className="btn btn-primary btn-sm">Role Applications</Link>
             </div>
           </div>
@@ -97,7 +98,7 @@ export default function AccountOverview() {
                 <h3>Profile Readiness</h3>
                 <p style={{ color: 'var(--text-light)' }}>Keep your identity and contact information complete for rental and admin workflows.</p>
               </div>
-              <Link to="/profile" className="btn btn-primary btn-sm">Edit Profile</Link>
+              <Link to={profilePath} className="btn btn-primary btn-sm">Edit Profile</Link>
             </div>
             <div className="account-progress">
               <div className="account-progress-track">
@@ -181,7 +182,7 @@ export default function AccountOverview() {
                     {application.reviewedAt && <p>Reviewed: {new Date(application.reviewedAt).toLocaleDateString()}</p>}
                     {application.rejectionReason && <p>Admin note: {application.rejectionReason}</p>}
                   </div>
-                  <Link to={`/profile#${application.roleKey}-role`} className="btn btn-outline btn-sm">Open Role Form</Link>
+                  <Link to={`/apply-roles#${application.roleKey}-role`} className="btn btn-outline btn-sm">Open Role Form</Link>
                 </div>
               ))}
             </div>
@@ -203,7 +204,7 @@ export default function AccountOverview() {
               <p>{nextAction}</p>
             </div>
             <div className="pill-row">
-              <Link to="/profile" className="btn btn-outline btn-sm">Profile</Link>
+              <Link to={profilePath} className="btn btn-outline btn-sm">Profile</Link>
               <Link to="/apply-roles" className="btn btn-primary btn-sm">Role Applications</Link>
             </div>
           </div>

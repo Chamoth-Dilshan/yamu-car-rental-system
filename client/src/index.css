@@ -533,6 +533,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .dashboard-layout { display: flex; min-height: calc(100vh - var(--navbar-height)); padding-top: var(--navbar-height); }
+.dashboard-layout.page-content { padding-top: var(--navbar-height); }
 .sidebar {
   width: 260px;
   min-height: calc(100vh - var(--navbar-height));
@@ -634,6 +635,27 @@ input:focus, select:focus, textarea:focus {
 .auth-card p.subtitle { color: var(--text-light); margin-bottom: 2rem; }
 .auth-card .auth-link { text-align: center; margin-top: 1.5rem; font-size: 0.9rem; color: var(--text-light); }
 .auth-card .auth-link a { color: var(--accent); font-weight: 600; }
+.auth-remember-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: -0.35rem 0 1.5rem;
+}
+.auth-remember-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.auth-remember-checkbox input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--accent);
+}
 
 .about-section { padding: 5rem 0; }
 .fleet-grid {
@@ -1231,6 +1253,12 @@ input:focus, select:focus, textarea:focus {
   color: var(--primary);
   box-shadow: var(--shadow);
 }
+.profile-section-nav a.active {
+  border-color: rgba(240,165,0,0.55);
+  background: rgba(240,165,0,0.14);
+  color: var(--primary);
+  box-shadow: var(--shadow);
+}
 .profile-health-grid {
   margin-bottom: 1.5rem;
 }
@@ -1474,6 +1502,11 @@ input:focus, select:focus, textarea:focus {
   flex-direction: column;
   gap: 1rem;
 }
+.admin-role-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1.25rem;
+}
 .admin-user-filters {
   display: grid;
   grid-template-columns: minmax(0, 2fr) repeat(2, minmax(180px, 1fr));
@@ -1496,6 +1529,99 @@ input:focus, select:focus, textarea:focus {
   border-color: rgba(240,165,0,0.65);
   box-shadow: 0 18px 40px rgba(15,23,42,0.1);
   transform: translateY(-2px);
+}
+.admin-role-summary-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 1.1rem;
+  min-height: 100%;
+  padding: 1.5rem;
+  background:
+    radial-gradient(circle at top right, rgba(240,165,0,0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%);
+}
+.admin-role-summary-card .admin-card-stat-row {
+  margin-bottom: 0;
+}
+.admin-role-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.admin-role-card-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.admin-role-card-copy h3 {
+  margin-bottom: 0.35rem;
+}
+.admin-role-card-copy p {
+  margin: 0;
+  color: var(--text-light);
+}
+.admin-role-card-eyebrow {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 0.7rem;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(240,165,0,0.12);
+  color: #b45309;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.admin-role-card-primary {
+  min-width: 200px;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(15,23,42,0.08);
+  border-radius: var(--radius);
+  background: rgba(15,23,42,0.03);
+}
+.admin-role-card-primary span,
+.admin-role-card-primary small {
+  display: block;
+  color: var(--text-light);
+}
+.admin-role-card-primary span {
+  font-size: 0.78rem;
+  margin-bottom: 0.35rem;
+}
+.admin-role-card-primary strong {
+  display: block;
+  color: var(--primary);
+  font-size: 1.15rem;
+}
+.admin-role-card-primary small {
+  margin-top: 0.35rem;
+  font-size: 0.84rem;
+}
+.admin-role-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+.admin-role-stat-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.admin-role-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 1rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid rgba(15,23,42,0.08);
+}
+.admin-role-card-note {
+  margin: 0;
+  color: var(--text-light);
+  font-size: 0.92rem;
+  line-height: 1.55;
 }
 .admin-user-summary-main {
   display: flex;
@@ -2019,6 +2145,9 @@ input:focus, select:focus, textarea:focus {
     flex-direction: column;
     padding-top: calc(var(--navbar-height) + 1rem);
   }
+  .dashboard-layout.page-content {
+    padding-top: calc(var(--navbar-height) + 1rem);
+  }
   .sidebar {
     width: auto;
     min-height: auto;
@@ -2049,9 +2178,23 @@ input:focus, select:focus, textarea:focus {
   .admin-section-grid,
   .admin-summary-grid,
   .admin-user-filters,
-  .admin-user-summary-card,
   .profile-hero-main,
   .profile-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-user-summary-card {
+    grid-template-columns: 1fr;
+  }
+  .admin-role-card-top,
+  .admin-role-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .admin-role-card-primary {
+    width: 100%;
+    min-width: 0;
+  }
+  .admin-role-stat-row {
     grid-template-columns: 1fr;
   }
   .vehicle-detail-grid,

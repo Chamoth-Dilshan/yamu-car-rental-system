@@ -6,7 +6,7 @@ import { formatRoleLabel } from '../utils/roles'
 const menuItems = {
   customer: [
     { section: 'Account' },
-    { to: '/profile', label: 'User Profile', end: true },
+    { to: '/profile/user', label: 'User Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
@@ -17,7 +17,7 @@ const menuItems = {
     { to: '/driver/ads', label: 'My Driver Ads', end: true },
     { to: '/driver/bookings', label: 'Booking Requests', end: true },
     { section: 'Account' },
-    { to: '/profile', label: 'Driver Profile', end: true },
+    { to: '/profile/driver', label: 'Driver Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
@@ -27,7 +27,7 @@ const menuItems = {
     { to: '/staff/vehicles', label: 'My Vehicles', end: true },
     { to: '/staff/bookings', label: 'Vehicle Requests', end: true },
     { section: 'Account' },
-    { to: '/profile', label: 'Store Profile', end: true },
+    { to: '/profile/store', label: 'Store Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
@@ -39,9 +39,8 @@ const menuItems = {
     { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: false },
     { section: 'Account' },
-    { to: '/profile', label: 'Admin Profile', end: true },
-    { to: '/notifications', label: 'Notifications', end: true },
-    { to: '/switch-roles', label: 'Switch Roles', end: true }
+    { to: '/profile/admin', label: 'Admin Profile', end: true },
+    { to: '/notifications', label: 'Notifications', end: true }
   ]
 }
 
@@ -53,7 +52,7 @@ export default function Sidebar() {
       return true
     }
 
-    if (item.to === '/profile' || item.to === '/notifications') {
+    if (item.to.startsWith('/profile') || item.to === '/notifications') {
       return hasPermission('profile.manage')
     }
 

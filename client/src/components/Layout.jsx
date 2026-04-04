@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { buildUploadUrl } from '../api/config';
 import { formatDateTime } from '../utils/formatters';
-import { formatRoleLabel } from '../utils/roles';
+import { formatRoleLabel, getProfilePathForRole } from '../utils/roles';
 import BrandLogo from './BrandLogo';
 import Footer from './Footer';
 
@@ -51,8 +51,10 @@ export default function Layout({ children }) {
   const canViewUsers = hasPermission('users.view');
   const canReviewRoles = hasPermission('roles.review');
   const canAssignRoles = hasPermission('roles.assign');
-  const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? '/profile' : '/';
-  const profileNavLabel = `${formatRoleLabel(activeRole || 'customer')} Profile`;
+  const userProfilePath = getProfilePathForRole('customer');
+  const roleProfilePath = getProfilePathForRole(activeRole);
+  const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? roleProfilePath : '/';
+  const roleProfileNavLabel = `${formatRoleLabel(activeRole || 'customer')} Profile`;
   const recentNotifications = (notifications || []).slice(0, 5);
 
   useEffect(() => {
@@ -124,7 +126,9 @@ export default function Layout({ children }) {
             {hasHomePage && <NavLink to="/">Home</NavLink>}
             {showDiscoverLinks && <NavLink to="/cars">Explore Cars</NavLink>}
             {showDiscoverLinks && <NavLink to="/drivers">Explore Drivers</NavLink>}
-            {user && !isAdmin && canManageProfile && <NavLink to="/profile">{profileNavLabel}</NavLink>}
+            {user && isCustomer && canManageProfile && <NavLink to={userProfilePath}>User Profile</NavLink>}
+            {user && !isCustomer && !isAdmin && canManageProfile && <NavLink to={roleProfilePath}>{roleProfileNavLabel}</NavLink>}
+            {user && isAdmin && canManageProfile && <NavLink to={roleProfilePath}>Admin Profile</NavLink>}
             {isDriver && <NavLink to="/driver/ads">Driver Ads</NavLink>}
             {isStaff && <NavLink to="/staff/vehicles">Store Vehicles</NavLink>}
             {isAdmin && canViewUsers && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
@@ -201,7 +205,9 @@ export default function Layout({ children }) {
                   <div className="nav-user-dropdown">
                     {showDiscoverLinks && <Link to="/cars">Explore Cars</Link>}
                     {showDiscoverLinks && <Link to="/drivers">Explore Drivers</Link>}
-                    {canManageProfile && <Link to="/profile">{profileNavLabel}</Link>}
+                    {canManageProfile && isCustomer && <Link to={userProfilePath}>User Profile</Link>}
+                    {canManageProfile && !isCustomer && !isAdmin && <Link to={roleProfilePath}>{roleProfileNavLabel}</Link>}
+                    {canManageProfile && isAdmin && <Link to={roleProfilePath}>Admin Profile</Link>}
                     {canManageProfile && <Link to="/notifications">Notifications</Link>}
                     {isCustomer && <Link to="/bookings">My Bookings</Link>}
                     {isDriver && <Link to="/driver/ads">My Driver Ads</Link>}
@@ -209,7 +215,7 @@ export default function Layout({ children }) {
                     {isStaff && <Link to="/staff/vehicles">My Vehicles</Link>}
                     {isStaff && <Link to="/staff/bookings">Vehicle Requests</Link>}
                     {!isAdmin && <Link to="/apply-roles">Role Applications</Link>}
-                    <Link to="/switch-roles">Switch Roles</Link>
+                    {!isAdmin && <Link to="/switch-roles">Switch Roles</Link>}
                     {isAdmin && canViewUsers && <Link to="/admin/dashboard">Overview</Link>}
                     {isAdmin && <Link to="/admin/bookings">Bookings</Link>}
                     {isAdmin && canViewUsers && canReviewRoles && <Link to="/admin/pending-approvals">Pending Approvals</Link>}

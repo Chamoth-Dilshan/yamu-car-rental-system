@@ -198,11 +198,16 @@ export function AuthProvider({ children }) {
 
   const register = async (payload) => {
     const res = await API.post('/auth/register', payload)
-    const { token, ...userData } = res.data
-    localStorage.setItem('uprm_token', token)
-    setUser(userData)
-    await refreshNotifications().catch(() => {})
-    return userData
+
+    if (res.data?.token) {
+      const { token, ...userData } = res.data
+      localStorage.setItem('uprm_token', token)
+      setUser(userData)
+      await refreshNotifications().catch(() => {})
+      return userData
+    }
+
+    return res.data
   }
 
   const switchRole = async (role) => {

@@ -45,14 +45,13 @@ const register = async (req, res) => {
       address: address || '',
       city: city || '',
       role: 'customer',
-      accountStatus: 'active',
-      verificationStatus: 'verified',
+      accountStatus: 'pending',
+      verificationStatus: 'pending',
       roles: [buildRoleAssignment('customer', { isPrimary: true })]
     });
 
     res.status(201).json({
-      ...serializeUser(user),
-      token: generateToken(user._id)
+      message: 'Registration submitted. Wait for admin approval before signing in.'
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -76,8 +75,12 @@ const login = async (req, res) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    if (['suspended', 'deactivated'].includes(user.accountStatus)) {
-      return res.status(403).json({ message: 'Your account is suspended or deactivated' });
+    if (user.accountStatus !== 'active') {
+      return res.status(403).json({
+        message: user.accountStatus === 'pending'
+          ? 'Your account is pending admin approval'
+          : 'Your account is not active'
+      });
     }
 
     syncUserRoles(user);

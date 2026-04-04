@@ -53,6 +53,7 @@ export default function VehicleDetails() {
 
   const totalAmount = billableDays > 0 ? billableDays * Number(vehicle?.pricePerDay || 0) : 0
   const isOwnVehicleListing = Boolean(user && vehicle?.owner?._id && String(vehicle.owner._id) === String(user._id))
+  const storeUnavailable = !vehicle?.owner
   const listedStoreName = vehicle?.owner?.storeName || vehicle?.owner?.fullName || ''
 
   const submitBooking = async (event) => {
@@ -67,6 +68,11 @@ export default function VehicleDetails() {
 
     if (isOwnVehicleListing) {
       setError('You cannot book your own store vehicle listing.')
+      return
+    }
+
+    if (storeUnavailable) {
+      setError('This vehicle listing is temporarily unavailable because no store profile is attached to it.')
       return
     }
 
@@ -194,12 +200,15 @@ export default function VehicleDetails() {
                   <span>Total</span>
                   <strong>{billableDays > 0 ? formatCurrency(totalAmount) : 'Select dates'}</strong>
                 </div>
-                <button className="btn btn-primary btn-block" type="submit" disabled={busy || vehicle.status !== 'available' || isOwnVehicleListing}>
+                <button className="btn btn-primary btn-block" type="submit" disabled={busy || vehicle.status !== 'available' || isOwnVehicleListing || storeUnavailable}>
                   {busy ? 'Booking...' : 'Reserve Vehicle'}
                 </button>
               </form>
               {isOwnVehicleListing && (
                 <p className="reservation-note">This is your own store listing. Booking is disabled.</p>
+              )}
+              {storeUnavailable && (
+                <p className="reservation-note">This listing is visible, but reservations are disabled until a store profile is reconnected.</p>
               )}
               {(user && (user.activeRole || user.role) !== 'customer') && (
                 <p className="reservation-note">

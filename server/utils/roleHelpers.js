@@ -13,7 +13,7 @@ const ROLE_DISPLAY_LABELS = {
   admin: 'Admin'
 };
 const PROVIDER_ROLE_KEYS = ['driver', 'staff'];
-const ACCOUNT_STATUSES = ['active', 'suspended', 'deactivated'];
+const ACCOUNT_STATUSES = ['pending', 'active', 'suspended', 'deactivated'];
 const ROLE_STATUSES = ['pending', 'active', 'rejected', 'suspended', 'deactivated'];
 const VERIFICATION_STATUSES = ['unverified', 'pending', 'verified', 'rejected'];
 const APPLICATION_STATUSES = ['pending', 'approved', 'rejected', 'withdrawn'];

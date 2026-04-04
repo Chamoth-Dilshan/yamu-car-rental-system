@@ -130,27 +130,6 @@ export default function StaffVehicleForm() {
         ) : (
           <div className="form-card">
             <form onSubmit={submitForm}>
-              {currentImages.length > 0 && (
-                <div className="vehicle-detail-thumbs" style={{ marginBottom: '1.25rem' }}>
-                  {currentImages.map((image) => (
-                    <div key={image} className="vehicle-thumb-button active" style={{ pointerEvents: 'none' }}>
-                      <img src={buildUploadUrl(image)} alt={form.name || 'Vehicle'} />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="form-group">
-                <label>Vehicle Images</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  required={!isEditMode && currentImages.length === 0}
-                  onChange={(e) => setImageFiles(Array.from(e.target.files || []))}
-                />
-              </div>
-
               <div className="form-row">
                 <div className="form-group">
                   <label>Vehicle Name</label>
@@ -248,6 +227,27 @@ export default function StaffVehicleForm() {
               <div className="form-group">
                 <label>Description</label>
                 <textarea rows="5" value={form.description} onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))} />
+              </div>
+
+              {currentImages.length > 0 && (
+                <div className="vehicle-detail-thumbs" style={{ marginBottom: '1.25rem' }}>
+                  {currentImages.map((image) => (
+                    <div key={image} className="vehicle-thumb-button active" style={{ pointerEvents: 'none' }}>
+                      <img src={buildUploadUrl(image)} alt={form.name || 'Vehicle'} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="form-group">
+                <label>Vehicle Images</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  required={!isEditMode && currentImages.length === 0}
+                  onChange={(e) => setImageFiles(Array.from(e.target.files || []))}
+                />
               </div>
 
               <div className="pill-row">

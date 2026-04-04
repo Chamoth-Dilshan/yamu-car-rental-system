@@ -70,6 +70,7 @@ After `npm run seed` in `server/`:
 
 - Admin: `admin@example.com` / `12345`
 - Customer with vehicle bookings: `alex@example.com` / `12345`
+- Store workspace demo: `sahan@example.com` / `12345`
 - Driver workspace demo: `nadeesha@example.com` / `12345`
 - Customer with driver requests: `deshan@example.com` / `12345`
 - Pending driver applicant: `kasun@example.com` / `12345`
