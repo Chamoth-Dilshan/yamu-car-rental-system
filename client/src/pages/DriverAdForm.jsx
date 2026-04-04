@@ -25,8 +25,6 @@ export default function DriverAdForm() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const isEditMode = Boolean(id)
-  const activeRole = user?.activeRole || user?.role
-  const providerLabel = activeRole === 'staff' ? 'Staff' : 'Driver'
   const [form, setForm] = useState(emptyForm)
   const [currentPhoto, setCurrentPhoto] = useState('')
   const [photoFile, setPhotoFile] = useState(null)
@@ -39,7 +37,7 @@ export default function DriverAdForm() {
     if (!isEditMode) {
       setForm((prev) => ({
         ...prev,
-        serviceLocation: user?.driverProfile?.serviceArea || user?.staffProfile?.storeAddress || user?.city || '',
+        serviceLocation: user?.driverProfile?.serviceArea || '',
         preferredContact: user?.phone ? 'Phone & Email' : ''
       }))
       return
@@ -53,7 +51,7 @@ export default function DriverAdForm() {
         const ad = (res.data.ads || []).find((item) => item._id === id)
 
         if (!ad) {
-          setError(`${providerLabel} advertisement not found`)
+          setError('Driver advertisement not found')
           return
         }
 
@@ -100,7 +98,7 @@ export default function DriverAdForm() {
         })
       }
 
-      setMessage(`${providerLabel} advertisement ${isEditMode ? 'updated' : 'created'} successfully`)
+      setMessage(`Driver advertisement ${isEditMode ? 'updated' : 'created'} successfully`)
       navigate('/driver/ads')
     } catch (err) {
       setError(err.response?.data?.message || `Failed to ${isEditMode ? 'update' : 'create'} advertisement`)
@@ -114,8 +112,8 @@ export default function DriverAdForm() {
       <Sidebar />
       <main className="dashboard-content">
         <div className="form-header">
-          <h2>{isEditMode ? `Edit ${providerLabel} Advertisement` : `Create ${providerLabel} Advertisement`}</h2>
-          <p style={{ color: 'var(--text-light)' }}>Reuse the current project theme, but keep the structure needed for a public provider card and detail page.</p>
+          <h2>{isEditMode ? 'Edit Driver Advertisement' : 'Create Driver Advertisement'}</h2>
+          <p style={{ color: 'var(--text-light)' }}>Reuse the current project theme, but keep the structure needed for a public driver card and detail page.</p>
         </div>
 
         {message && <div className="alert alert-success">{message}</div>}
@@ -130,11 +128,11 @@ export default function DriverAdForm() {
                 <div className="driver-ad-photo-preview">
                   <img
                     src={currentPhoto ? getMediaImage(currentPhoto, user?.fullName || 'Driver') : getUserAvatar(user)}
-                    alt={user?.fullName || providerLabel}
+                    alt={user?.fullName || 'Driver'}
                   />
                 </div>
                 <div>
-                  <h3>{providerLabel} Photo</h3>
+                  <h3>Driver Photo</h3>
                   <p style={{ color: 'var(--text-light)' }}>Upload a clean headshot. If you skip this, your current profile picture stays in use.</p>
                   <input type="file" accept="image/*" onChange={(e) => setPhotoFile(e.target.files?.[0] || null)} />
                 </div>

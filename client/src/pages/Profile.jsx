@@ -6,11 +6,12 @@ import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 import { formatDateTime } from '../utils/formatters';
 import { isRoleManagementNotification } from '../utils/notifications';
+import { formatRoleLabel } from '../utils/roles';
 
 const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
 const blockedApplicationStatuses = ['suspended', 'deactivated'];
 
-const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+const roleLabel = (value) => formatRoleLabel(value);
 const createDocumentDraft = (document = {}) => ({
   fileName: document?.fileName || '',
   filePath: document?.filePath || document?.reference || '',
@@ -350,9 +351,7 @@ export default function Profile() {
     hasDocumentReference(staffProfile.documents.businessRegistrationDocument),
     hasDocumentReference(staffProfile.documents.proofOfAddressDocument)
   ]);
-  const currentRoleProfileLabel = activeRoleKey === 'customer'
-    ? 'User Profile'
-    : `${roleLabel(activeRoleKey)} Profile`;
+  const currentRoleProfileLabel = `${roleLabel(activeRoleKey)} Profile`;
   const showCommonProfile = !['driver', 'staff'].includes(activeRoleKey);
   const heroPrimaryProfileHref = showCommonProfile
     ? '#common-profile'
@@ -626,7 +625,7 @@ export default function Profile() {
 
         {(driverApplication?.status === 'pending' || staffApplication?.status === 'pending') && (
           <div className="alert alert-info">
-            A role application is waiting for admin review. Switch into that role after approval to manage its profile workspace.
+            A role application is waiting for admin review. You can keep the driver or store profile details updated while it is pending.
           </div>
         )}
 
@@ -751,7 +750,7 @@ export default function Profile() {
           </div>
         )}
 
-        {activeRoleKey === 'driver' && driverRole && (
+        {(activeRoleKey === 'driver' || activeRoleKey === 'customer') && (
           <div id="driver-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
             <div className="profile-section-heading">
               <div>
@@ -921,12 +920,12 @@ export default function Profile() {
           </div>
         )}
 
-        {activeRoleKey === 'staff' && staffRole && (
+        {(activeRoleKey === 'staff' || activeRoleKey === 'customer') && (
           <div id="staff-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
             <div className="profile-section-heading">
               <div>
-                <h3>Staff Profile</h3>
-                <p>Maintain rental center information, document placeholders, and the staff provider request in one place.</p>
+                <h3>Store Profile</h3>
+                <p>Maintain store information, document placeholders, and the store provider request in one place.</p>
               </div>
               <span className={getBadgeClass(staffOnboardingState.tone)}>{staffOnboardingState.stateLabel}</span>
             </div>
@@ -964,11 +963,11 @@ export default function Profile() {
               <div className="alert alert-warning">Admin note: {staffApplication.rejectionReason}</div>
             )}
             {staffProfileBlocked && (
-              <div className="alert alert-danger">This role is blocked. Contact an admin before submitting further staff updates.</div>
+              <div className="alert alert-danger">This role is blocked. Contact an admin before submitting further store updates.</div>
             )}
             <form onSubmit={(e) => {
               e.preventDefault();
-              saveRoleProfile('/users/staff-profile', staffProfile, 'Staff profile updated successfully', 'staff');
+              saveRoleProfile('/users/staff-profile', staffProfile, 'Store profile updated successfully', 'staff');
             }}
             >
               <div className="form-row">
@@ -1042,7 +1041,7 @@ export default function Profile() {
               <div className="profile-form-actions">
                 {staffRole && (
                   <button className="btn btn-secondary" type="submit" disabled={busyAction === 'staff' || staffProfileBlocked}>
-                    {busyAction === 'staff' ? 'Saving...' : 'Save Staff Profile'}
+                    {busyAction === 'staff' ? 'Saving...' : 'Save Store Profile'}
                   </button>
                 )}
               </div>
@@ -1062,12 +1061,12 @@ export default function Profile() {
                   {busyAction === 'apply-staff'
                     ? 'Submitting...'
                     : staffApplication?.status === 'pending'
-                      ? 'Staff Application Pending'
+                      ? 'Store Application Pending'
                       : staffApplication?.status === 'rejected'
-                        ? 'Re-apply for Staff Role'
+                        ? 'Re-apply for Store Role'
                         : staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified'
-                          ? 'Staff Role Approved'
-                          : 'Apply for Staff Role'}
+                          ? 'Store Role Approved'
+                          : 'Apply for Store Role'}
                 </button>
               </div>
             )}

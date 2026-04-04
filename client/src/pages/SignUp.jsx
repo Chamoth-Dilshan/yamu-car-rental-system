@@ -58,7 +58,7 @@ export default function SignUp() {
     <div className="auth-page page-content">
       <div className="auth-card">
         <h1>Create Account</h1>
-        <p className="subtitle">Sign up as a customer first, then apply for driver or staff access after onboarding.</p>
+        <p className="subtitle">Sign up as a user first, then apply for driver or store access after onboarding.</p>
         {error && <div className="alert alert-danger">{error}</div>}
         <form onSubmit={handleSubmit} autoComplete="off">
           <input type="text" name="register-username" autoComplete="username" style={{ display: 'none' }} tabIndex={-1} />

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
+import { formatRoleLabel } from '../utils/roles';
 
 const usableStatuses = ['active'];
 
@@ -104,7 +105,7 @@ export default function RoleManagement() {
 
     try {
       await switchRole(role);
-      setMessage(`Active role switched to ${formatLabel(role)}`);
+      setMessage(`Active role switched to ${formatRoleLabel(role)}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to switch role');
     } finally {
@@ -132,7 +133,7 @@ export default function RoleManagement() {
 
             <div className="profile-hero-aside">
               <div className="profile-hero-meta">
-                <span className="badge badge-info">Current role: {formatLabel(user?.activeRole || 'customer')}</span>
+                <span className="badge badge-info">Current role: {formatRoleLabel(user?.activeRole || 'customer')}</span>
                 <span className="badge badge-info">{roles.length} assigned roles</span>
               </div>
               <div className="profile-progress-card">
@@ -219,7 +220,7 @@ export default function RoleManagement() {
                     <div className="card-body">
                       <div className="role-switch-card-top">
                         <div>
-                          <h4>{formatLabel(roleItem.roleKey)}</h4>
+                          <h4>{formatRoleLabel(roleItem.roleKey)}</h4>
                           <p>{summary.helperText}</p>
                         </div>
                         <span className={getBadgeClass(summary.tone)}>{summary.statusLabel}</span>

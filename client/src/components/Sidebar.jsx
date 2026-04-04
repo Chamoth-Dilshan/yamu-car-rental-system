@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom'
 import { buildUploadUrl } from '../api/config'
 import { useAuth } from '../context/AuthContext'
+import { formatRoleLabel } from '../utils/roles'
 
 const menuItems = {
   customer: [
@@ -22,11 +23,11 @@ const menuItems = {
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   staff: [
-    { section: 'Staff Workspace' },
-    { to: '/driver/ads', label: 'My Staff Ads', end: true },
-    { to: '/driver/bookings', label: 'Booking Requests', end: true },
+    { section: 'Store Workspace' },
+    { to: '/staff/vehicles', label: 'My Vehicles', end: true },
+    { to: '/staff/bookings', label: 'Vehicle Requests', end: true },
     { section: 'Account' },
-    { to: '/profile', label: 'Staff Profile', end: true },
+    { to: '/profile', label: 'Store Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
@@ -79,8 +80,8 @@ export default function Sidebar() {
       <div className="sidebar-user">
         <img src={avatarSrc} alt={user?.fullName} />
         <h4>{user?.fullName}</h4>
-        <span>{user?.activeRole}</span>
-        <small>{user?.primaryRole ? `Primary: ${user.primaryRole}` : 'Primary role pending'}</small>
+        <span>{formatRoleLabel(user?.activeRole)}</span>
+        <small>{user?.primaryRole ? `Primary: ${formatRoleLabel(user.primaryRole)}` : 'Primary role pending'}</small>
       </div>
       <nav className="sidebar-nav">
         {items.map((item) => {

@@ -1,10 +1,11 @@
 import { Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
+import { formatRoleLabel } from '../utils/roles';
 
 const providerRoles = ['driver', 'staff'];
 
-const formatLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+const formatLabel = (value) => String(value || '').charAt(0).toUpperCase() + String(value || '').slice(1);
 
 export default function AccountOverview() {
   const { user } = useAuth();
@@ -13,8 +14,8 @@ export default function AccountOverview() {
   const pendingCount = providerApplications.filter((item) => item.status === 'pending').length;
   const usableRoleCount = (user?.roles || []).filter((role) => role.roleStatus === 'active' && role.verificationStatus === 'verified').length;
   const stats = [
-    { label: 'Active Role', value: formatLabel(user?.activeRole || 'customer') },
-    { label: 'Primary Role', value: formatLabel(user?.primaryRole || user?.activeRole || 'customer') },
+    { label: 'Active Role', value: formatRoleLabel(user?.activeRole || 'customer') },
+    { label: 'Primary Role', value: formatRoleLabel(user?.primaryRole || user?.activeRole || 'customer') },
     { label: 'Approved Roles', value: String(usableRoleCount) },
     { label: 'Pending Applications', value: String(pendingCount) }
   ];
@@ -58,8 +59,8 @@ export default function AccountOverview() {
             </span>
           </div>
           <div className="pill-row" style={{ marginBottom: '1rem' }}>
-            <span className="badge badge-info">Active role: {accountHealth?.activeRoleLabel || formatLabel(user?.activeRole || 'customer')}</span>
-            <span className="badge badge-success">Primary role: {accountHealth?.primaryRoleLabel || formatLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
+            <span className="badge badge-info">Active role: {accountHealth?.activeRoleLabel || formatRoleLabel(user?.activeRole || 'customer')}</span>
+            <span className="badge badge-success">Primary role: {accountHealth?.primaryRoleLabel || formatRoleLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
             <span className="badge badge-warning">Profile: {accountHealth?.profileCompletionPercent ?? profileCompletion}%</span>
             <span className="badge badge-info">Pending: {accountHealth?.pendingApplicationsCount ?? pendingCount}</span>
             <span className="badge badge-info">Unread: {accountHealth?.unreadNotificationsCount ?? user?.unreadNotificationCount ?? 0}</span>
@@ -149,7 +150,7 @@ export default function AccountOverview() {
               {(user?.roles || []).map((role) => (
                 <div key={role.roleKey} className="admin-list-item">
                   <div>
-                    <h4>{formatLabel(role.roleKey)}</h4>
+                    <h4>{formatRoleLabel(role.roleKey)}</h4>
                     <p>Status: {role.roleStatus} | Verification: {role.verificationStatus}</p>
                   </div>
                   <span className={`badge ${role.isPrimary ? 'badge-success' : 'badge-info'}`}>
@@ -165,7 +166,7 @@ export default function AccountOverview() {
           <div className="card-header">
             <div>
               <h3>Role Applications</h3>
-              <p style={{ color: 'var(--text-light)' }}>Track driver and staff onboarding applications and any admin feedback.</p>
+              <p style={{ color: 'var(--text-light)' }}>Track driver and store onboarding applications and any admin feedback.</p>
             </div>
             <Link to="/apply-roles" className="btn btn-primary btn-sm">Manage Applications</Link>
           </div>
@@ -174,7 +175,7 @@ export default function AccountOverview() {
               {providerApplications.map((application) => (
                 <div key={application.roleKey} className="admin-list-item account-request-item">
                   <div>
-                    <h4>{formatLabel(application.roleKey)} Application</h4>
+                    <h4>{formatRoleLabel(application.roleKey)} Application</h4>
                     <p>Status: {application.status}</p>
                     {application.submittedAt && <p>Submitted: {new Date(application.submittedAt).toLocaleDateString()}</p>}
                     {application.reviewedAt && <p>Reviewed: {new Date(application.reviewedAt).toLocaleDateString()}</p>}

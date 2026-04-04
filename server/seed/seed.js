@@ -397,6 +397,7 @@ const seed = async () => {
 
     const [nissanKicks, wagonR, audiQ8] = await Vehicle.create([
       {
+        owner: alex._id,
         vehicleCode: 'CAR-1005',
         name: 'Nissan Kicks',
         brand: 'Nissan',
@@ -417,6 +418,7 @@ const seed = async () => {
         featured: true
       },
       {
+        owner: alex._id,
         vehicleCode: 'CAR-1001',
         name: 'Maruti Suzuki Wagon R',
         brand: 'Maruti Suzuki',
@@ -437,6 +439,7 @@ const seed = async () => {
         featured: true
       },
       {
+        owner: alex._id,
         vehicleCode: 'CAR-1003',
         name: 'Audi Q8',
         brand: 'Audi',
@@ -457,6 +460,7 @@ const seed = async () => {
         featured: true
       },
       {
+        owner: alex._id,
         vehicleCode: 'CAR-1010',
         name: 'Honda Vezel',
         brand: 'Honda',

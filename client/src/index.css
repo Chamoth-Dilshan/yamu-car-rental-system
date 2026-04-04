@@ -321,8 +321,8 @@ input:focus, select:focus, textarea:focus {
   color: var(--white);
   border: 1px solid rgba(255,255,255,0.12);
   border-radius: 999px;
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   position: relative;
   transition: var(--transition);
@@ -336,8 +336,8 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 0 0 3px rgba(240, 165, 0, 0.25);
 }
 .nav-notification-icon {
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
 }
 .nav-notification-count {
   display: inline-flex;
@@ -359,18 +359,25 @@ input:focus, select:focus, textarea:focus {
 .nav-user {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.65rem;
   color: var(--white);
   font-weight: 500;
   cursor: pointer;
   position: relative;
+  padding: 0.2rem 0.25rem 0.2rem 0.2rem;
+  border-radius: 999px;
+  transition: var(--transition);
+}
+.nav-user:hover {
+  background: rgba(255,255,255,0.06);
 }
 .nav-user img {
-  width: 36px;
-  height: 36px;
+  width: 42px;
+  height: 42px;
   border-radius: var(--radius-full);
   border: 2px solid var(--accent);
   object-fit: cover;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.18);
 }
 .nav-user-dropdown {
   position: absolute;

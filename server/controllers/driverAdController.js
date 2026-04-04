@@ -37,7 +37,6 @@ const getDriverAdPayload = (body, file, existingAd, user) => {
         body.serviceLocation
         || existingAd?.serviceLocation
         || user.driverProfile?.serviceArea
-        || user.staffProfile?.storeAddress
         || user.city
         || ''
       ).trim(),

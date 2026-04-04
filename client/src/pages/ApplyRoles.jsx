@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import API from '../api/axios';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
+import { formatRoleLabel } from '../utils/roles';
 
 const roleCards = [
   {
@@ -12,12 +13,10 @@ const roleCards = [
   },
   {
     key: 'staff',
-    title: 'Staff Role',
-    description: 'Maintain rental-center identity, contact details, and request staff access for branch operations.'
+    title: 'Store Role',
+    description: 'Maintain store identity, contact details, and request store access for vehicle operations.'
   }
 ];
-
-const formatLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 
 export default function ApplyRoles() {
   const { user, refreshMe, refreshNotifications } = useAuth();
@@ -50,7 +49,7 @@ export default function ApplyRoles() {
       <main className="dashboard-content">
         <div className="form-header">
           <h2>Role Applications</h2>
-          <p style={{ color: 'var(--text-light)' }}>Apply for driver or staff access, track review status, and update role onboarding details.</p>
+          <p style={{ color: 'var(--text-light)' }}>Apply for driver or store access, track review status, and update role onboarding details.</p>
         </div>
 
         {message && <div className="alert alert-success">{message}</div>}
@@ -65,12 +64,16 @@ export default function ApplyRoles() {
             const isRejected = application?.status === 'rejected';
             const isWithdrawn = application?.status === 'withdrawn';
             const isCurrentRole = user?.activeRole === item.key;
-            const target = isCurrentRole ? '/profile' : '/switch-roles';
+            const target = isCurrentRole
+              ? '/profile'
+              : isApproved
+                ? '/switch-roles'
+                : `/profile#${item.key}-role`;
             const actionLabel = isCurrentRole
               ? 'Manage Profile'
               : isApproved
                 ? 'Switch to Role'
-                : null;
+                : 'Open Role Form';
 
             return (
               <div key={item.key} className="form-card">
@@ -98,14 +101,14 @@ export default function ApplyRoles() {
                       <h4>Current State</h4>
                       <p>
                         {isApproved
-                          ? `${formatLabel(item.key)} access is approved and available for role switching.`
+                          ? `${formatRoleLabel(item.key)} access is approved and available for role switching.`
                           : isPending
-                            ? `${formatLabel(item.key)} application is waiting for admin review.`
+                            ? `${formatRoleLabel(item.key)} application is waiting for admin review.`
                             : isRejected
-                              ? `${formatLabel(item.key)} application was rejected. Review the admin note and update the form before reapplying.`
+                              ? `${formatRoleLabel(item.key)} application was rejected. Review the admin note and update the form before reapplying.`
                               : isWithdrawn
-                                ? `${formatLabel(item.key)} application was withdrawn.`
-                                : `No ${item.key} application has been submitted yet.`}
+                                ? `${formatRoleLabel(item.key)} application was withdrawn.`
+                                : `No ${formatRoleLabel(item.key).toLowerCase()} application has been submitted yet.`}
                       </p>
                     </div>
                   </div>
@@ -128,7 +131,7 @@ export default function ApplyRoles() {
                 <div className="pill-row" style={{ marginTop: '1.25rem' }}>
                   {actionLabel && (
                     <Link to={target} className="btn btn-primary btn-sm">
-                      {isCurrentRole ? 'Edit Role Profile' : 'Switch to This Role'}
+                      {isCurrentRole ? 'Edit Role Profile' : isApproved ? 'Switch to This Role' : 'Open Role Form'}
                     </Link>
                   )}
                   {isPending && (

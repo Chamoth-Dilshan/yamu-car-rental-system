@@ -2,11 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import API from '../api/axios'
 import Sidebar from '../components/Sidebar'
-import { useAuth } from '../context/AuthContext'
 import { formatCurrency, formatDate, getBadgeClass } from '../utils/formatters'
 
 export default function DriverAdList() {
-  const { user } = useAuth()
   const [ads, setAds] = useState([])
   const [stats, setStats] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -19,12 +17,6 @@ export default function DriverAdList() {
   const [busyAction, setBusyAction] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
-  const activeRole = user?.activeRole || user?.role
-  const isStaff = activeRole === 'staff'
-  const adOwnerLabel = isStaff ? 'staff' : 'driver'
-  const adEntityLabel = isStaff ? 'staff advertisement' : 'driver advertisement'
-  const listHeading = isStaff ? 'My Staff Ads' : 'My Driver Ads'
-  const createLabel = isStaff ? 'Create Staff Ad' : 'Create Ad'
 
   useEffect(() => {
     setLoading(true)
@@ -35,12 +27,12 @@ export default function DriverAdList() {
         setAds(res.data.ads || [])
         setStats(res.data.stats)
       })
-      .catch((err) => setError(err.response?.data?.message || `Failed to load ${adEntityLabel}s`))
+      .catch((err) => setError(err.response?.data?.message || 'Failed to load driver advertisements'))
       .finally(() => setLoading(false))
   }, [filters, reloadKey])
 
   const deleteAd = async (adId) => {
-    if (!window.confirm(`Delete this ${adEntityLabel}?`)) {
+    if (!window.confirm('Delete this driver advertisement?')) {
       return
     }
 
@@ -50,7 +42,7 @@ export default function DriverAdList() {
 
     try {
       await API.delete(`/driver-ads/${adId}`)
-      setMessage(`${isStaff ? 'Staff' : 'Driver'} advertisement deleted`)
+      setMessage('Driver advertisement deleted')
       setReloadKey((prev) => prev + 1)
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to delete advertisement')
@@ -71,8 +63,8 @@ export default function DriverAdList() {
       <Sidebar />
       <main className="dashboard-content">
         <div className="form-header">
-          <h2>{listHeading}</h2>
-          <p style={{ color: 'var(--text-light)' }}>Create and maintain the public {adOwnerLabel} advertisements customers use when submitting requests.</p>
+          <h2>My Driver Ads</h2>
+          <p style={{ color: 'var(--text-light)' }}>Create and maintain the public driver advertisements customers use when submitting requests.</p>
         </div>
 
         {message && <div className="alert alert-success">{message}</div>}
@@ -95,7 +87,7 @@ export default function DriverAdList() {
               <h3>Advertisement List</h3>
               <p style={{ color: 'var(--text-light)' }}>Filter your ads by availability or visibility, then edit them without leaving the dashboard.</p>
             </div>
-            <Link className="btn btn-primary btn-sm" to="/driver/ads/new">{createLabel}</Link>
+            <Link className="btn btn-primary btn-sm" to="/driver/ads/new">Create Ad</Link>
           </div>
 
           <div className="filter-grid filter-grid-4">

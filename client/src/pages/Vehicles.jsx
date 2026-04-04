@@ -164,6 +164,11 @@ export default function Vehicles() {
                         <div>
                           <h3>{vehicle.name}</h3>
                           <p>{vehicle.location}</p>
+                          {(vehicle.owner?.storeName || vehicle.owner?.fullName) && (
+                            <p style={{ color: 'var(--text-light)' }}>
+                              Store: {vehicle.owner.storeName || vehicle.owner.fullName}
+                            </p>
+                          )}
                         </div>
                         <span className={`badge ${getBadgeClass(vehicle.status)}`}>{vehicle.status}</span>
                       </div>

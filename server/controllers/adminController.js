@@ -28,7 +28,12 @@ const {
 
 const MANAGEABLE_ROLE_KEYS = [...ROLE_KEYS];
 
-const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+const roleLabel = (value) => ({
+  customer: 'User',
+  staff: 'Store',
+  driver: 'Driver',
+  admin: 'Admin'
+}[value] || value.charAt(0).toUpperCase() + value.slice(1));
 const toPlain = (value) => (value?.toObject ? value.toObject() : value);
 const snapshotsEqual = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const isProtectedAdminAccount = (user) => Boolean(user?.isSystemAdmin);
