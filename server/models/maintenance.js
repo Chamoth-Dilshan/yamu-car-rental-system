@@ -7,6 +7,7 @@ const maintenanceSchema = new mongoose.Schema({
     type: { type: String, required: true },
     count: { type: Number, required: true},
     addedthings: { type: String, required: true },
+    status: { type: String, required: true },
     totcost: { type: Number, required: true },
     }, { timestamps: true })
 
