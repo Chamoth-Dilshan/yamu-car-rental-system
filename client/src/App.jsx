@@ -2,11 +2,9 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Home from './pages/Home'
-import AdminSignIn from './pages/AdminSignIn'
 import AdminUsers from './pages/AdminUsers'
 import AdminBookings from './pages/AdminBookings'
 import ApplyRoles from './pages/ApplyRoles'
-import AccountOverview from './pages/AccountOverview'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import Profile from './pages/Profile'
@@ -30,16 +28,9 @@ export default function App() {
         <Route path="/drivers" element={<ExploreDrivers />} />
         <Route path="/drivers/:id" element={<DriverDetails />} />
         <Route path="/signin" element={<SignIn />} />
-        <Route path="/admin/signin" element={<AdminSignIn />} />
+        <Route path="/admin/signin" element={<Navigate to="/signin" replace />} />
         <Route path="/signup" element={<SignUp />} />
-        <Route
-          path="/account"
-          element={(
-            <ProtectedRoute>
-              <AccountOverview />
-            </ProtectedRoute>
-          )}
-        />
+        <Route path="/account" element={<Navigate to="/profile" replace />} />
         <Route
           path="/bookings"
           element={(
@@ -51,7 +42,7 @@ export default function App() {
         <Route
           path="/profile"
           element={(
-            <ProtectedRoute>
+            <ProtectedRoute permissions={['profile.manage']}>
               <Profile />
             </ProtectedRoute>
           )}
@@ -107,7 +98,7 @@ export default function App() {
         <Route
           path="/admin/dashboard"
           element={(
-            <ProtectedRoute roles={['admin']}>
+            <ProtectedRoute roles={['admin']} permissions={['users.view']}>
               <AdminUsers />
             </ProtectedRoute>
           )}
@@ -115,7 +106,7 @@ export default function App() {
         <Route
           path="/admin/pending-approvals/*"
           element={(
-            <ProtectedRoute roles={['admin']}>
+            <ProtectedRoute roles={['admin']} permissions={['users.view', 'roles.review']}>
               <AdminUsers />
             </ProtectedRoute>
           )}
@@ -123,7 +114,7 @@ export default function App() {
         <Route
           path="/admin/users/*"
           element={(
-            <ProtectedRoute roles={['admin']}>
+            <ProtectedRoute roles={['admin']} permissions={['users.view']}>
               <AdminUsers />
             </ProtectedRoute>
           )}
@@ -131,7 +122,7 @@ export default function App() {
         <Route
           path="/admin/roles/*"
           element={(
-            <ProtectedRoute roles={['admin']}>
+            <ProtectedRoute roles={['admin']} permissions={['users.view']}>
               <AdminUsers />
             </ProtectedRoute>
           )}

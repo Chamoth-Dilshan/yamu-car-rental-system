@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   getProfile,
+  getMyRoleHistory,
   updateProfile,
   updateCustomerProfile,
   updateDriverProfile,
@@ -12,22 +13,23 @@ const {
   markNotificationRead,
   markAllNotificationsRead
 } = require('../controllers/userController');
-const { protect } = require('../middleware/auth');
+const { protect, authorizePermissions } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 
 const router = express.Router();
 
-router.get('/profile', protect, getProfile);
-router.put('/profile', protect, (req, res, next) => { req.uploadDir = 'profiles'; next(); }, upload.single('profilePic'), updateProfile);
-router.put('/customer-profile', protect, updateCustomerProfile);
-router.put('/driver-profile', protect, updateDriverProfile);
-router.put('/staff-profile', protect, updateStaffProfile);
-router.put('/admin-profile', protect, updateAdminProfile);
-router.post('/applications/:roleKey', protect, applyForProviderRole);
-router.put('/applications/:roleKey/withdraw', protect, withdrawProviderApplication);
-router.get('/notifications', protect, getNotifications);
-router.put('/notifications/read-all', protect, markAllNotificationsRead);
-router.put('/notifications/:notificationId/read', protect, markNotificationRead);
+router.get('/profile', protect, authorizePermissions('profile.manage'), getProfile);
+router.get('/role-history', protect, authorizePermissions('profile.manage'), getMyRoleHistory);
+router.put('/profile', protect, authorizePermissions('profile.manage'), (req, res, next) => { req.uploadDir = 'profiles'; next(); }, upload.single('profilePic'), updateProfile);
+router.put('/customer-profile', protect, authorizePermissions('profile.manage'), updateCustomerProfile);
+router.put('/driver-profile', protect, authorizePermissions('profile.manage'), updateDriverProfile);
+router.put('/staff-profile', protect, authorizePermissions('profile.manage'), updateStaffProfile);
+router.put('/admin-profile', protect, authorizePermissions('profile.manage'), updateAdminProfile);
+router.post('/applications/:roleKey', protect, authorizePermissions('profile.manage'), applyForProviderRole);
+router.put('/applications/:roleKey/withdraw', protect, authorizePermissions('profile.manage'), withdrawProviderApplication);
+router.get('/notifications', protect, authorizePermissions('profile.manage'), getNotifications);
+router.put('/notifications/read-all', protect, authorizePermissions('profile.manage'), markAllNotificationsRead);
+router.put('/notifications/:notificationId/read', protect, authorizePermissions('profile.manage'), markNotificationRead);
 
 module.exports = router;
 

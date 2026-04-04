@@ -62,7 +62,14 @@ const seed = async () => {
       password: '12345',
       fullName: 'System Admin',
       role: 'admin',
+      preferredLanguage: 'English',
+      emergencyContact: {
+        name: 'Platform Duty Manager',
+        phone: '0110000000',
+        relationship: 'Internal escalation'
+      },
       accountStatus: 'active',
+      isSystemAdmin: true,
       verificationStatus: 'verified',
       roles: [buildRoleAssignment('admin', { isPrimary: true })],
       adminProfile: {
@@ -97,6 +104,12 @@ const seed = async () => {
       city: 'Colombo',
       phone: '0771234567',
       address: '14 Duplication Road, Colombo 03',
+      preferredLanguage: 'English',
+      emergencyContact: {
+        name: 'Nuwan Perera',
+        phone: '0779991111',
+        relationship: 'Brother'
+      },
       accountStatus: 'active',
       verificationStatus: 'verified',
       roles: [
@@ -112,7 +125,19 @@ const seed = async () => {
         drivingLicenseNumber: 'B1234567',
         nicId: '901234567V',
         serviceArea: 'Colombo and Gampaha',
-        providerDetails: 'Experienced private hire driver with airport pickup coverage'
+        providerDetails: 'Experienced private hire driver with airport pickup coverage',
+        documents: {
+          nicDocument: {
+            reference: 'NIC-ALX-2026',
+            status: 'verified',
+            note: 'Seeded document metadata'
+          },
+          licenseProof: {
+            reference: 'LIC-ALX-2026',
+            status: 'verified',
+            note: 'Seeded document metadata'
+          }
+        }
       },
       staffProfile: {
         storeName: 'Alex Rentals',
@@ -120,7 +145,14 @@ const seed = async () => {
         businessRegistrationNumber: 'BR-2026-001',
         storeAddress: '12 Main Street, Colombo',
         storeContactNumber: '0112233445',
-        storeEmail: 'alex@example.com'
+        storeEmail: 'alex@example.com',
+        documents: {
+          businessRegistrationProof: {
+            reference: 'BR-ALX-2026',
+            status: 'verified',
+            note: 'Seeded document metadata'
+          }
+        }
       },
       providerApplications: [
         {
@@ -177,6 +209,12 @@ const seed = async () => {
       role: 'customer',
       city: 'Kandy',
       phone: '0712223344',
+      preferredLanguage: 'Sinhala',
+      emergencyContact: {
+        name: 'Sajith Kumara',
+        phone: '0715552222',
+        relationship: 'Father'
+      },
       accountStatus: 'active',
       verificationStatus: 'verified',
       roles: [
@@ -189,7 +227,19 @@ const seed = async () => {
       driverProfile: {
         drivingLicenseNumber: 'C9876543',
         nicId: '921234567V',
-        serviceArea: 'Kandy'
+        serviceArea: 'Kandy',
+        documents: {
+          nicDocument: {
+            reference: 'NIC-KAS-2026',
+            status: 'submitted',
+            note: 'Awaiting review'
+          },
+          licenseProof: {
+            reference: 'LIC-KAS-2026',
+            status: 'submitted',
+            note: 'Awaiting review'
+          }
+        }
       },
       providerApplications: [
         {
@@ -223,6 +273,12 @@ const seed = async () => {
       city: 'Colombo',
       phone: '0765566778',
       address: '52 Park Street, Colombo',
+      preferredLanguage: 'English',
+      emergencyContact: {
+        name: 'Madhavi Fernando',
+        phone: '0761112233',
+        relationship: 'Spouse'
+      },
       accountStatus: 'active',
       verificationStatus: 'verified',
       roles: [
@@ -236,7 +292,17 @@ const seed = async () => {
         drivingLicenseNumber: 'DL-443322',
         nicId: '891112223V',
         serviceArea: 'Colombo',
-        providerDetails: 'Airport pickups, business travel, and private city rides'
+        providerDetails: 'Airport pickups, business travel, and private city rides',
+        documents: {
+          nicDocument: {
+            reference: 'NIC-NAD-2026',
+            status: 'verified'
+          },
+          licenseProof: {
+            reference: 'LIC-NAD-2026',
+            status: 'verified'
+          }
+        }
       },
       providerApplications: [
         {

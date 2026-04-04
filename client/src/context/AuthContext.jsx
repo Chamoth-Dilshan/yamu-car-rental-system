@@ -10,6 +10,17 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
   const [notifications, setNotifications] = useState([])
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(0)
+  const hasPermission = (permission) => Boolean(user?.permissions?.includes(permission))
+  const hasAnyPermission = (...permissions) => permissions.some((permission) => hasPermission(permission))
+  const hasAllPermissions = (...permissions) => permissions.every((permission) => hasPermission(permission))
+
+  const clearSession = () => {
+    localStorage.removeItem('uprm_token')
+    localStorage.removeItem('uprm_user')
+    setUserState(null)
+    setNotifications([])
+    setUnreadNotificationCount(0)
+  }
 
   const setUser = (nextUser) => {
     setUserState(nextUser)
@@ -37,24 +48,48 @@ export function AuthProvider({ children }) {
   }
 
   const refreshNotifications = async () => {
-    const res = await API.get('/users/notifications')
-    setNotifications(res.data.notifications || [])
-    syncUnreadCount(res.data.unreadCount || 0)
-    return res.data
+    try {
+      const res = await API.get('/users/notifications')
+      setNotifications(res.data.notifications || [])
+      syncUnreadCount(res.data.unreadCount || 0)
+      return res.data
+    } catch (error) {
+      if ([401, 403].includes(error?.response?.status)) {
+        clearSession()
+      }
+
+      throw error
+    }
   }
 
   const markNotificationRead = async (notificationId) => {
-    const res = await API.put(`/users/notifications/${notificationId}/read`)
-    setNotifications(res.data.notifications || [])
-    syncUnreadCount(res.data.unreadCount || 0)
-    return res.data
+    try {
+      const res = await API.put(`/users/notifications/${notificationId}/read`)
+      setNotifications(res.data.notifications || [])
+      syncUnreadCount(res.data.unreadCount || 0)
+      return res.data
+    } catch (error) {
+      if ([401, 403].includes(error?.response?.status)) {
+        clearSession()
+      }
+
+      throw error
+    }
   }
 
   const markAllNotificationsRead = async () => {
-    const res = await API.put('/users/notifications/read-all')
-    setNotifications(res.data.notifications || [])
-    syncUnreadCount(res.data.unreadCount || 0)
-    return res.data
+    try {
+      const res = await API.put('/users/notifications/read-all')
+      setNotifications(res.data.notifications || [])
+      syncUnreadCount(res.data.unreadCount || 0)
+      return res.data
+    } catch (error) {
+      if ([401, 403].includes(error?.response?.status)) {
+        clearSession()
+      }
+
+      throw error
+    }
   }
 
   useEffect(() => {
@@ -91,16 +126,11 @@ export function AuthProvider({ children }) {
         setNotifications(notificationRes.data.notifications || [])
         syncUnreadCount(notificationRes.data.unreadCount || nextUser.unreadNotificationCount || 0, nextUser)
       } catch {
-        localStorage.removeItem('uprm_token')
-        localStorage.removeItem('uprm_user')
-
         if (!active) {
           return
         }
 
-        setUserState(null)
-        setNotifications([])
-        setUnreadNotificationCount(0)
+        clearSession()
       } finally {
         if (active) {
           setLoading(false)
@@ -124,7 +154,11 @@ export function AuthProvider({ children }) {
           setNotifications(res.data.notifications || [])
           syncUnreadCount(res.data.unreadCount || 0)
         })
-        .catch(() => {})
+        .catch((error) => {
+          if (active && [401, 403].includes(error?.response?.status)) {
+            clearSession()
+          }
+        })
     }, 30000)
 
     return () => {
@@ -154,25 +188,28 @@ export function AuthProvider({ children }) {
   const switchRole = async (role) => {
     const res = await API.put('/auth/switch-role', { role })
     const { token, ...userData } = res.data
-    const nextUser = { ...user, ...userData }
     localStorage.setItem('uprm_token', token)
-    setUser(nextUser)
+    setUser(userData)
     await refreshNotifications().catch(() => {})
-    return nextUser
+    return userData
   }
 
   const refreshMe = async () => {
-    const res = await API.get('/auth/me')
-    setUser(res.data)
-    return res.data
+    try {
+      const res = await API.get('/auth/me')
+      setUser(res.data)
+      return res.data
+    } catch (error) {
+      if ([401, 403].includes(error?.response?.status)) {
+        clearSession()
+      }
+
+      throw error
+    }
   }
 
   const logout = () => {
-    localStorage.removeItem('uprm_token')
-    localStorage.removeItem('uprm_user')
-    setUserState(null)
-    setNotifications([])
-    setUnreadNotificationCount(0)
+    clearSession()
   }
 
   return (
@@ -190,6 +227,9 @@ export function AuthProvider({ children }) {
         refreshNotifications,
         markNotificationRead,
         markAllNotificationsRead,
+        hasPermission,
+        hasAnyPermission,
+        hasAllPermissions,
         setUser
       }}
     >

@@ -5,9 +5,8 @@ import { useAuth } from '../context/AuthContext'
 const menuItems = {
   customer: [
     { section: 'Account' },
-    { to: '/account', label: 'Overview', end: true },
+    { to: '/profile', label: 'User Profile', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
-    { to: '/profile', label: 'Profile Details', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true },
     { section: 'Discover' },
@@ -19,15 +18,13 @@ const menuItems = {
     { to: '/driver/ads', label: 'My Driver Ads', end: true },
     { to: '/driver/bookings', label: 'Booking Requests', end: true },
     { section: 'Account' },
-    { to: '/account', label: 'Overview', end: true },
-    { to: '/profile', label: 'Profile Details', end: true },
+    { to: '/profile', label: 'User Profile', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   staff: [
     { section: 'Account' },
-    { to: '/account', label: 'Overview', end: true },
-    { to: '/profile', label: 'Profile Details', end: true },
+    { to: '/profile', label: 'User Profile', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
@@ -36,13 +33,39 @@ const menuItems = {
     { to: '/admin/dashboard', label: 'Overview', end: true },
     { to: '/admin/pending-approvals', label: 'Pending Approvals', end: false },
     { to: '/admin/users', label: 'Users', end: false },
-    { to: '/admin/roles', label: 'Role Access', end: false }
+    { to: '/admin/roles', label: 'Role Access', end: false },
+    { section: 'Account' },
+    { to: '/profile', label: 'User Profile', end: true },
+    { to: '/switch-roles', label: 'Switch Roles', end: true }
   ]
 }
 
 export default function Sidebar() {
-  const { user } = useAuth()
-  const items = menuItems[user?.activeRole] || menuItems.customer
+  const { user, hasPermission } = useAuth()
+  const activeRole = user?.activeRole
+  const items = (menuItems[activeRole] || menuItems.customer).filter((item) => {
+    if (!item.to) {
+      return true
+    }
+
+    if (item.to === '/profile') {
+      return hasPermission('profile.manage')
+    }
+
+    if (item.to === '/admin/dashboard' || item.to === '/admin/users') {
+      return hasPermission('users.view')
+    }
+
+    if (item.to === '/admin/pending-approvals') {
+      return hasPermission('users.view') && hasPermission('roles.review')
+    }
+
+    if (item.to === '/admin/roles') {
+      return hasPermission('users.view') && hasPermission('roles.assign')
+    }
+
+    return true
+  })
   const avatarSrc = user?.profilePic && user.profilePic !== 'avatar.png'
     ? buildUploadUrl(user.profilePic)
     : `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || 'User')}&background=f0a500&color=0d1b2a&bold=true`
@@ -53,6 +76,7 @@ export default function Sidebar() {
         <img src={avatarSrc} alt={user?.fullName} />
         <h4>{user?.fullName}</h4>
         <span>{user?.activeRole}</span>
+        <small>{user?.primaryRole ? `Primary: ${user.primaryRole}` : 'Primary role pending'}</small>
       </div>
       <nav className="sidebar-nav">
         {items.map((item) => {

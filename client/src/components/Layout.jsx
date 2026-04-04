@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { buildUploadUrl } from '../api/config';
 import { formatDateTime } from '../utils/formatters';
+import BrandLogo from './BrandLogo';
 import Footer from './Footer';
 
 export default function Layout({ children }) {
@@ -10,6 +11,7 @@ export default function Layout({ children }) {
     logout,
     notifications,
     unreadNotificationCount,
+    hasPermission,
     markNotificationRead,
     markAllNotificationsRead
   } = useAuth();
@@ -20,9 +22,20 @@ export default function Layout({ children }) {
   const isDriver = activeRole === 'driver';
   const isAdmin = activeRole === 'admin';
   const hasHomePage = !user || activeRole === 'customer';
-  const showFooter = location.pathname === '/signin';
-  const logoTarget = isAdmin ? '/admin/dashboard' : user ? '/account' : '/';
+  const footerHiddenPaths = new Set(['/signin']);
+  const showFooter = !footerHiddenPaths.has(location.pathname) && (!user || isCustomer);
+  const canManageProfile = hasPermission('profile.manage');
+  const canViewUsers = hasPermission('users.view');
+  const canReviewRoles = hasPermission('roles.review');
+  const canAssignRoles = hasPermission('roles.assign');
+  const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? '/profile' : '/';
   const recentNotifications = (notifications || []).slice(0, 5);
+  const workflowNotificationCount = (notifications || []).filter((notification) => (
+    [notification.title, notification.message, notification.link]
+      .join(' ')
+      .toLowerCase()
+      .match(/profile|role|verification|approval|application|switch/)
+  )).length;
 
   const handleLogout = () => {
     logout()
@@ -53,13 +66,15 @@ export default function Layout({ children }) {
     <>
       <nav className="navbar">
         <div className="container">
-          <Link to={logoTarget} className="logo">YA<span>MU</span></Link>
+          <Link to={logoTarget} className="logo" aria-label="YAMU Car Rental">
+            <BrandLogo />
+          </Link>
 
           <div className="nav-links">
             {hasHomePage && <NavLink to="/">Home</NavLink>}
-            {user && !isAdmin && <NavLink to="/account">Account</NavLink>}
+            {user && !isAdmin && canManageProfile && <NavLink to="/profile">User Profile</NavLink>}
             {isDriver && <NavLink to="/driver/ads">Driver Ads</NavLink>}
-            {isAdmin && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
+            {isAdmin && canViewUsers && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
             {isAdmin && <NavLink to="/admin/bookings">Bookings</NavLink>}
           </div>
 
@@ -75,7 +90,10 @@ export default function Layout({ children }) {
                   </button>
                   <div className="nav-notification-panel">
                     <div className="nav-notification-header">
-                      <strong>Notifications</strong>
+                      <div>
+                        <strong>Notifications</strong>
+                        <small>{workflowNotificationCount} profile or role updates</small>
+                      </div>
                       {unreadNotificationCount > 0 && (
                         <button type="button" onClick={() => markAllNotificationsRead()}>
                           Mark all read
@@ -102,9 +120,11 @@ export default function Layout({ children }) {
                       <div className="nav-notification-empty">No notifications yet.</div>
                     )}
 
-                    <Link to="/profile#notifications" className="nav-notification-footer">
-                      Open notification center
-                    </Link>
+                    {canManageProfile && (
+                      <Link to="/profile#notifications" className="nav-notification-footer">
+                        Open notification center
+                      </Link>
+                    )}
                   </div>
                 </div>
 
@@ -112,18 +132,17 @@ export default function Layout({ children }) {
                   <img src={avatarSrc} alt={user.fullName} />
                   <span>{user.fullName?.split(' ')[0]}</span>
                   <div className="nav-user-dropdown">
-                    {!isAdmin && <Link to="/account">Account Overview</Link>}
-                    {!isAdmin && <Link to="/profile">Profile Details</Link>}
+                    {canManageProfile && <Link to="/profile">User Profile</Link>}
                     {isCustomer && <Link to="/bookings">My Bookings</Link>}
                     {isDriver && <Link to="/driver/ads">My Driver Ads</Link>}
                     {isDriver && <Link to="/driver/bookings">Booking Requests</Link>}
-                    {!isAdmin && <Link to="/apply-roles">Role Requests</Link>}
-                    {!isAdmin && <Link to="/switch-roles">Switch Roles</Link>}
-                    {isAdmin && <Link to="/admin/dashboard">Overview</Link>}
+                    {!isAdmin && <Link to="/apply-roles">Role Applications</Link>}
+                    <Link to="/switch-roles">Switch Roles</Link>
+                    {isAdmin && canViewUsers && <Link to="/admin/dashboard">Overview</Link>}
                     {isAdmin && <Link to="/admin/bookings">Bookings</Link>}
-                    {isAdmin && <Link to="/admin/pending-approvals">Pending Approvals</Link>}
-                    {isAdmin && <Link to="/admin/users">Users</Link>}
-                    {isAdmin && <Link to="/admin/roles">Role Access</Link>}
+                    {isAdmin && canViewUsers && canReviewRoles && <Link to="/admin/pending-approvals">Pending Approvals</Link>}
+                    {isAdmin && canViewUsers && <Link to="/admin/users">Users</Link>}
+                    {isAdmin && canViewUsers && canAssignRoles && <Link to="/admin/roles">Role Access</Link>}
                     <button onClick={handleLogout}>Logout</button>
                   </div>
                 </div>

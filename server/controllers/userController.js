@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { sendServerError } = require('../utils/errorResponses');
+const { buildUserAuditSnapshot, logAuditEvent, getRoleHistoryTimeline } = require('../utils/auditHelpers');
 const {
   addNotificationToAdmins,
   appendNotification,
@@ -11,12 +12,29 @@ const {
   buildRoleAssignment,
   canManageRoleProfile,
   canUseRole,
-  getLatestProviderApplication,
+  createProviderApplication,
+  getLatestPendingProviderApplication,
+  getProviderRequirementConfig,
   getRoleAssignment,
   serializeUser,
   syncUserRoles,
-  upsertProviderApplication
 } = require('../utils/roleHelpers');
+const {
+  hasDocumentFile,
+  mergeDriverDocuments,
+  mergeStaffDocuments,
+  normalizeEmergencyContact,
+  normalizeDriverDocuments,
+  normalizePreferredLanguage,
+  normalizeStaffDocuments,
+  parseDate,
+  setDocumentCollectionStatus,
+  trimValue,
+  validateRequiredTextFields,
+  validatePasswordStrength
+} = require('../utils/profileHelpers');
+
+const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 
 const ensureUniqueIdentityFields = async (userId, email, username) => {
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -34,6 +52,53 @@ const ensureUniqueIdentityFields = async (userId, email, username) => {
   return { normalizedEmail, normalizedUsername };
 };
 
+const getPlainObject = (value) => (value?.toObject ? value.toObject() : (value || {}));
+
+const buildDriverProfilePayload = (payload = {}, currentProfile = {}) => {
+  const current = getPlainObject(currentProfile);
+
+  return {
+    drivingLicenseNumber: trimValue(payload.drivingLicenseNumber, current.drivingLicenseNumber || ''),
+    licenseExpiryDate: parseDate(payload.licenseExpiryDate) || null,
+    nicId: trimValue(payload.nicId, current.nicId || ''),
+    serviceArea: trimValue(payload.serviceArea, current.serviceArea || ''),
+    providerDetails: trimValue(payload.providerDetails, current.providerDetails || ''),
+    documents: mergeDriverDocuments(payload.documents || {}, current.documents || {})
+  };
+};
+
+const buildStaffProfilePayload = (payload = {}, currentProfile = {}) => {
+  const current = getPlainObject(currentProfile);
+
+  return {
+    storeName: trimValue(payload.storeName, current.storeName || ''),
+    storeOwner: trimValue(payload.storeOwner, current.storeOwner || ''),
+    businessRegistrationNumber: trimValue(payload.businessRegistrationNumber, current.businessRegistrationNumber || ''),
+    storeAddress: trimValue(payload.storeAddress, current.storeAddress || ''),
+    storeContactNumber: trimValue(payload.storeContactNumber, current.storeContactNumber || ''),
+    storeEmail: trimValue(payload.storeEmail, current.storeEmail || ''),
+    documents: mergeStaffDocuments(payload.documents || {}, current.documents || {})
+  };
+};
+
+const validateProviderApplicationData = (roleKey, applicationData = {}) => {
+  const { fields, documents } = getProviderRequirementConfig(roleKey);
+  const missingField = fields.find(({ key }) => !trimValue(applicationData[key], ''));
+
+  if (missingField) {
+    return { valid: false, message: `Missing required field: ${missingField.label}` };
+  }
+
+  const nextDocuments = applicationData.documents || {};
+  const missingDocument = documents.find(({ key }) => !hasDocumentFile(nextDocuments?.[key] || {}));
+
+  if (missingDocument) {
+    return { valid: false, message: `Missing required document metadata: ${missingDocument.label}` };
+  }
+
+  return { valid: true };
+};
+
 const getProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('-password');
@@ -42,9 +107,21 @@ const getProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    syncUserRoles(user);
     res.json(serializeUser(user));
   } catch (error) {
     sendServerError(res, error, 'Failed to load profile');
+  }
+};
+
+const getMyRoleHistory = async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const items = await getRoleHistoryTimeline(req.user._id, limit);
+
+    res.json({ items });
+  } catch (error) {
+    sendServerError(res, error, 'Failed to load role history');
   }
 };
 
@@ -58,20 +135,52 @@ const updateProfile = async (req, res) => {
 
     const nextEmail = req.body.email || user.email;
     const nextUsername = req.body.username || user.username || nextEmail;
+    const missingIdentityField = validateRequiredTextFields([
+      ['Full name', req.body.fullName ?? user.fullName],
+      ['Email', nextEmail],
+      ['Username', nextUsername]
+    ]);
+
+    if (missingIdentityField) {
+      return res.status(400).json({ message: `${missingIdentityField} is required` });
+    }
+
     const { normalizedEmail, normalizedUsername } = await ensureUniqueIdentityFields(
       user._id,
       nextEmail,
       nextUsername
     );
 
-    user.fullName = req.body.fullName?.trim() || user.fullName;
+    if (req.body.password) {
+      const passwordError = validatePasswordStrength(req.body.password);
+      if (passwordError) {
+        return res.status(400).json({ message: passwordError });
+      }
+
+      if (!req.body.currentPassword) {
+        return res.status(400).json({ message: 'Current password is required to set a new password' });
+      }
+
+      if (!(await user.matchPassword(req.body.currentPassword))) {
+        return res.status(400).json({ message: 'Current password is incorrect' });
+      }
+    }
+
+    const beforeSnapshot = buildUserAuditSnapshot(user);
+    user.fullName = trimValue(req.body.fullName, user.fullName);
     user.email = normalizedEmail;
     user.username = normalizedUsername;
-    user.phone = req.body.phone || '';
-    user.address = req.body.address || '';
-    user.city = req.body.city || '';
-    user.dob = req.body.dob || '';
-    user.bio = req.body.bio || '';
+    user.phone = trimValue(req.body.phone, '');
+    user.address = trimValue(req.body.address, '');
+    user.city = trimValue(req.body.city, '');
+    user.dob = trimValue(req.body.dob, '');
+    user.bio = trimValue(req.body.bio, '');
+    user.preferredLanguage = normalizePreferredLanguage(req.body.preferredLanguage, user.preferredLanguage || 'English');
+    user.emergencyContact = normalizeEmergencyContact({
+      name: req.body.emergencyContactName,
+      phone: req.body.emergencyContactPhone,
+      relationship: req.body.emergencyContactRelationship
+    });
 
     if (req.file) {
       user.profilePic = `profiles/${req.file.filename}`;
@@ -82,6 +191,13 @@ const updateProfile = async (req, res) => {
     }
 
     await user.save();
+    await logAuditEvent({
+      actorUserId: user._id,
+      targetUserId: user._id,
+      actionType: 'user.profile.updated',
+      beforeSnapshot,
+      afterSnapshot: buildUserAuditSnapshot(user)
+    });
 
     res.json(serializeUser(user));
   } catch (error) {
@@ -105,13 +221,21 @@ const updateCustomerProfile = async (req, res) => {
       return res.status(403).json({ message: 'Customer profile access is restricted to active customer roles' });
     }
 
+    const beforeSnapshot = buildUserAuditSnapshot(user);
     user.customerProfile = {
       ...user.customerProfile,
-      preferences: req.body.preferences || '',
-      notes: req.body.notes || ''
+      preferences: trimValue(req.body.preferences, ''),
+      notes: trimValue(req.body.notes, '')
     };
 
     await user.save({ validateModifiedOnly: true });
+    await logAuditEvent({
+      actorUserId: user._id,
+      targetUserId: user._id,
+      actionType: 'user.customer_profile.updated',
+      beforeSnapshot,
+      afterSnapshot: buildUserAuditSnapshot(user)
+    });
     res.json({
       message: 'Customer profile updated',
       customerProfile: user.customerProfile,
@@ -135,26 +259,36 @@ const updateDriverProfile = async (req, res) => {
       return res.status(403).json({ message: 'Driver onboarding is available only for assigned driver applicants or roles' });
     }
 
+    const beforeSnapshot = buildUserAuditSnapshot(user);
+    const documentKeys = getProviderRequirementConfig('driver').documents.map(({ key }) => key);
     user.driverProfile = {
-      ...user.driverProfile,
-      drivingLicenseNumber: req.body.drivingLicenseNumber || '',
-      licenseExpiryDate: req.body.licenseExpiryDate || null,
-      nicId: req.body.nicId || '',
-      serviceArea: req.body.serviceArea || '',
-      providerDetails: req.body.providerDetails || ''
+      ...getPlainObject(user.driverProfile),
+      ...buildDriverProfilePayload(req.body, user.driverProfile)
     };
 
-    const pendingApplication = getLatestProviderApplication(user, 'driver');
+    const pendingApplication = getLatestPendingProviderApplication(user, 'driver');
     if (pendingApplication?.status === 'pending') {
-      const driverProfileData = user.driverProfile?.toObject ? user.driverProfile.toObject() : user.driverProfile;
+      user.driverProfile.documents = setDocumentCollectionStatus(user.driverProfile.documents, documentKeys, { status: 'pending' });
       pendingApplication.applicationData = {
         ...pendingApplication.applicationData,
-        ...driverProfileData
+        ...getPlainObject(user.driverProfile),
+        documents: setDocumentCollectionStatus(
+          normalizeDriverDocuments(getPlainObject(user.driverProfile)?.documents || {}),
+          documentKeys,
+          { status: 'pending' }
+        )
       };
       pendingApplication.submittedAt = new Date();
     }
 
     await user.save({ validateModifiedOnly: true });
+    await logAuditEvent({
+      actorUserId: user._id,
+      targetUserId: user._id,
+      actionType: 'user.driver_profile.updated',
+      beforeSnapshot,
+      afterSnapshot: buildUserAuditSnapshot(user)
+    });
     res.json({
       message: 'Driver profile updated',
       driverProfile: user.driverProfile,
@@ -178,27 +312,36 @@ const updateStaffProfile = async (req, res) => {
       return res.status(403).json({ message: 'Staff onboarding is available only for assigned staff applicants or roles' });
     }
 
+    const beforeSnapshot = buildUserAuditSnapshot(user);
+    const documentKeys = getProviderRequirementConfig('staff').documents.map(({ key }) => key);
     user.staffProfile = {
-      ...user.staffProfile,
-      storeName: req.body.storeName || '',
-      storeOwner: req.body.storeOwner || '',
-      businessRegistrationNumber: req.body.businessRegistrationNumber || '',
-      storeAddress: req.body.storeAddress || '',
-      storeContactNumber: req.body.storeContactNumber || '',
-      storeEmail: req.body.storeEmail || ''
+      ...getPlainObject(user.staffProfile),
+      ...buildStaffProfilePayload(req.body, user.staffProfile)
     };
 
-    const pendingApplication = getLatestProviderApplication(user, 'staff');
+    const pendingApplication = getLatestPendingProviderApplication(user, 'staff');
     if (pendingApplication?.status === 'pending') {
-      const staffProfileData = user.staffProfile?.toObject ? user.staffProfile.toObject() : user.staffProfile;
+      user.staffProfile.documents = setDocumentCollectionStatus(user.staffProfile.documents, documentKeys, { status: 'pending' });
       pendingApplication.applicationData = {
         ...pendingApplication.applicationData,
-        ...staffProfileData
+        ...getPlainObject(user.staffProfile),
+        documents: setDocumentCollectionStatus(
+          normalizeStaffDocuments(getPlainObject(user.staffProfile)?.documents || {}),
+          documentKeys,
+          { status: 'pending' }
+        )
       };
       pendingApplication.submittedAt = new Date();
     }
 
     await user.save({ validateModifiedOnly: true });
+    await logAuditEvent({
+      actorUserId: user._id,
+      targetUserId: user._id,
+      actionType: 'user.staff_profile.updated',
+      beforeSnapshot,
+      afterSnapshot: buildUserAuditSnapshot(user)
+    });
     res.json({
       message: 'Staff profile updated',
       staffProfile: user.staffProfile,
@@ -222,13 +365,21 @@ const updateAdminProfile = async (req, res) => {
       return res.status(403).json({ message: 'Admin profile access is restricted to admin users' });
     }
 
+    const beforeSnapshot = buildUserAuditSnapshot(user);
     user.adminProfile = {
       ...user.adminProfile,
-      accessScope: req.body.accessScope || '',
-      controlNotes: req.body.controlNotes || ''
+      accessScope: trimValue(req.body.accessScope, ''),
+      controlNotes: trimValue(req.body.controlNotes, '')
     };
 
     await user.save({ validateModifiedOnly: true });
+    await logAuditEvent({
+      actorUserId: user._id,
+      targetUserId: user._id,
+      actionType: 'user.admin_profile.updated',
+      beforeSnapshot,
+      afterSnapshot: buildUserAuditSnapshot(user)
+    });
     res.json({
       message: 'Admin profile updated',
       adminProfile: user.adminProfile,
@@ -253,51 +404,48 @@ const applyForProviderRole = async (req, res) => {
     }
 
     if (!canUseRole(getRoleAssignment(user, 'customer'))) {
-      return res.status(403).json({ message: 'Only customers can apply for provider roles' });
+      return res.status(403).json({ message: 'Only accounts with active customer access can apply for provider roles' });
     }
 
     const roleAssignment = getRoleAssignment(user, roleKey);
-    if (roleAssignment && ['active', 'verified'].includes(roleAssignment.roleStatus) && roleAssignment.verificationStatus === 'verified') {
+    if (roleAssignment && canUseRole(roleAssignment)) {
       return res.status(400).json({ message: `Your ${roleKey} role is already approved` });
     }
 
-    const applicationData = roleKey === 'driver'
-      ? {
-          drivingLicenseNumber: req.body.drivingLicenseNumber || '',
-          licenseExpiryDate: req.body.licenseExpiryDate || null,
-          nicId: req.body.nicId || '',
-          serviceArea: req.body.serviceArea || '',
-          providerDetails: req.body.providerDetails || ''
-        }
-      : {
-          storeName: req.body.storeName || '',
-          storeOwner: req.body.storeOwner || '',
-          businessRegistrationNumber: req.body.businessRegistrationNumber || '',
-          storeAddress: req.body.storeAddress || '',
-          storeContactNumber: req.body.storeContactNumber || '',
-          storeEmail: req.body.storeEmail || ''
-        };
-
-    const requiredFields = roleKey === 'driver'
-      ? ['drivingLicenseNumber', 'nicId', 'serviceArea']
-      : ['storeName', 'businessRegistrationNumber', 'storeAddress', 'storeContactNumber', 'storeEmail'];
-
-    const missingField = requiredFields.find((field) => !applicationData[field]);
-    if (missingField) {
-      return res.status(400).json({ message: `Missing required field: ${missingField}` });
+    if (roleAssignment && ['suspended', 'deactivated'].includes(roleAssignment.roleStatus)) {
+      return res.status(403).json({ message: `Your ${roleKey} access is currently restricted. Contact an administrator for help.` });
     }
+
+    if (getLatestPendingProviderApplication(user, roleKey)) {
+      return res.status(400).json({ message: `A ${roleKey} application is already pending review` });
+    }
+
+    const applicationData = roleKey === 'driver'
+      ? buildDriverProfilePayload(req.body, user.driverProfile)
+      : buildStaffProfilePayload(req.body, user.staffProfile);
+    const documentKeys = getProviderRequirementConfig(roleKey).documents.map(({ key }) => key);
+
+    const validation = validateProviderApplicationData(roleKey, applicationData);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    const nextApplicationData = {
+      ...applicationData,
+      documents: setDocumentCollectionStatus(applicationData.documents, documentKeys, { status: 'pending' })
+    };
 
     if (roleKey === 'driver') {
       user.driverProfile = {
-        ...user.driverProfile,
-        ...applicationData
+        ...getPlainObject(user.driverProfile),
+        ...nextApplicationData
       };
     }
 
     if (roleKey === 'staff') {
       user.staffProfile = {
-        ...user.staffProfile,
-        ...applicationData
+        ...getPlainObject(user.staffProfile),
+        ...nextApplicationData
       };
     }
 
@@ -312,19 +460,28 @@ const applyForProviderRole = async (req, res) => {
       roleAssignment.verificationStatus = 'pending';
     }
 
-    upsertProviderApplication(user, roleKey, applicationData);
+    const beforeSnapshot = buildUserAuditSnapshot(user);
+    createProviderApplication(user, roleKey, nextApplicationData);
     syncUserRoles(user);
     appendNotification(user, {
       type: 'role',
-      title: `${roleKey.charAt(0).toUpperCase() + roleKey.slice(1)} application submitted`,
-      message: `Your ${roleKey} application is now pending admin review.`,
+      title: `${roleLabel(roleKey)} application submitted`,
+      message: `Your ${roleKey} application was sent for admin review. We will notify you once it is reviewed.`,
       link: '/apply-roles'
     });
     await user.save();
+    await logAuditEvent({
+      actorUserId: user._id,
+      targetUserId: user._id,
+      actionType: 'user.provider_application.submitted',
+      beforeSnapshot,
+      afterSnapshot: buildUserAuditSnapshot(user),
+      reason: roleKey
+    });
 
     await addNotificationToAdmins({
       type: 'role',
-      title: 'New provider role application',
+      title: 'Provider application submitted',
       message: `${user.fullName} submitted a ${roleKey} application for review.`,
       link: '/admin/pending-approvals'
     });
@@ -351,11 +508,12 @@ const withdrawProviderApplication = async (req, res) => {
       return res.status(400).json({ message: 'Unsupported provider role application' });
     }
 
-    const application = getLatestProviderApplication(user, roleKey);
+    const application = getLatestPendingProviderApplication(user, roleKey);
     if (!application || application.status !== 'pending') {
       return res.status(404).json({ message: 'No pending application found for this role' });
     }
 
+    const beforeSnapshot = buildUserAuditSnapshot(user);
     application.status = 'withdrawn';
     application.reviewedAt = null;
     application.reviewedBy = null;
@@ -377,6 +535,21 @@ const withdrawProviderApplication = async (req, res) => {
       link: '/apply-roles'
     });
     await user.save();
+    await logAuditEvent({
+      actorUserId: user._id,
+      targetUserId: user._id,
+      actionType: 'user.provider_application.withdrawn',
+      beforeSnapshot,
+      afterSnapshot: buildUserAuditSnapshot(user),
+      reason: roleKey
+    });
+
+    await addNotificationToAdmins({
+      type: 'role',
+      title: 'Provider application withdrawn',
+      message: `${user.fullName} withdrew a pending ${roleKey} application.`,
+      link: '/admin/pending-approvals'
+    });
 
     res.json({
       message: `${roleKey} application withdrawn`,
@@ -469,6 +642,7 @@ const markAllNotificationsRead = async (req, res) => {
 
 module.exports = {
   getProfile,
+  getMyRoleHistory,
   updateProfile,
   updateCustomerProfile,
   updateDriverProfile,
