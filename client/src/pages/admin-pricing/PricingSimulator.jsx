@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/Sidebar';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function PricingSimulator() {
   const [form, setForm] = useState({
@@ -71,7 +72,7 @@ export default function PricingSimulator() {
             <form onSubmit={handleSimulate}>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Daily Base Price ($)</label>
+                  <label>Daily Base Price (LKR)</label>
                   <input type="number" step="0.01" value={form.basePrice} onChange={e => setForm({...form, basePrice: e.target.value})} required />
                 </div>
                 <div className="form-group">
@@ -140,7 +141,7 @@ export default function PricingSimulator() {
                     <h4>Raw Subtotal</h4>
                     <p>Base price × Duration</p>
                   </div>
-                  <strong style={{ fontSize: '1.25rem' }}>${result.originalPrice.toFixed(2)}</strong>
+                  <strong style={{ fontSize: '1.25rem' }}>{formatCurrency(result.originalPrice)}</strong>
                 </div>
 
                 <div style={{ borderTop: '1px dashed var(--border)', borderBottom: '1px dashed var(--border)', padding: '1rem 0', margin: '0 1.25rem' }}>
@@ -158,7 +159,7 @@ export default function PricingSimulator() {
                             {item.name}
                           </span>
                           <strong style={{ color: item.type === 'error' ? 'var(--danger)' : (item.impact < 0 ? 'var(--success)' : 'var(--warning)') }}>
-                            {item.type === 'error' ? '' : (item.impact > 0 ? '+' : '')}{item.impact.toFixed(2)}
+                            {item.type === 'error' ? '' : (item.impact > 0 ? '+' : '-')}{formatCurrency(Math.abs(item.impact))}
                           </strong>
                         </div>
                       ))}
@@ -171,7 +172,7 @@ export default function PricingSimulator() {
                     <h4 style={{ fontSize: '1.5rem', color: 'var(--primary)' }}>Final Invoice Total</h4>
                     <p>Amount sent to payment gateway target.</p>
                   </div>
-                  <strong style={{ fontSize: '2rem', color: 'var(--primary)' }}>${result.finalPrice.toFixed(2)}</strong>
+                  <strong style={{ fontSize: '2rem', color: 'var(--primary)' }}>{formatCurrency(result.finalPrice)}</strong>
                 </div>
               </div>
             ) : (

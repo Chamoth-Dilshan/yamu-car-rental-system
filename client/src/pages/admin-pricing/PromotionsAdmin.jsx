@@ -3,6 +3,7 @@ import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/Sidebar';
 import PromotionCountdown from '../../components/PromotionCountdown';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function PromotionsAdmin() {
   const [promotions, setPromotions] = useState([]);
@@ -212,7 +213,7 @@ export default function PromotionsAdmin() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label>Min Booking Amount ($)</label>
+                    <label>Min Booking Amount (LKR)</label>
                     <input type="number" value={form.minBookingAmount} onChange={e => setForm({...form, minBookingAmount: e.target.value})} />
                   </div>
                   <div className="form-group">
@@ -258,7 +259,7 @@ export default function PromotionsAdmin() {
                       <div>
                         <h4 style={{ marginBottom: '0.2rem' }}>{p.code} <span style={{ color: 'var(--text-light)', fontWeight: 'normal', fontSize: '0.9rem' }}>- {p.title}</span></h4>
                         <p style={{ fontSize: '0.85rem' }}>
-                          Discount: {p.discountType === 'percentage' ? `${p.discountValue}%` : `$${p.discountValue}`}
+                          Discount: {p.discountType === 'percentage' ? `${p.discountValue}%` : formatCurrency(p.discountValue)}
                         </p>
                         {p.campaignId && (
                           <div style={{ marginTop: '0.4rem' }}>

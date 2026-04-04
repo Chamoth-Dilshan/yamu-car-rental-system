@@ -5,19 +5,19 @@ const featuredCars = [
   {
     name: 'City Compact',
     tag: 'Best for daily errands',
-    price: '$28/day',
+    price: 'LKR 28/day',
     description: 'Fuel-efficient and easy to park for quick runs around town.'
   },
   {
     name: 'Family SUV',
     tag: 'Most popular choice',
-    price: '$52/day',
+    price: 'LKR 52/day',
     description: 'Spacious interior, strong AC, and room for luggage on longer drives.'
   },
   {
     name: 'Executive Sedan',
     tag: 'Business and airport trips',
-    price: '$46/day',
+    price: 'LKR 46/day',
     description: 'Comfort-focused travel with a polished look for meetings and pickups.'
   }
 ];

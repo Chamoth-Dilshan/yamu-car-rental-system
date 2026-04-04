@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/Sidebar';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function PricingRulesAdmin() {
   const [rules, setRules] = useState([]);
@@ -157,7 +158,7 @@ export default function PricingRulesAdmin() {
                   <label>Adjustment Metric</label>
                   <select value={form.adjustmentType} onChange={e => setForm({...form, adjustmentType: e.target.value})}>
                     <option value="percentage">Percentage (%)</option>
-                    <option value="fixed">Fixed Amount ($)</option>
+                    <option value="fixed">Fixed Amount (LKR)</option>
                   </select>
                 </div>
               </div>
@@ -222,7 +223,7 @@ export default function PricingRulesAdmin() {
                         <h4 style={{ marginBottom: '0.2rem' }}>{r.name}</h4>
                         <p style={{ fontSize: '0.85rem' }}>
                           Adjustment: <strong style={{ color: r.adjustmentDirection === 'decrease' ? 'var(--success)' : 'var(--danger)' }}>
-                            {r.adjustmentDirection === 'increase' ? '+' : '-'}{r.adjustmentType === 'percentage' ? `${r.adjustmentValue}%` : `$${r.adjustmentValue}`}
+                            {r.adjustmentDirection === 'increase' ? '+' : '-'}{r.adjustmentType === 'percentage' ? `${r.adjustmentValue}%` : formatCurrency(r.adjustmentValue)}
                           </strong>
                         </p>
                       </div>

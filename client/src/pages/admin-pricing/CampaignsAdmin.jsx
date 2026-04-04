@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/Sidebar';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function CampaignsAdmin() {
   const [campaigns, setCampaigns] = useState([]);
@@ -198,7 +199,7 @@ export default function CampaignsAdmin() {
                               if (linked.length === 0) return <span style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>None</span>;
                               return linked.map(p => (
                                 <span key={p._id} className="badge badge-info" style={{ fontSize: '0.75rem' }}>
-                                  {p.code} ({p.discountType === 'percentage' ? `${p.discountValue}%` : `$${p.discountValue}`})
+                                  {p.code} ({p.discountType === 'percentage' ? `${p.discountValue}%` : formatCurrency(p.discountValue)})
                                 </span>
                               ));
                             })()}

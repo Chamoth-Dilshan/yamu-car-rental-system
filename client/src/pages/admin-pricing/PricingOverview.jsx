@@ -4,6 +4,7 @@ import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/Sidebar';
 import PromotionCountdown from '../../components/PromotionCountdown';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function PricingOverview() {
   const [campaigns, setCampaigns] = useState([]);
@@ -106,7 +107,7 @@ export default function PricingOverview() {
                           <p style={{ fontSize: '0.85rem' }}>{p.title}</p>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.4rem' }}>
-                          <span className="badge badge-success">{p.discountType === 'percentage' ? `${p.discountValue}%` : `$${p.discountValue}`}</span>
+                          <span className="badge badge-success">{p.discountType === 'percentage' ? `${p.discountValue}%` : formatCurrency(p.discountValue)}</span>
                           <PromotionCountdown endDate={p.endDate} />
                         </div>
                       </div>
