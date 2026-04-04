@@ -1,7 +1,7 @@
 const User = require('../models/User');
 const { sendServerError } = require('../utils/errorResponses');
 const { addNotificationToUser, appendNotification } = require('../utils/notificationHelpers');
-const { buildUserAuditSnapshot, logAuditEvent } = require('../utils/auditHelpers');
+const { buildUserAuditSnapshot, logAuditEvent, getRoleHistoryTimeline } = require('../utils/auditHelpers');
 const {
   ACCOUNT_STATUSES,
   ROLE_KEYS,
@@ -10,13 +10,21 @@ const {
   getLatestApprovedProviderApplication,
   getLatestPendingProviderApplication,
   getPrimaryRole,
+  getProviderRequirementConfig,
   getRoleAssignment,
   normalizeRoleAssignment,
   serializeUser,
   syncUserRoles,
   validateManagedUserState
 } = require('../utils/roleHelpers');
-const { trimValue } = require('../utils/profileHelpers');
+const {
+  hasDocumentFile,
+  normalizeDriverDocuments,
+  normalizeStaffDocuments,
+  setDocumentCollectionStatus,
+  trimValue,
+  validateRequiredTextFields
+} = require('../utils/profileHelpers');
 
 const MANAGEABLE_ROLE_KEYS = [...ROLE_KEYS];
 
@@ -24,7 +32,6 @@ const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
 const toPlain = (value) => (value?.toObject ? value.toObject() : value);
 const snapshotsEqual = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const isProtectedAdminAccount = (user) => Boolean(user?.isSystemAdmin);
-
 const ensureUniqueIdentityFields = async (userId, email, username) => {
   const normalizedEmail = String(email).trim().toLowerCase();
   const normalizedUsername = String(username).trim().toLowerCase();
@@ -100,25 +107,52 @@ const validateProviderRoleAssignmentChange = (user, nextRoles = [], currentRoles
   return { valid: true };
 };
 
-const validateProviderApplicationSnapshot = (roleKey, applicationData = {}) => {
-  const requiredFields = roleKey === 'driver'
-    ? ['drivingLicenseNumber', 'nicId', 'serviceArea']
-    : ['storeName', 'businessRegistrationNumber', 'storeAddress', 'storeContactNumber', 'storeEmail'];
-  const requiredDocuments = roleKey === 'driver'
-    ? ['nicDocument', 'licenseProof']
-    : ['businessRegistrationProof'];
-  const missingField = requiredFields.find((field) => !trimValue(applicationData[field], ''));
+const buildProviderApplicationAssessment = (roleKey, applicationData = {}, user = {}) => {
+  const config = getProviderRequirementConfig(roleKey);
+  const checks = [
+    {
+      key: 'accountStatus',
+      label: 'Account is active',
+      complete: user.accountStatus === 'active',
+      blocking: true
+    },
+    ...config.fields.map(({ key, label }) => ({
+      key,
+      label,
+      complete: Boolean(trimValue(applicationData[key], '')),
+      blocking: true
+    })),
+    ...config.documents.map(({ key, label }) => ({
+      key,
+      label,
+      complete: hasDocumentFile(applicationData?.documents?.[key] || {}),
+      blocking: true
+    }))
+  ];
+  const missingItems = checks.filter((item) => item.blocking && !item.complete).map((item) => item.label);
 
-  if (missingField) {
-    return { valid: false, message: `Missing required field: ${missingField}` };
+  return {
+    checks,
+    missingItems,
+    valid: missingItems.length === 0
+  };
+};
+
+const validateProviderApplicationSnapshot = (roleKey, applicationData = {}, user = {}) => {
+  const assessment = buildProviderApplicationAssessment(roleKey, applicationData, user);
+
+  if (!assessment.valid) {
+    return {
+      valid: false,
+      message: `Cannot approve ${roleKey} application. Missing required items: ${assessment.missingItems.join(', ')}`,
+      missingItems: assessment.missingItems
+    };
   }
 
-  const missingDocument = requiredDocuments.find((documentKey) => !trimValue(applicationData?.documents?.[documentKey]?.reference, ''));
-  if (missingDocument) {
-    return { valid: false, message: `Missing required document reference: ${missingDocument}` };
-  }
-
-  return { valid: true };
+  return {
+    valid: true,
+    assessment
+  };
 };
 
 const buildIdentitySnapshot = (user) => ({
@@ -142,6 +176,15 @@ const buildRoleSnapshot = (user) => ({
   }))
 });
 
+const buildAssignedRolesSnapshot = (user) => (
+  (user.roles || []).map((role) => ({
+    roleKey: role.roleKey,
+    roleStatus: role.roleStatus,
+    verificationStatus: role.verificationStatus,
+    isPrimary: Boolean(role.isPrimary)
+  }))
+);
+
 const buildRoleChangeMessage = (user) => {
   const roleList = (user.roles || []).map((role) => roleLabel(role.roleKey)).join(', ');
   return `An administrator updated your role access. Current roles: ${roleList}.`;
@@ -157,6 +200,23 @@ const getAllUsers = async (req, res) => {
     res.json(users.map(serializeUser));
   } catch (error) {
     sendServerError(res, error, 'Failed to load users');
+  }
+};
+
+const getUserRoleHistory = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id).select('_id');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const items = await getRoleHistoryTimeline(user._id, limit);
+
+    res.json({ items });
+  } catch (error) {
+    sendServerError(res, error, 'Failed to load role history');
   }
 };
 
@@ -180,6 +240,16 @@ const updateUser = async (req, res) => {
 
     const nextEmail = req.body.email || user.email;
     const nextUsername = req.body.username || user.username || nextEmail;
+    const missingIdentityField = validateRequiredTextFields([
+      ['Full name', req.body.fullName ?? user.fullName],
+      ['Email', nextEmail],
+      ['Username', nextUsername]
+    ]);
+
+    if (missingIdentityField) {
+      return res.status(400).json({ message: `${missingIdentityField} is required` });
+    }
+
     const { normalizedEmail, normalizedUsername } = await ensureUniqueIdentityFields(
       user._id,
       nextEmail,
@@ -251,7 +321,10 @@ const updateUser = async (req, res) => {
 
     const accountStatusChanged = previousAccountStatus !== user.accountStatus;
     const identityChanged = !snapshotsEqual(beforeIdentitySnapshot, afterIdentityPreview);
-    const rolesChanged = !snapshotsEqual(beforeRoleSnapshot, afterRolePreview);
+    const assignedRolesChanged = !snapshotsEqual(beforeRoleSnapshot.roles, afterRolePreview.roles);
+    const activeRoleChanged = beforeRoleSnapshot.activeRole !== afterRolePreview.activeRole;
+    const primaryRoleChanged = beforeRoleSnapshot.primaryRole !== afterRolePreview.primaryRole;
+    const rolesChanged = assignedRolesChanged || activeRoleChanged || primaryRoleChanged;
 
     if (accountStatusChanged) {
       appendNotification(user, {
@@ -283,9 +356,39 @@ const updateUser = async (req, res) => {
       auditEvents.push(logAuditEvent({
         actorUserId: req.user._id,
         targetUserId: user._id,
-        actionType: 'user.profile.updated',
+        actionType: 'admin.user_record.updated',
         beforeSnapshot: beforeIdentitySnapshot,
         afterSnapshot: buildIdentitySnapshot(user)
+      }));
+    }
+
+    if (assignedRolesChanged) {
+      auditEvents.push(logAuditEvent({
+        actorUserId: req.user._id,
+        targetUserId: user._id,
+        actionType: 'admin.assigned_roles.updated',
+        beforeSnapshot: buildAssignedRolesSnapshot({ roles: beforeRoleSnapshot.roles }),
+        afterSnapshot: buildAssignedRolesSnapshot(user)
+      }));
+    }
+
+    if (activeRoleChanged) {
+      auditEvents.push(logAuditEvent({
+        actorUserId: req.user._id,
+        targetUserId: user._id,
+        actionType: 'admin.active_role.updated',
+        beforeSnapshot: { activeRole: beforeRoleSnapshot.activeRole },
+        afterSnapshot: { activeRole: user.role }
+      }));
+    }
+
+    if (primaryRoleChanged) {
+      auditEvents.push(logAuditEvent({
+        actorUserId: req.user._id,
+        targetUserId: user._id,
+        actionType: 'admin.primary_role.updated',
+        beforeSnapshot: { primaryRole: beforeRoleSnapshot.primaryRole },
+        afterSnapshot: { primaryRole: getPrimaryRole(user) }
       }));
     }
 
@@ -293,7 +396,7 @@ const updateUser = async (req, res) => {
       auditEvents.push(logAuditEvent({
         actorUserId: req.user._id,
         targetUserId: user._id,
-        actionType: 'user.roles.updated',
+        actionType: 'admin.role_state.updated',
         beforeSnapshot: beforeRoleSnapshot,
         afterSnapshot: buildRoleSnapshot(user)
       }));
@@ -303,7 +406,7 @@ const updateUser = async (req, res) => {
       auditEvents.push(logAuditEvent({
         actorUserId: req.user._id,
         targetUserId: user._id,
-        actionType: 'user.account_status.updated',
+        actionType: 'admin.account_status.updated',
         beforeSnapshot,
         afterSnapshot
       }));
@@ -354,6 +457,9 @@ const reviewProviderApplication = async (req, res) => {
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
     let roleAssignment = getRoleAssignment(user, roleKey);
+    const requiredDocuments = roleKey === 'driver'
+      ? ['nicDocument', 'drivingLicenseDocument', 'proofOfAddressDocument']
+      : ['businessRegistrationDocument', 'proofOfAddressDocument'];
     if (!roleAssignment) {
       roleAssignment = buildRoleAssignment(roleKey, {
         roleStatus: 'pending',
@@ -366,7 +472,15 @@ const reviewProviderApplication = async (req, res) => {
     const trimmedReason = trimValue(rejectionReason, '');
 
     if (action === 'approve') {
-      const currentProfile = roleKey === 'driver' ? toPlain(user.driverProfile) : toPlain(user.staffProfile);
+      const currentProfile = roleKey === 'driver'
+        ? {
+            ...toPlain(user.driverProfile),
+            documents: normalizeDriverDocuments(toPlain(user.driverProfile)?.documents || {})
+          }
+        : {
+            ...toPlain(user.staffProfile),
+            documents: normalizeStaffDocuments(toPlain(user.staffProfile)?.documents || {})
+          };
       const applicationSnapshot = {
         ...currentProfile,
         ...(application.applicationData || {}),
@@ -375,15 +489,38 @@ const reviewProviderApplication = async (req, res) => {
           ...((application.applicationData || {}).documents || {})
         }
       };
-      const validation = validateProviderApplicationSnapshot(roleKey, applicationSnapshot);
+      const validation = validateProviderApplicationSnapshot(roleKey, applicationSnapshot, user);
       if (!validation.valid) {
         return res.status(400).json({ message: validation.message });
       }
+      const reviewedAt = new Date();
+      const reviewedDocuments = setDocumentCollectionStatus(applicationSnapshot.documents, requiredDocuments, {
+        status: 'approved',
+        reviewedAt
+      });
+
+      if (roleKey === 'driver') {
+        user.driverProfile = {
+          ...currentProfile,
+          ...applicationSnapshot,
+          documents: reviewedDocuments
+        };
+      } else {
+        user.staffProfile = {
+          ...currentProfile,
+          ...applicationSnapshot,
+          documents: reviewedDocuments
+        };
+      }
 
       application.status = 'approved';
-      application.reviewedAt = new Date();
+      application.reviewedAt = reviewedAt;
       application.reviewedBy = req.user._id;
       application.rejectionReason = '';
+      application.applicationData = {
+        ...applicationSnapshot,
+        documents: reviewedDocuments
+      };
       roleAssignment.roleStatus = 'active';
       roleAssignment.verificationStatus = 'verified';
       appendNotification(user, {
@@ -399,10 +536,52 @@ const reviewProviderApplication = async (req, res) => {
         return res.status(400).json({ message: 'A rejection reason is required' });
       }
 
+      const currentProfile = roleKey === 'driver'
+        ? {
+            ...toPlain(user.driverProfile),
+            documents: normalizeDriverDocuments(toPlain(user.driverProfile)?.documents || {})
+          }
+        : {
+            ...toPlain(user.staffProfile),
+            documents: normalizeStaffDocuments(toPlain(user.staffProfile)?.documents || {})
+          };
+      const applicationSnapshot = {
+        ...currentProfile,
+        ...(application.applicationData || {}),
+        documents: {
+          ...(currentProfile?.documents || {}),
+          ...((application.applicationData || {}).documents || {})
+        }
+      };
+      const reviewedAt = new Date();
+      const reviewedDocuments = setDocumentCollectionStatus(applicationSnapshot.documents, requiredDocuments, {
+        status: 'rejected',
+        rejectionReason: trimmedReason,
+        reviewedAt
+      });
+
+      if (roleKey === 'driver') {
+        user.driverProfile = {
+          ...currentProfile,
+          ...applicationSnapshot,
+          documents: reviewedDocuments
+        };
+      } else {
+        user.staffProfile = {
+          ...currentProfile,
+          ...applicationSnapshot,
+          documents: reviewedDocuments
+        };
+      }
+
       application.status = 'rejected';
-      application.reviewedAt = new Date();
+      application.reviewedAt = reviewedAt;
       application.reviewedBy = req.user._id;
       application.rejectionReason = trimmedReason;
+      application.applicationData = {
+        ...applicationSnapshot,
+        documents: reviewedDocuments
+      };
       roleAssignment.roleStatus = 'rejected';
       roleAssignment.verificationStatus = 'rejected';
       appendNotification(user, {
@@ -421,7 +600,7 @@ const reviewProviderApplication = async (req, res) => {
     await logAuditEvent({
       actorUserId: req.user._id,
       targetUserId: user._id,
-      actionType: `provider_application.${action === 'approve' ? 'approved' : 'rejected'}`,
+      actionType: `admin.provider_application.${action === 'approve' ? 'approved' : 'rejected'}`,
       beforeSnapshot,
       afterSnapshot: buildUserAuditSnapshot(user),
       reason: trimmedReason
@@ -443,7 +622,7 @@ const reviewProviderApplication = async (req, res) => {
   }
 };
 
-const deleteUser = async (req, res) => {
+const deactivateUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
 
@@ -480,9 +659,10 @@ const deleteUser = async (req, res) => {
     await logAuditEvent({
       actorUserId: req.user._id,
       targetUserId: user._id,
-      actionType: 'user.account.deactivated',
+      actionType: 'admin.account_status.updated',
       beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user)
+      afterSnapshot: buildUserAuditSnapshot(user),
+      reason: 'deactivated'
     });
 
     await addNotificationToUser(req.user._id, {
@@ -501,4 +681,59 @@ const deleteUser = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, updateUser, reviewProviderApplication, deleteUser };
+const restoreUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (isProtectedAdminAccount(user)) {
+      return res.status(403).json({ message: 'Protected admin accounts cannot be restored through this workflow' });
+    }
+
+    if (user.accountStatus !== 'deactivated') {
+      return res.status(400).json({ message: 'Only deactivated accounts can be restored' });
+    }
+
+    const beforeSnapshot = buildUserAuditSnapshot(user);
+
+    user.accountStatus = 'active';
+    user.deactivatedAt = null;
+    appendNotification(user, {
+      type: 'admin',
+      title: 'Account restored',
+      message: 'An administrator restored access to your account. You can sign in again.',
+      link: '/signin'
+    });
+
+    syncUserRoles(user);
+    await user.save();
+
+    await logAuditEvent({
+      actorUserId: req.user._id,
+      targetUserId: user._id,
+      actionType: 'admin.account_status.updated',
+      beforeSnapshot,
+      afterSnapshot: buildUserAuditSnapshot(user),
+      reason: 'restored'
+    });
+
+    await addNotificationToUser(req.user._id, {
+      type: 'admin',
+      title: 'Account restored',
+      message: `You restored ${user.fullName}'s account.`,
+      link: '/admin/users'
+    });
+
+    res.json({
+      message: 'Account restored',
+      user: serializeUser(user)
+    });
+  } catch (error) {
+    sendServerError(res, error, 'Failed to restore user');
+  }
+};
+
+module.exports = { getAllUsers, getUserRoleHistory, updateUser, reviewProviderApplication, deactivateUser, restoreUser };

@@ -1,6 +1,6 @@
 const User = require('../models/User');
 const { sendServerError } = require('../utils/errorResponses');
-const { buildUserAuditSnapshot, logAuditEvent } = require('../utils/auditHelpers');
+const { buildUserAuditSnapshot, logAuditEvent, getRoleHistoryTimeline } = require('../utils/auditHelpers');
 const {
   addNotificationToAdmins,
   appendNotification,
@@ -14,17 +14,23 @@ const {
   canUseRole,
   createProviderApplication,
   getLatestPendingProviderApplication,
+  getProviderRequirementConfig,
   getRoleAssignment,
   serializeUser,
   syncUserRoles,
 } = require('../utils/roleHelpers');
 const {
+  hasDocumentFile,
   mergeDriverDocuments,
   mergeStaffDocuments,
   normalizeEmergencyContact,
+  normalizeDriverDocuments,
   normalizePreferredLanguage,
+  normalizeStaffDocuments,
   parseDate,
+  setDocumentCollectionStatus,
   trimValue,
+  validateRequiredTextFields,
   validatePasswordStrength
 } = require('../utils/profileHelpers');
 
@@ -75,31 +81,19 @@ const buildStaffProfilePayload = (payload = {}, currentProfile = {}) => {
   };
 };
 
-const getProviderApplicationRequirements = (roleKey) => (
-  roleKey === 'driver'
-    ? {
-        requiredFields: ['drivingLicenseNumber', 'nicId', 'serviceArea'],
-        requiredDocuments: ['nicDocument', 'licenseProof']
-      }
-    : {
-        requiredFields: ['storeName', 'businessRegistrationNumber', 'storeAddress', 'storeContactNumber', 'storeEmail'],
-        requiredDocuments: ['businessRegistrationProof']
-      }
-);
-
 const validateProviderApplicationData = (roleKey, applicationData = {}) => {
-  const { requiredFields, requiredDocuments } = getProviderApplicationRequirements(roleKey);
-  const missingField = requiredFields.find((field) => !trimValue(applicationData[field], ''));
+  const { fields, documents } = getProviderRequirementConfig(roleKey);
+  const missingField = fields.find(({ key }) => !trimValue(applicationData[key], ''));
 
   if (missingField) {
-    return { valid: false, message: `Missing required field: ${missingField}` };
+    return { valid: false, message: `Missing required field: ${missingField.label}` };
   }
 
-  const documents = applicationData.documents || {};
-  const missingDocument = requiredDocuments.find((documentKey) => !trimValue(documents?.[documentKey]?.reference, ''));
+  const nextDocuments = applicationData.documents || {};
+  const missingDocument = documents.find(({ key }) => !hasDocumentFile(nextDocuments?.[key] || {}));
 
   if (missingDocument) {
-    return { valid: false, message: `Missing required document reference: ${missingDocument}` };
+    return { valid: false, message: `Missing required document metadata: ${missingDocument.label}` };
   }
 
   return { valid: true };
@@ -120,6 +114,17 @@ const getProfile = async (req, res) => {
   }
 };
 
+const getMyRoleHistory = async (req, res) => {
+  try {
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
+    const items = await getRoleHistoryTimeline(req.user._id, limit);
+
+    res.json({ items });
+  } catch (error) {
+    sendServerError(res, error, 'Failed to load role history');
+  }
+};
+
 const updateProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -130,6 +135,16 @@ const updateProfile = async (req, res) => {
 
     const nextEmail = req.body.email || user.email;
     const nextUsername = req.body.username || user.username || nextEmail;
+    const missingIdentityField = validateRequiredTextFields([
+      ['Full name', req.body.fullName ?? user.fullName],
+      ['Email', nextEmail],
+      ['Username', nextUsername]
+    ]);
+
+    if (missingIdentityField) {
+      return res.status(400).json({ message: `${missingIdentityField} is required` });
+    }
+
     const { normalizedEmail, normalizedUsername } = await ensureUniqueIdentityFields(
       user._id,
       nextEmail,
@@ -245,6 +260,7 @@ const updateDriverProfile = async (req, res) => {
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
+    const documentKeys = getProviderRequirementConfig('driver').documents.map(({ key }) => key);
     user.driverProfile = {
       ...getPlainObject(user.driverProfile),
       ...buildDriverProfilePayload(req.body, user.driverProfile)
@@ -252,9 +268,15 @@ const updateDriverProfile = async (req, res) => {
 
     const pendingApplication = getLatestPendingProviderApplication(user, 'driver');
     if (pendingApplication?.status === 'pending') {
+      user.driverProfile.documents = setDocumentCollectionStatus(user.driverProfile.documents, documentKeys, { status: 'pending' });
       pendingApplication.applicationData = {
         ...pendingApplication.applicationData,
-        ...getPlainObject(user.driverProfile)
+        ...getPlainObject(user.driverProfile),
+        documents: setDocumentCollectionStatus(
+          normalizeDriverDocuments(getPlainObject(user.driverProfile)?.documents || {}),
+          documentKeys,
+          { status: 'pending' }
+        )
       };
       pendingApplication.submittedAt = new Date();
     }
@@ -291,6 +313,7 @@ const updateStaffProfile = async (req, res) => {
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
+    const documentKeys = getProviderRequirementConfig('staff').documents.map(({ key }) => key);
     user.staffProfile = {
       ...getPlainObject(user.staffProfile),
       ...buildStaffProfilePayload(req.body, user.staffProfile)
@@ -298,9 +321,15 @@ const updateStaffProfile = async (req, res) => {
 
     const pendingApplication = getLatestPendingProviderApplication(user, 'staff');
     if (pendingApplication?.status === 'pending') {
+      user.staffProfile.documents = setDocumentCollectionStatus(user.staffProfile.documents, documentKeys, { status: 'pending' });
       pendingApplication.applicationData = {
         ...pendingApplication.applicationData,
-        ...getPlainObject(user.staffProfile)
+        ...getPlainObject(user.staffProfile),
+        documents: setDocumentCollectionStatus(
+          normalizeStaffDocuments(getPlainObject(user.staffProfile)?.documents || {}),
+          documentKeys,
+          { status: 'pending' }
+        )
       };
       pendingApplication.submittedAt = new Date();
     }
@@ -394,23 +423,29 @@ const applyForProviderRole = async (req, res) => {
     const applicationData = roleKey === 'driver'
       ? buildDriverProfilePayload(req.body, user.driverProfile)
       : buildStaffProfilePayload(req.body, user.staffProfile);
+    const documentKeys = getProviderRequirementConfig(roleKey).documents.map(({ key }) => key);
 
     const validation = validateProviderApplicationData(roleKey, applicationData);
     if (!validation.valid) {
       return res.status(400).json({ message: validation.message });
     }
 
+    const nextApplicationData = {
+      ...applicationData,
+      documents: setDocumentCollectionStatus(applicationData.documents, documentKeys, { status: 'pending' })
+    };
+
     if (roleKey === 'driver') {
       user.driverProfile = {
         ...getPlainObject(user.driverProfile),
-        ...applicationData
+        ...nextApplicationData
       };
     }
 
     if (roleKey === 'staff') {
       user.staffProfile = {
         ...getPlainObject(user.staffProfile),
-        ...applicationData
+        ...nextApplicationData
       };
     }
 
@@ -426,7 +461,7 @@ const applyForProviderRole = async (req, res) => {
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
-    createProviderApplication(user, roleKey, applicationData);
+    createProviderApplication(user, roleKey, nextApplicationData);
     syncUserRoles(user);
     appendNotification(user, {
       type: 'role',
@@ -438,7 +473,7 @@ const applyForProviderRole = async (req, res) => {
     await logAuditEvent({
       actorUserId: user._id,
       targetUserId: user._id,
-      actionType: 'provider_application.submitted',
+      actionType: 'user.provider_application.submitted',
       beforeSnapshot,
       afterSnapshot: buildUserAuditSnapshot(user),
       reason: roleKey
@@ -503,7 +538,7 @@ const withdrawProviderApplication = async (req, res) => {
     await logAuditEvent({
       actorUserId: user._id,
       targetUserId: user._id,
-      actionType: 'provider_application.withdrawn',
+      actionType: 'user.provider_application.withdrawn',
       beforeSnapshot,
       afterSnapshot: buildUserAuditSnapshot(user),
       reason: roleKey
@@ -607,6 +642,7 @@ const markAllNotificationsRead = async (req, res) => {
 
 module.exports = {
   getProfile,
+  getMyRoleHistory,
   updateProfile,
   updateCustomerProfile,
   updateDriverProfile,

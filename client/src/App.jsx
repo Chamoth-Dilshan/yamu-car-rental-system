@@ -51,7 +51,7 @@ export default function App() {
         <Route
           path="/profile"
           element={(
-            <ProtectedRoute>
+            <ProtectedRoute permissions={['profile.manage']}>
               <Profile />
             </ProtectedRoute>
           )}
@@ -107,7 +107,7 @@ export default function App() {
         <Route
           path="/admin/dashboard"
           element={(
-            <ProtectedRoute roles={['admin']}>
+            <ProtectedRoute roles={['admin']} permissions={['users.view']}>
               <AdminUsers />
             </ProtectedRoute>
           )}
@@ -115,7 +115,7 @@ export default function App() {
         <Route
           path="/admin/pending-approvals/*"
           element={(
-            <ProtectedRoute roles={['admin']}>
+            <ProtectedRoute roles={['admin']} permissions={['users.view', 'roles.review']}>
               <AdminUsers />
             </ProtectedRoute>
           )}
@@ -123,7 +123,7 @@ export default function App() {
         <Route
           path="/admin/users/*"
           element={(
-            <ProtectedRoute roles={['admin']}>
+            <ProtectedRoute roles={['admin']} permissions={['users.view']}>
               <AdminUsers />
             </ProtectedRoute>
           )}
@@ -131,7 +131,7 @@ export default function App() {
         <Route
           path="/admin/roles/*"
           element={(
-            <ProtectedRoute roles={['admin']}>
+            <ProtectedRoute roles={['admin']} permissions={['users.view']}>
               <AdminUsers />
             </ProtectedRoute>
           )}

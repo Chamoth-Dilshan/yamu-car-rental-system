@@ -4,6 +4,8 @@ const {
   canUseRole,
   getRoleAssignment,
   getUsableRoleAssignments,
+  hasAllPermissions,
+  hasAnyPermission,
   hasPermission,
   syncUserRoles
 } = require('../utils/roleHelpers');
@@ -41,25 +43,34 @@ const protect = async (req, res, next) => {
   return res.status(401).json({ message: 'Not authorized, no token' });
 };
 
-const authorize = (...roles) => (req, res, next) => {
+const authorizeAccess = ({
+  roles = [],
+  permissions = [],
+  requireAllPermissions = true
+} = {}) => (req, res, next) => {
   const currentRole = getRoleAssignment(req.user, req.user.role);
 
-  if (!roles.includes(req.user.role) || !canUseRole(currentRole)) {
+  if (roles.length && (!roles.includes(req.user.role) || !canUseRole(currentRole))) {
     return res.status(403).json({ message: 'Not authorized for this action' });
   }
 
-  next();
-};
+  if (permissions.length) {
+    const isAuthorized = requireAllPermissions
+      ? hasAllPermissions(req.user, permissions)
+      : hasAnyPermission(req.user, permissions);
 
-const authorizePermissions = (...permissions) => (req, res, next) => {
-  const missingPermission = permissions.find((permission) => !hasPermission(req.user, permission));
-
-  if (missingPermission) {
-    return res.status(403).json({ message: `Missing permission: ${missingPermission}` });
+    if (!isAuthorized) {
+      const missingPermission = permissions.find((permission) => !hasPermission(req.user, permission));
+      return res.status(403).json({ message: `Missing permission: ${missingPermission || permissions[0]}` });
+    }
   }
 
   next();
 };
+
+const authorize = (...roles) => authorizeAccess({ roles });
+
+const authorizePermissions = (...permissions) => authorizeAccess({ permissions });
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -67,6 +78,6 @@ const generateToken = (id) => {
   });
 };
 
-module.exports = { protect, authorize, authorizePermissions, generateToken };
+module.exports = { protect, authorize, authorizeAccess, authorizePermissions, generateToken };
 
 

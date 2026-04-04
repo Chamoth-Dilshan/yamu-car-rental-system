@@ -38,12 +38,13 @@ const notificationSchema = new mongoose.Schema({
 }, { _id: true });
 
 const documentMetadataSchema = new mongoose.Schema({
-  reference: { type: String, default: '' },
   fileName: { type: String, default: '' },
-  originalName: { type: String, default: '' },
-  status: { type: String, enum: DOCUMENT_STATUSES, default: 'not_provided' },
-  note: { type: String, default: '' },
-  uploadedAt: { type: Date, default: null }
+  filePath: { type: String, default: '' },
+  reference: { type: String, default: '' },
+  status: { type: String, enum: DOCUMENT_STATUSES, default: 'not_uploaded' },
+  rejectionReason: { type: String, default: '' },
+  uploadedAt: { type: Date, default: null },
+  reviewedAt: { type: Date, default: null }
 }, { _id: false });
 
 const emergencyContactSchema = new mongoose.Schema({
@@ -107,7 +108,11 @@ const userSchema = new mongoose.Schema({
         type: documentMetadataSchema,
         default: () => ({})
       },
-      licenseProof: {
+      drivingLicenseDocument: {
+        type: documentMetadataSchema,
+        default: () => ({})
+      },
+      proofOfAddressDocument: {
         type: documentMetadataSchema,
         default: () => ({})
       }
@@ -121,7 +126,11 @@ const userSchema = new mongoose.Schema({
     storeContactNumber: { type: String, default: '' },
     storeEmail: { type: String, default: '' },
     documents: {
-      businessRegistrationProof: {
+      businessRegistrationDocument: {
+        type: documentMetadataSchema,
+        default: () => ({})
+      },
+      proofOfAddressDocument: {
         type: documentMetadataSchema,
         default: () => ({})
       }

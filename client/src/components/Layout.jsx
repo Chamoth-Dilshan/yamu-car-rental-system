@@ -11,6 +11,7 @@ export default function Layout({ children }) {
     logout,
     notifications,
     unreadNotificationCount,
+    hasPermission,
     markNotificationRead,
     markAllNotificationsRead
   } = useAuth();
@@ -21,8 +22,12 @@ export default function Layout({ children }) {
   const isDriver = activeRole === 'driver';
   const isAdmin = activeRole === 'admin';
   const hasHomePage = !user || activeRole === 'customer';
-  const showFooter = location.pathname === '/signin' || isCustomer;
-  const logoTarget = isAdmin ? '/admin/dashboard' : user ? '/account' : '/';
+  const showFooter = location.pathname === '/' || location.pathname === '/signin' || isCustomer;
+  const canManageProfile = hasPermission('profile.manage');
+  const canViewUsers = hasPermission('users.view');
+  const canReviewRoles = hasPermission('roles.review');
+  const canAssignRoles = hasPermission('roles.assign');
+  const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? '/account' : '/';
   const recentNotifications = (notifications || []).slice(0, 5);
 
   const handleLogout = () => {
@@ -62,7 +67,7 @@ export default function Layout({ children }) {
             {hasHomePage && <NavLink to="/">Home</NavLink>}
             {user && !isAdmin && <NavLink to="/account">Account</NavLink>}
             {isDriver && <NavLink to="/driver/ads">Driver Ads</NavLink>}
-            {isAdmin && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
+            {isAdmin && canViewUsers && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
             {isAdmin && <NavLink to="/admin/bookings">Bookings</NavLink>}
           </div>
 
@@ -105,9 +110,11 @@ export default function Layout({ children }) {
                       <div className="nav-notification-empty">No notifications yet.</div>
                     )}
 
-                    <Link to="/profile#notifications" className="nav-notification-footer">
-                      Open notification center
-                    </Link>
+                    {canManageProfile && (
+                      <Link to="/profile#notifications" className="nav-notification-footer">
+                        Open notification center
+                      </Link>
+                    )}
                   </div>
                 </div>
 
@@ -116,17 +123,17 @@ export default function Layout({ children }) {
                   <span>{user.fullName?.split(' ')[0]}</span>
                   <div className="nav-user-dropdown">
                     {!isAdmin && <Link to="/account">Account Overview</Link>}
-                    <Link to="/profile">Profile Details</Link>
+                    {canManageProfile && <Link to="/profile">Profile Details</Link>}
                     {isCustomer && <Link to="/bookings">My Bookings</Link>}
                     {isDriver && <Link to="/driver/ads">My Driver Ads</Link>}
                     {isDriver && <Link to="/driver/bookings">Booking Requests</Link>}
-                    {!isAdmin && <Link to="/apply-roles">Role Requests</Link>}
+                    {!isAdmin && <Link to="/apply-roles">Role Applications</Link>}
                     <Link to="/switch-roles">Switch Roles</Link>
-                    {isAdmin && <Link to="/admin/dashboard">Overview</Link>}
+                    {isAdmin && canViewUsers && <Link to="/admin/dashboard">Overview</Link>}
                     {isAdmin && <Link to="/admin/bookings">Bookings</Link>}
-                    {isAdmin && <Link to="/admin/pending-approvals">Pending Approvals</Link>}
-                    {isAdmin && <Link to="/admin/users">Users</Link>}
-                    {isAdmin && <Link to="/admin/roles">Role Access</Link>}
+                    {isAdmin && canViewUsers && canReviewRoles && <Link to="/admin/pending-approvals">Pending Approvals</Link>}
+                    {isAdmin && canViewUsers && <Link to="/admin/users">Users</Link>}
+                    {isAdmin && canViewUsers && canAssignRoles && <Link to="/admin/roles">Role Access</Link>}
                     <button onClick={handleLogout}>Logout</button>
                   </div>
                 </div>

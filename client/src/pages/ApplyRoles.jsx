@@ -49,8 +49,8 @@ export default function ApplyRoles() {
       <Sidebar />
       <main className="dashboard-content">
         <div className="form-header">
-          <h2>Role Requests</h2>
-          <p style={{ color: 'var(--text-light)' }}>Request driver or staff access, track approval status, and update role onboarding details.</p>
+          <h2>Role Applications</h2>
+          <p style={{ color: 'var(--text-light)' }}>Apply for driver or staff access, track review status, and update role onboarding details.</p>
         </div>
 
         {message && <div className="alert alert-success">{message}</div>}
@@ -81,7 +81,7 @@ export default function ApplyRoles() {
                 <div className="pill-row" style={{ marginBottom: '1rem' }}>
                   <span className="badge badge-info">Role: {role?.roleStatus || 'not assigned'}</span>
                   <span className="badge badge-warning">Verification: {role?.verificationStatus || 'unverified'}</span>
-                  <span className="badge badge-success">Request: {application?.status || 'not submitted'}</span>
+                  <span className="badge badge-success">Application: {application?.status || 'not submitted'}</span>
                 </div>
 
                 <div className="admin-stack">
@@ -92,12 +92,12 @@ export default function ApplyRoles() {
                         {isApproved
                           ? `${formatLabel(item.key)} access is approved and available for role switching.`
                           : isPending
-                            ? `${formatLabel(item.key)} request is waiting for admin review.`
+                            ? `${formatLabel(item.key)} application is waiting for admin review.`
                             : isRejected
-                              ? `${formatLabel(item.key)} request was rejected. Review the admin note and update the form before reapplying.`
+                              ? `${formatLabel(item.key)} application was rejected. Review the admin note and update the form before reapplying.`
                               : isWithdrawn
-                                ? `${formatLabel(item.key)} request was withdrawn.`
-                                : `No ${item.key} request has been submitted yet.`}
+                                ? `${formatLabel(item.key)} application was withdrawn.`
+                                : `No ${item.key} application has been submitted yet.`}
                       </p>
                     </div>
                   </div>
@@ -128,7 +128,7 @@ export default function ApplyRoles() {
                       disabled={busyAction === `withdraw-${item.key}`}
                       onClick={() => withdrawApplication(item.key)}
                     >
-                      {busyAction === `withdraw-${item.key}` ? 'Withdrawing...' : 'Withdraw Request'}
+                      {busyAction === `withdraw-${item.key}` ? 'Withdrawing...' : 'Withdraw Application'}
                     </button>
                   )}
                 </div>

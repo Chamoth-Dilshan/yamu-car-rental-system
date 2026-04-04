@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
+import { formatDateTime } from '../utils/formatters';
 
 const manageableRoles = ['customer', 'driver', 'staff', 'admin'];
 const accountStatuses = ['active', 'suspended', 'deactivated'];
@@ -54,20 +55,158 @@ const getStatusBadgeClass = (status) => {
   return 'badge-warning';
 };
 
-const getDocumentDetails = (documents = {}) => (
-  Object.entries(documents)
-    .map(([key, value]) => ({ key, value }))
-    .filter(({ value }) => value && (value.reference || value.fileName || value.note || value.status !== 'not_provided'))
+const providerDocumentKeys = {
+  driver: ['nicDocument', 'drivingLicenseDocument', 'proofOfAddressDocument'],
+  staff: ['businessRegistrationDocument', 'proofOfAddressDocument']
+};
+const providerReviewConfig = {
+  driver: {
+    fields: [
+      ['drivingLicenseNumber', 'Driving license number'],
+      ['nicId', 'NIC / ID'],
+      ['serviceArea', 'Service area']
+    ],
+    documents: [
+      ['nicDocument', 'NIC / ID document'],
+      ['drivingLicenseDocument', 'Driving license document'],
+      ['proofOfAddressDocument', 'Proof of address document']
+    ]
+  },
+  staff: {
+    fields: [
+      ['storeName', 'Store name'],
+      ['businessRegistrationNumber', 'Business registration number'],
+      ['storeAddress', 'Store address'],
+      ['storeContactNumber', 'Store contact number'],
+      ['storeEmail', 'Store email']
+    ],
+    documents: [
+      ['businessRegistrationDocument', 'Business registration document'],
+      ['proofOfAddressDocument', 'Proof of address document']
+    ]
+  }
+};
+
+const hasContent = (value) => {
+  if (Array.isArray(value)) {
+    return value.length > 0;
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.values(value).some((item) => hasContent(item));
+  }
+
+  return Boolean(String(value || '').trim());
+};
+
+const hasDocumentMetadata = (document = {}) => hasContent(document.fileName) || hasContent(document.filePath);
+
+const getDocumentDetails = (roleKey, documents = {}) => (
+  (providerDocumentKeys[roleKey] || Object.keys(documents || {}))
+    .map((key) => ({ key, value: documents?.[key] || {} }))
+    .filter(({ value }) => value && (value.filePath || value.fileName || value.status !== 'not_uploaded' || value.rejectionReason || value.reviewedAt))
 );
+
+const buildPendingReviewAssessment = (user, application) => {
+  const config = providerReviewConfig[application.roleKey] || { fields: [], documents: [] };
+  const applicationData = application.applicationData || {};
+  const checks = [
+    {
+      key: 'accountStatus',
+      label: 'Account is active',
+      complete: user.accountStatus === 'active',
+      detail: user.accountStatus === 'active' ? 'Ready for review' : `Current status: ${formatLabel(user.accountStatus)}`
+    },
+    ...config.fields.map(([field, label]) => ({
+      key: field,
+      label,
+      complete: hasContent(applicationData[field]),
+      detail: hasContent(applicationData[field]) ? String(applicationData[field]) : 'Missing'
+    })),
+    ...config.documents.map(([documentKey, label]) => {
+      const document = applicationData.documents?.[documentKey] || {};
+
+      return {
+        key: documentKey,
+        label,
+        complete: hasDocumentMetadata(document),
+        detail: hasDocumentMetadata(document)
+          ? `${document.fileName || 'Unnamed file'}${document.filePath ? ` | ${document.filePath}` : ''}`
+          : 'Missing'
+      };
+    })
+  ];
+  const missingItems = checks.filter((item) => !item.complete).map((item) => item.label);
+  const rejectionHistory = (user.providerApplications || [])
+    .filter((item) => item.roleKey === application.roleKey && item.status === 'rejected' && item.rejectionReason)
+    .slice(0, 3);
+
+  return {
+    checks,
+    missingItems,
+    rejectionHistory
+  };
+};
+
+const normalizeRoleDraft = (role) => {
+  const nextRole = { ...role };
+
+  if (nextRole.roleKey === 'customer' || nextRole.roleKey === 'admin') {
+    return {
+      ...nextRole,
+      roleStatus: 'active',
+      verificationStatus: 'verified'
+    };
+  }
+
+  if (nextRole.roleStatus === 'rejected') {
+    nextRole.verificationStatus = 'rejected';
+  }
+
+  if (nextRole.roleStatus === 'pending' && nextRole.verificationStatus === 'verified') {
+    nextRole.verificationStatus = 'pending';
+  }
+
+  if (nextRole.roleStatus === 'active' && nextRole.verificationStatus === 'rejected') {
+    nextRole.verificationStatus = 'pending';
+  }
+
+  return nextRole;
+};
+
+const normalizeEditableUserState = (user) => {
+  const nextRoles = (user.roles || []).map((role) => normalizeRoleDraft(role));
+  const primaryRole = nextRoles.some((role) => role.roleKey === user.primaryRole)
+    ? user.primaryRole
+    : (nextRoles.find((role) => role.isPrimary)?.roleKey || nextRoles[0]?.roleKey || '');
+  const roles = nextRoles.map((role) => ({
+    ...role,
+    isPrimary: role.roleKey === primaryRole
+  }));
+  const usableRoleKeys = roles.filter(canUseRole).map((role) => role.roleKey);
+  const activeRole = user.accountStatus === 'active'
+    ? (usableRoleKeys.includes(user.activeRole) ? user.activeRole : (usableRoleKeys.includes(primaryRole) ? primaryRole : (usableRoleKeys[0] || primaryRole || roles[0]?.roleKey || '')))
+    : (roles.some((role) => role.roleKey === user.activeRole) ? user.activeRole : (primaryRole || roles[0]?.roleKey || ''));
+
+  return {
+    ...user,
+    primaryRole,
+    activeRole,
+    role: activeRole,
+    roles
+  };
+};
 
 export default function AdminUsers() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user: currentUser, refreshNotifications } = useAuth();
+  const { user: currentUser, hasPermission, refreshNotifications, refreshMe } = useAuth();
   const [users, setUsers] = useState([]);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyAction, setBusyAction] = useState('');
+  const [roleHistoryItems, setRoleHistoryItems] = useState([]);
+  const [roleHistoryLoading, setRoleHistoryLoading] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -86,6 +225,10 @@ export default function AdminUsers() {
   const isRolesDetailPath = Boolean(rolesDetailMatch);
   const isEditPath = userDetailMatch?.[2] === 'edit';
   const isRoleEditPath = rolesDetailMatch?.[2] === 'edit';
+  const canViewUsersPermission = hasPermission('users.view');
+  const canEditUsersPermission = hasPermission('users.edit');
+  const canReviewRolesPermission = hasPermission('roles.review');
+  const canAssignRolesPermission = hasPermission('roles.assign');
 
   const pendingReviewUsers = users.filter((user) => getPendingApplications(user).length > 0);
   const orderedUsers = [...users].sort((left, right) => {
@@ -131,6 +274,11 @@ export default function AdminUsers() {
   });
   const selectedPendingUser = visibleUsers.find((user) => user._id === pendingDetailUserId) || null;
   const selectedRoleUser = visibleUsers.find((user) => user._id === roleDetailUserId) || null;
+  const timelineUserId = selectedUserId || roleDetailUserId || '';
+  const showSectionHeader = !(
+    (isPendingPath && !isPendingDetailPath)
+    || (isUsersPath && !isUserDetailPath)
+  );
   let currentSection = adminSections['/admin/dashboard'];
 
   if (isPendingPath && isPendingDetailPath) {
@@ -179,13 +327,54 @@ export default function AdminUsers() {
   ];
 
   useEffect(() => {
+    if (!canViewUsersPermission) {
+      setUsers([]);
+      return;
+    }
+
     API.get('/admin/users')
       .then((res) => setUsers(res.data))
       .catch((err) => setError(err.response?.data?.message || 'Failed to load users'));
-  }, []);
+  }, [canViewUsersPermission]);
+
+  useEffect(() => {
+    if (!canViewUsersPermission || !timelineUserId) {
+      setRoleHistoryItems([]);
+      setRoleHistoryLoading(false);
+      return;
+    }
+
+    let active = true;
+    setRoleHistoryLoading(true);
+
+    API.get(`/admin/users/${timelineUserId}/role-history`)
+      .then((res) => {
+        if (active) {
+          setRoleHistoryItems(res.data.items || []);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setRoleHistoryItems([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setRoleHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canViewUsersPermission, timelineUserId]);
 
   const updateField = (userId, field, value) => {
-    setUsers((prev) => prev.map((user) => user._id === userId ? { ...user, [field]: value } : user));
+    setUsers((prev) => prev.map((user) => (
+      user._id === userId
+        ? normalizeEditableUserState({ ...user, [field]: value })
+        : user
+    )));
   };
 
   const updateRoleField = (userId, roleKey, field, value) => {
@@ -194,10 +383,14 @@ export default function AdminUsers() {
         return user;
       }
 
-      return {
+      return normalizeEditableUserState({
         ...user,
-        roles: user.roles.map((role) => role.roleKey === roleKey ? { ...role, [field]: value } : role)
-      };
+        roles: user.roles.map((role) => (
+          role.roleKey === roleKey
+            ? normalizeRoleDraft({ ...role, [field]: value })
+            : role
+        ))
+      });
     }));
   };
 
@@ -255,17 +448,11 @@ export default function AdminUsers() {
         isPrimary: role.roleKey === primaryRole
       }));
 
-      const nextActiveRole = usableRoles.some((role) => role.roleKey === user.activeRole)
-        ? user.activeRole
-        : primaryRole;
-
-      return {
+      return normalizeEditableUserState({
         ...user,
         primaryRole,
-        activeRole: nextActiveRole,
-        role: nextActiveRole,
         roles: usableRoles
-      };
+      });
     }));
   };
 
@@ -283,23 +470,18 @@ export default function AdminUsers() {
 
         const nextRoles = user.roles.filter((role) => role.roleKey !== roleKey);
         const nextPrimaryRole = nextRoles.find((role) => role.isPrimary)?.roleKey || nextRoles[0]?.roleKey || null;
-        const nextActiveRole = nextRoles.some((role) => role.roleKey === user.activeRole)
-          ? user.activeRole
-          : nextPrimaryRole;
 
-        return {
+        return normalizeEditableUserState({
           ...user,
           primaryRole: nextPrimaryRole,
-          activeRole: nextActiveRole,
-          role: nextActiveRole,
           roles: nextRoles.map((role) => ({
             ...role,
             isPrimary: role.roleKey === nextPrimaryRole
           }))
-        };
+        });
       }
 
-      return {
+      return normalizeEditableUserState({
         ...user,
         roles: [
           ...user.roles,
@@ -310,7 +492,7 @@ export default function AdminUsers() {
             isPrimary: false
           }
         ]
-      };
+      });
     }));
   };
 
@@ -336,6 +518,9 @@ export default function AdminUsers() {
       const res = await API.put(`/admin/users/${user._id}`, payload);
       setUsers((prev) => prev.map((item) => item._id === user._id ? res.data : item));
       await refreshNotifications().catch(() => {});
+      if (user._id === currentUser?._id) {
+        await refreshMe().catch(() => {});
+      }
       setMessage(`Updated ${res.data.fullName}`);
       navigate(destination.replace(user._id, res.data._id));
       return res.data;
@@ -371,9 +556,16 @@ export default function AdminUsers() {
         action,
         rejectionReason: reason
       });
-      setUsers((prev) => prev.map((item) => item._id === userId ? res.data.user : item));
+      const nextUser = res.data.user;
+      setUsers((prev) => prev.map((item) => item._id === userId ? nextUser : item));
       await refreshNotifications().catch(() => {});
+      if (userId === currentUser?._id) {
+        await refreshMe().catch(() => {});
+      }
       setMessage(res.data.message);
+      if (pendingDetailUserId === userId && getPendingApplications(nextUser).length === 0) {
+        navigate('/admin/pending-approvals');
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to review application');
     } finally {
@@ -381,12 +573,12 @@ export default function AdminUsers() {
     }
   };
 
-  const deleteUser = async (userId) => {
+  const deactivateUser = async (userId) => {
     if (!window.confirm('Deactivate this user account?')) {
       return;
     }
 
-    setBusyAction(`delete-${userId}`);
+    setBusyAction(`deactivate-${userId}`);
     setMessage('');
     setError('');
 
@@ -394,8 +586,34 @@ export default function AdminUsers() {
       const res = await API.delete(`/admin/users/${userId}`);
       setUsers((prev) => prev.map((user) => user._id === userId ? res.data.user : user));
       setMessage(res.data.message || 'Account deactivated');
+      if (selectedUserId === userId && isEditPath) {
+        navigate(`/admin/users/${userId}`);
+      }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to deactivate user');
+    } finally {
+      setBusyAction('');
+    }
+  };
+
+  const restoreUser = async (userId) => {
+    if (!window.confirm('Restore this deactivated user account?')) {
+      return;
+    }
+
+    setBusyAction(`restore-${userId}`);
+    setMessage('');
+    setError('');
+
+    try {
+      const res = await API.put(`/admin/users/${userId}/restore`);
+      setUsers((prev) => prev.map((user) => user._id === userId ? res.data.user : user));
+      setMessage(res.data.message || 'Account restored');
+      if (selectedUserId === userId && isEditPath) {
+        navigate(`/admin/users/${userId}`);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to restore user');
     } finally {
       setBusyAction('');
     }
@@ -406,7 +624,9 @@ export default function AdminUsers() {
       {pendingApplications.map((application) => {
         const applicationData = Object.entries(application.applicationData || {})
           .filter(([field, value]) => field !== 'documents' && value);
-        const documentDetails = getDocumentDetails(application.applicationData?.documents || {});
+        const documentDetails = getDocumentDetails(application.roleKey, application.applicationData?.documents || {});
+        const assessment = buildPendingReviewAssessment(user, application);
+        const canApprove = assessment.missingItems.length === 0;
 
         return (
           <div key={application.roleKey} className={`admin-approval-item${compact ? ' compact' : ''}`}>
@@ -415,33 +635,102 @@ export default function AdminUsers() {
               {application.submittedAt && (
                 <div className="admin-meta-text">Submitted {new Date(application.submittedAt).toLocaleDateString()}</div>
               )}
-              {applicationData.length > 0 && (
-                <div className="admin-data-grid">
-                  {applicationData.map(([field, value]) => (
-                    <div key={field} className="admin-data-item">
-                      <span>{formatLabel(field)}</span>
-                      <strong>{String(value)}</strong>
-                    </div>
-                  ))}
+              <div className="pill-row" style={{ marginTop: '0.75rem', marginBottom: '0.75rem' }}>
+                <span className="badge badge-info">Requested role: {formatLabel(application.roleKey)}</span>
+                <span className={`badge ${getStatusBadgeClass(user.accountStatus)}`}>Account: {formatLabel(user.accountStatus)}</span>
+                <span className="badge badge-warning">Profile complete: {user.profileCompletion?.percent || 0}%</span>
+              </div>
+              {assessment.missingItems.length > 0 && (
+                <div className="alert alert-warning" style={{ marginBottom: '0.75rem' }}>
+                  Approval blocked until these items are fixed: {assessment.missingItems.join(', ')}
                 </div>
               )}
-              {documentDetails.length > 0 && (
-                <div className="admin-data-grid" style={{ marginTop: '0.75rem' }}>
-                  {documentDetails.map(({ key, value }) => (
-                    <div key={key} className="admin-data-item">
-                      <span>{formatLabel(key)}</span>
-                      <strong>{value.reference || value.fileName || 'Metadata added'}</strong>
-                      <small style={{ color: 'var(--text-light)' }}>Status: {formatLabel(value.status)}</small>
+              <div className="admin-stack" style={{ marginBottom: '0.75rem' }}>
+                {assessment.checks.map((check) => (
+                  <div key={`${application.roleKey}-${check.key}`} className="admin-list-item">
+                    <div>
+                      <h4>{check.label}</h4>
+                      <p>{check.detail}</p>
                     </div>
-                  ))}
-                </div>
+                    <span className={`badge ${check.complete ? 'badge-success' : 'badge-danger'}`}>
+                      {check.complete ? 'Ready' : 'Missing'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {applicationData.length > 0 && (
+                <>
+                  <div className="admin-meta-text" style={{ marginBottom: '0.5rem' }}>Application details</div>
+                  <div className="admin-data-grid">
+                    {applicationData.map(([field, value]) => (
+                      <div key={field} className="admin-data-item">
+                        <span>{formatLabel(field)}</span>
+                        <strong>{String(value)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {documentDetails.length > 0 && (
+                <>
+                  <div className="admin-meta-text" style={{ marginTop: '0.75rem', marginBottom: '0.5rem' }}>Verification documents</div>
+                  <div className="admin-data-grid">
+                    {documentDetails.map(({ key, value }) => (
+                      <div key={key} className="admin-data-item">
+                        <span>{formatLabel(key)}</span>
+                        <strong>{value.fileName || value.filePath || 'Metadata added'}</strong>
+                        <small style={{ color: 'var(--text-light)' }}>
+                          Path: {value.filePath || 'Placeholder not added'}
+                        </small>
+                        <small style={{ color: 'var(--text-light)' }}>
+                          Status: {formatLabel(value.status || 'not_uploaded')}
+                        </small>
+                        {value.uploadedAt && (
+                          <small style={{ color: 'var(--text-light)' }}>
+                            Uploaded: {new Date(value.uploadedAt).toLocaleDateString()}
+                          </small>
+                        )}
+                        {value.reviewedAt && (
+                          <small style={{ color: 'var(--text-light)' }}>
+                            Reviewed: {new Date(value.reviewedAt).toLocaleDateString()}
+                          </small>
+                        )}
+                        {value.rejectionReason && (
+                          <small style={{ color: 'var(--text-light)' }}>
+                            Rejection: {value.rejectionReason}
+                          </small>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+              {assessment.rejectionHistory.length > 0 && (
+                <>
+                  <div className="admin-meta-text" style={{ marginTop: '0.75rem', marginBottom: '0.5rem' }}>Recent rejection history</div>
+                  <div className="admin-stack">
+                    {assessment.rejectionHistory.map((historyItem, index) => (
+                      <div key={`${application.roleKey}-history-${index}`} className="admin-list-item">
+                        <div>
+                          <h4>{historyItem.rejectionReason}</h4>
+                          <p>
+                            {historyItem.reviewedAt
+                              ? `Rejected on ${new Date(historyItem.reviewedAt).toLocaleDateString()}`
+                              : 'Rejected previously'}
+                          </p>
+                        </div>
+                        <span className="badge badge-danger">Rejected</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
             <div className="pill-row">
               <button
                 className="btn btn-primary btn-sm"
                 type="button"
-                disabled={busyAction === `approve-${user._id}-${application.roleKey}`}
+                disabled={!canReviewRolesPermission || !canApprove || busyAction === `approve-${user._id}-${application.roleKey}`}
                 onClick={() => reviewApplication(user._id, application.roleKey, 'approve')}
               >
                 {busyAction === `approve-${user._id}-${application.roleKey}` ? 'Approving...' : 'Approve'}
@@ -449,7 +738,7 @@ export default function AdminUsers() {
               <button
                 className="btn btn-outline btn-sm"
                 type="button"
-                disabled={busyAction === `reject-${user._id}-${application.roleKey}`}
+                disabled={!canReviewRolesPermission || busyAction === `reject-${user._id}-${application.roleKey}`}
                 onClick={() => reviewApplication(user._id, application.roleKey, 'reject')}
               >
                 {busyAction === `reject-${user._id}-${application.roleKey}` ? 'Rejecting...' : 'Reject'}
@@ -458,6 +747,46 @@ export default function AdminUsers() {
           </div>
         );
       })}
+    </div>
+  );
+
+  const renderRoleHistoryTimeline = () => (
+    <div className="form-card" style={{ marginTop: '1rem' }}>
+      <div className="card-header">
+        <div>
+          <h3>Role History</h3>
+          <p style={{ color: 'var(--text-light)' }}>
+            Review role requests, approvals, switches, suspensions, reactivations, and primary-role changes for this account.
+          </p>
+        </div>
+        <span className="badge badge-info">{roleHistoryItems.length} events</span>
+      </div>
+
+      {roleHistoryLoading ? (
+        <div className="admin-empty-state">Loading role history...</div>
+      ) : roleHistoryItems.length > 0 ? (
+        <div className="notification-feed">
+          {roleHistoryItems.map((item) => (
+            <div key={item.id} className="notification-card">
+              <div className="notification-card-copy">
+                <strong>{item.title}</strong>
+                <p>{item.description}</p>
+                <small>
+                  {formatDateTime(item.createdAt)}
+                  {item.actor?.fullName ? ` | ${item.actor.isSelf ? 'Self' : item.actor.fullName}` : ''}
+                </small>
+              </div>
+              {item.roleKey && (
+                <div className="notification-card-actions">
+                  <span className="badge badge-info">{formatLabel(item.roleKey)}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="admin-empty-state">No role history yet for this account.</div>
+      )}
     </div>
   );
 
@@ -486,8 +815,13 @@ export default function AdminUsers() {
         </div>
 
         <div className="admin-user-card-actions">
-          <button type="button" className="btn btn-primary btn-sm" onClick={() => openPendingPanel(user._id)}>
-            Review
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={!canReviewRolesPermission}
+            onClick={() => openPendingPanel(user._id)}
+          >
+            {canReviewRolesPermission ? 'Review' : 'View'}
           </button>
         </div>
       </article>
@@ -529,6 +863,7 @@ export default function AdminUsers() {
           <span className="badge badge-info">Active role: {selectedPendingUser.activeRole}</span>
           <span className={`badge ${getStatusBadgeClass(selectedPendingUser.accountStatus)}`}>Account: {formatLabel(selectedPendingUser.accountStatus)}</span>
           <span className="badge badge-warning">{pendingApplications.length} pending</span>
+          <span className="badge badge-info">Profile complete: {selectedPendingUser.profileCompletion?.percent || 0}%</span>
         </div>
 
         <div className="admin-user-detail-grid" style={{ marginBottom: '1rem' }}>
@@ -600,7 +935,7 @@ export default function AdminUsers() {
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            disabled={protectedAdmin}
+            disabled={protectedAdmin || !canAssignRolesPermission}
             onClick={() => openRolePanel(user._id, 'edit')}
           >
             Edit
@@ -625,7 +960,7 @@ export default function AdminUsers() {
     const protectedAdmin = isProtectedAdmin(selectedRoleUser);
     const pendingApplications = getPendingApplications(selectedRoleUser);
     const switchableRoles = selectedRoleUser.roles.filter(canUseRole);
-    const readOnlyMode = !isRoleEditPath || protectedAdmin;
+    const readOnlyMode = !isRoleEditPath || protectedAdmin || !canAssignRolesPermission;
 
     return (
       <section className="form-card admin-user-detail-panel">
@@ -644,7 +979,7 @@ export default function AdminUsers() {
                 View
               </button>
             )}
-            {readOnlyMode && !protectedAdmin && (
+            {readOnlyMode && !protectedAdmin && canAssignRolesPermission && (
               <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/admin/roles/${selectedRoleUser._id}/edit`)}>
                 Edit
               </button>
@@ -814,6 +1149,8 @@ export default function AdminUsers() {
             This user has {pendingApplications.length} pending application(s). Use the Pending Approvals page for approve or reject actions. The role editor will not bypass pending provider reviews.
           </div>
         )}
+
+        {renderRoleHistoryTimeline()}
       </section>
     );
   };
@@ -822,7 +1159,8 @@ export default function AdminUsers() {
     const hasAdminRole = user.roles.some((role) => role.roleKey === 'admin');
     const protectedAdmin = isProtectedAdmin(user);
     const pendingApplications = getPendingApplications(user);
-    const canDeleteUser = !protectedAdmin && currentUser?._id !== user._id && user.accountStatus !== 'deactivated';
+    const canDeactivateUser = canEditUsersPermission && !protectedAdmin && currentUser?._id !== user._id && user.accountStatus !== 'deactivated';
+    const canRestoreUser = canEditUsersPermission && !protectedAdmin && user.accountStatus === 'deactivated';
     const isSelected = selectedUserId === user._id;
 
     return (
@@ -857,19 +1195,29 @@ export default function AdminUsers() {
           <button
             type="button"
             className="btn btn-primary btn-sm"
-            disabled={protectedAdmin}
+            disabled={protectedAdmin || !canEditUsersPermission}
             onClick={() => openUserPanel(user._id, 'edit')}
           >
             Edit
           </button>
-          {canDeleteUser && (
+          {canDeactivateUser && (
             <button
               type="button"
               className="btn btn-danger btn-sm"
-              disabled={busyAction === `delete-${user._id}`}
-              onClick={() => deleteUser(user._id)}
+              disabled={busyAction === `deactivate-${user._id}`}
+              onClick={() => deactivateUser(user._id)}
             >
-              {busyAction === `delete-${user._id}` ? 'Deactivating...' : 'Deactivate'}
+              {busyAction === `deactivate-${user._id}` ? 'Deactivating...' : 'Deactivate'}
+            </button>
+          )}
+          {canRestoreUser && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              disabled={busyAction === `restore-${user._id}`}
+              onClick={() => restoreUser(user._id)}
+            >
+              {busyAction === `restore-${user._id}` ? 'Restoring...' : 'Restore'}
             </button>
           )}
         </div>
@@ -892,7 +1240,7 @@ export default function AdminUsers() {
     const protectedAdmin = isProtectedAdmin(selectedUser);
     const pendingApplications = getPendingApplications(selectedUser);
     const switchableRoles = selectedUser.roles.filter(canUseRole);
-    const readOnlyMode = !isEditPath || protectedAdmin;
+    const readOnlyMode = !isEditPath || protectedAdmin || !canEditUsersPermission;
 
     return (
       <section className="form-card admin-user-detail-panel">
@@ -911,7 +1259,7 @@ export default function AdminUsers() {
                 View
               </button>
             )}
-            {readOnlyMode && !protectedAdmin && (
+            {readOnlyMode && !protectedAdmin && canEditUsersPermission && (
               <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/admin/users/${selectedUser._id}/edit`)}>
                 Edit
               </button>
@@ -927,6 +1275,30 @@ export default function AdminUsers() {
           <span className="badge badge-success">Primary role: {selectedUser.primaryRole}</span>
           <span className="badge badge-warning">Account: {selectedUser.accountStatus}</span>
         </div>
+
+        {canEditUsersPermission && !protectedAdmin && currentUser?._id !== selectedUser._id && (
+          <div className="pill-row" style={{ marginBottom: '1rem' }}>
+            {selectedUser.accountStatus === 'deactivated' ? (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                disabled={busyAction === `restore-${selectedUser._id}`}
+                onClick={() => restoreUser(selectedUser._id)}
+              >
+                {busyAction === `restore-${selectedUser._id}` ? 'Restoring...' : 'Restore Account'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                disabled={busyAction === `deactivate-${selectedUser._id}`}
+                onClick={() => deactivateUser(selectedUser._id)}
+              >
+                {busyAction === `deactivate-${selectedUser._id}` ? 'Deactivating...' : 'Deactivate Account'}
+              </button>
+            )}
+          </div>
+        )}
 
         {readOnlyMode ? (
           <div className="admin-user-detail-grid">
@@ -1042,6 +1414,8 @@ export default function AdminUsers() {
             This user has {pendingApplications.length} pending application(s). Use the Pending Approvals page for approve/reject actions.
           </div>
         )}
+
+        {renderRoleHistoryTimeline()}
       </section>
     );
   };
@@ -1114,15 +1488,6 @@ export default function AdminUsers() {
   const renderPendingSection = () => (
     pendingReviewUsers.length > 0 ? (
       <section className="form-card">
-        <div className="card-header">
-          <div>
-            <h3>Pending Approval Cards</h3>
-            <p style={{ color: 'var(--text-light)' }}>
-              Browse pending accounts first, then open a dedicated review page for approve or reject actions.
-            </p>
-          </div>
-          <span className="badge badge-info">{filteredPendingUsers.length} users</span>
-        </div>
         <div className="admin-user-filters">
           <div className="form-group">
             <label htmlFor="pending-search">Search</label>
@@ -1274,10 +1639,12 @@ export default function AdminUsers() {
     <div className="dashboard-layout page-content">
       <Sidebar />
       <main className="dashboard-content">
-        <div className="form-header">
-          <h2>{currentSection.title}</h2>
-          <p style={{ color: 'var(--text-light)' }}>{currentSection.description}</p>
-        </div>
+        {showSectionHeader && (
+          <div className="form-header">
+            <h2>{currentSection.title}</h2>
+            <p style={{ color: 'var(--text-light)' }}>{currentSection.description}</p>
+          </div>
+        )}
 
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-danger">{error}</div>}

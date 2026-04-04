@@ -8,7 +8,7 @@ const menuItems = {
     { to: '/account', label: 'Overview', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
     { to: '/profile', label: 'Profile Details', end: true },
-    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/apply-roles', label: 'Role Applications', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true },
     { section: 'Discover' },
     { to: '/cars', label: 'Explore Cars', end: true },
@@ -21,14 +21,14 @@ const menuItems = {
     { section: 'Account' },
     { to: '/account', label: 'Overview', end: true },
     { to: '/profile', label: 'Profile Details', end: true },
-    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/apply-roles', label: 'Role Applications', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   staff: [
     { section: 'Account' },
     { to: '/account', label: 'Overview', end: true },
     { to: '/profile', label: 'Profile Details', end: true },
-    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/apply-roles', label: 'Role Applications', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   admin: [
@@ -44,8 +44,31 @@ const menuItems = {
 }
 
 export default function Sidebar() {
-  const { user } = useAuth()
-  const items = menuItems[user?.activeRole] || menuItems.customer
+  const { user, hasPermission } = useAuth()
+  const activeRole = user?.activeRole
+  const items = (menuItems[activeRole] || menuItems.customer).filter((item) => {
+    if (!item.to) {
+      return true
+    }
+
+    if (item.to === '/profile') {
+      return hasPermission('profile.manage')
+    }
+
+    if (item.to === '/admin/dashboard' || item.to === '/admin/users') {
+      return hasPermission('users.view')
+    }
+
+    if (item.to === '/admin/pending-approvals') {
+      return hasPermission('users.view') && hasPermission('roles.review')
+    }
+
+    if (item.to === '/admin/roles') {
+      return hasPermission('users.view') && hasPermission('roles.assign')
+    }
+
+    return true
+  })
   const avatarSrc = user?.profilePic && user.profilePic !== 'avatar.png'
     ? buildUploadUrl(user.profilePic)
     : `https://ui-avatars.com/api/?name=${encodeURIComponent(user?.fullName || 'User')}&background=f0a500&color=0d1b2a&bold=true`

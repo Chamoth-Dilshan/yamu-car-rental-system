@@ -233,6 +233,10 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  max-width: none;
+  width: 100%;
+  padding-left: 1rem;
+  padding-right: 1.5rem;
   padding-top: 0.75rem;
   padding-bottom: 0.75rem;
 }
@@ -251,7 +255,7 @@ input:focus, select:focus, textarea:focus {
 }
 .brand-logo svg {
   display: block;
-  width: 168px;
+  width: 188px;
   height: auto;
 }
 .brand-logo-outline,
@@ -261,15 +265,17 @@ input:focus, select:focus, textarea:focus {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.brand-logo-outline { stroke-width: 2.6; }
-.brand-logo-wheel { stroke-width: 2.2; }
+.brand-logo-outline { stroke-width: 3; }
+.brand-logo-wheel { stroke-width: 2.5; }
+.brand-logo-hub {
+  fill: currentColor;
+}
 .brand-logo-type {
   fill: currentColor;
-  font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+  font-family: var(--font);
   font-size: 18px;
-  font-style: italic;
-  font-weight: 700;
-  letter-spacing: 4px;
+  font-weight: 800;
+  letter-spacing: 2px;
 }
 .nav-links { display: flex; align-items: center; gap: 2rem; }
 .nav-links a {
@@ -1360,6 +1366,10 @@ input:focus, select:focus, textarea:focus {
   .hero .text-box h1 { font-size: 1.75rem; }
   .hero .btn-group { flex-direction: column; }
   .container { padding: 0 1rem; }
+  .navbar .container {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
   .brand-logo svg { width: 138px; }
   .footer-logo svg { width: 118px; }
 }

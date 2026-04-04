@@ -10,11 +10,69 @@ const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
 const blockedApplicationStatuses = ['suspended', 'deactivated'];
 
 const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+const createDocumentDraft = (document = {}) => ({
+  fileName: document?.fileName || '',
+  filePath: document?.filePath || document?.reference || '',
+  status: document?.status || 'not_uploaded',
+  rejectionReason: document?.rejectionReason || '',
+  uploadedAt: document?.uploadedAt || null,
+  reviewedAt: document?.reviewedAt || null
+});
+const createDriverDocumentsDraft = (documents = {}) => ({
+  nicDocument: createDocumentDraft(documents.nicDocument),
+  drivingLicenseDocument: createDocumentDraft(documents.drivingLicenseDocument || documents.licenseProof),
+  proofOfAddressDocument: createDocumentDraft(documents.proofOfAddressDocument)
+});
+const createStaffDocumentsDraft = (documents = {}) => ({
+  businessRegistrationDocument: createDocumentDraft(documents.businessRegistrationDocument || documents.businessRegistrationProof),
+  proofOfAddressDocument: createDocumentDraft(documents.proofOfAddressDocument)
+});
+const formatStatusLabel = (value) => String(value || '')
+  .split('_')
+  .filter(Boolean)
+  .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+  .join(' ');
+const getStatusTone = (value) => {
+  switch (value) {
+    case 'active':
+    case 'approved':
+    case 'verified':
+      return 'success';
+    case 'pending':
+    case 'pending_review':
+    case 'uploaded':
+    case 'unverified':
+      return 'info';
+    case 'missing_requirements':
+    case 'not_uploaded':
+    case 'withdrawn':
+    case 'not_submitted':
+    case 'not_assigned':
+      return 'warning';
+    case 'rejected':
+    case 'suspended':
+    case 'deactivated':
+      return 'danger';
+    default:
+      return 'info';
+  }
+};
+const getBadgeClass = (tone) => {
+  switch (tone) {
+    case 'success':
+      return 'badge badge-success';
+    case 'warning':
+      return 'badge badge-warning';
+    case 'danger':
+      return 'badge badge-danger';
+    default:
+      return 'badge badge-info';
+  }
+};
 
 export default function Profile() {
   const {
     user,
-    refreshMe,
     setUser,
     notifications,
     unreadNotificationCount,
@@ -48,16 +106,7 @@ export default function Profile() {
     nicId: '',
     serviceArea: '',
     providerDetails: '',
-    documents: {
-      nicDocument: {
-        reference: '',
-        note: ''
-      },
-      licenseProof: {
-        reference: '',
-        note: ''
-      }
-    }
+    documents: createDriverDocumentsDraft()
   });
   const [staffProfile, setStaffProfile] = useState({
     storeName: '',
@@ -66,12 +115,7 @@ export default function Profile() {
     storeAddress: '',
     storeContactNumber: '',
     storeEmail: '',
-    documents: {
-      businessRegistrationProof: {
-        reference: '',
-        note: ''
-      }
-    }
+    documents: createStaffDocumentsDraft()
   });
   const [adminProfile, setAdminProfile] = useState({
     accessScope: '',
@@ -81,6 +125,8 @@ export default function Profile() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyAction, setBusyAction] = useState('');
+  const [roleHistory, setRoleHistory] = useState([]);
+  const [roleHistoryLoading, setRoleHistoryLoading] = useState(false);
 
   const roleMap = useMemo(() => (
     Object.fromEntries((user?.roles || []).map((item) => [item.roleKey, item]))
@@ -123,16 +169,7 @@ export default function Profile() {
       nicId: user.driverProfile?.nicId || '',
       serviceArea: user.driverProfile?.serviceArea || '',
       providerDetails: user.driverProfile?.providerDetails || '',
-      documents: {
-        nicDocument: {
-          reference: user.driverProfile?.documents?.nicDocument?.reference || '',
-          note: user.driverProfile?.documents?.nicDocument?.note || ''
-        },
-        licenseProof: {
-          reference: user.driverProfile?.documents?.licenseProof?.reference || '',
-          note: user.driverProfile?.documents?.licenseProof?.note || ''
-        }
-      }
+      documents: createDriverDocumentsDraft(user.driverProfile?.documents || {})
     });
 
     setStaffProfile({
@@ -142,12 +179,7 @@ export default function Profile() {
       storeAddress: user.staffProfile?.storeAddress || '',
       storeContactNumber: user.staffProfile?.storeContactNumber || '',
       storeEmail: user.staffProfile?.storeEmail || '',
-      documents: {
-        businessRegistrationProof: {
-          reference: user.staffProfile?.documents?.businessRegistrationProof?.reference || '',
-          note: user.staffProfile?.documents?.businessRegistrationProof?.note || ''
-        }
-      }
+      documents: createStaffDocumentsDraft(user.staffProfile?.documents || {})
     });
 
     setAdminProfile({
@@ -155,6 +187,37 @@ export default function Profile() {
       controlNotes: user.adminProfile?.controlNotes || ''
     });
   }, [user]);
+
+  useEffect(() => {
+    if (!user?._id) {
+      setRoleHistory([]);
+      return;
+    }
+
+    let active = true;
+    setRoleHistoryLoading(true);
+
+    API.get('/users/role-history')
+      .then((res) => {
+        if (active) {
+          setRoleHistory(res.data.items || []);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setRoleHistory([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setRoleHistoryLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?._id, user?.updatedAt]);
 
   const customerRole = roleMap.customer;
   const driverRole = roleMap.driver;
@@ -199,7 +262,6 @@ export default function Profile() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setUser(res.data);
-      await refreshMe();
       setProfile((prev) => ({ ...prev, currentPassword: '', password: '' }));
       setProfilePic(null);
       setMessage('Common profile updated successfully');
@@ -216,8 +278,8 @@ export default function Profile() {
     setError('');
 
     try {
-      await API.put(endpoint, payload);
-      await refreshMe();
+      const res = await API.put(endpoint, payload);
+      setUser(res.data.user);
       setMessage(successMessage);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save profile');
@@ -232,9 +294,9 @@ export default function Profile() {
     setError('');
 
     try {
-      await API.post(`/users/applications/${roleKey}`, payload);
-      await refreshMe();
-      await refreshNotifications();
+      const res = await API.post(`/users/applications/${roleKey}`, payload);
+      setUser(res.data.user);
+      await refreshNotifications().catch(() => {});
       setMessage(`${roleLabel(roleKey)} application submitted for admin review`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to submit application');
@@ -252,6 +314,10 @@ export default function Profile() {
   const driverApplicationBlocked = driverRole && blockedApplicationStatuses.includes(driverRole.roleStatus);
   const staffApplicationBlocked = staffRole && blockedApplicationStatuses.includes(staffRole.roleStatus);
   const profileCompletion = user?.profileCompletion?.percent || 0;
+  const accountHealth = user?.accountHealth;
+  const verificationCenter = user?.verificationCenter;
+  const verificationItems = verificationCenter?.roleChecks || [];
+  const currentVerification = verificationCenter?.currentRole;
 
   const updateDriverDocument = (documentKey, field, value) => {
     setDriverProfile((prev) => ({
@@ -260,7 +326,23 @@ export default function Profile() {
         ...prev.documents,
         [documentKey]: {
           ...prev.documents[documentKey],
-          [field]: value
+          [field]: value,
+          ...(['fileName', 'filePath'].includes(field)
+            ? (() => {
+                const nextDocument = {
+                  ...prev.documents[documentKey],
+                  [field]: value
+                };
+                const hasFile = Boolean(nextDocument.fileName || nextDocument.filePath);
+
+                return {
+                  status: hasFile ? 'uploaded' : 'not_uploaded',
+                  rejectionReason: '',
+                  reviewedAt: null,
+                  uploadedAt: hasFile ? (nextDocument.uploadedAt || new Date().toISOString()) : null
+                };
+              })()
+            : {})
         }
       }
     }));
@@ -273,11 +355,135 @@ export default function Profile() {
         ...prev.documents,
         [documentKey]: {
           ...prev.documents[documentKey],
-          [field]: value
+          [field]: value,
+          ...(['fileName', 'filePath'].includes(field)
+            ? (() => {
+                const nextDocument = {
+                  ...prev.documents[documentKey],
+                  [field]: value
+                };
+                const hasFile = Boolean(nextDocument.fileName || nextDocument.filePath);
+
+                return {
+                  status: hasFile ? 'uploaded' : 'not_uploaded',
+                  rejectionReason: '',
+                  reviewedAt: null,
+                  uploadedAt: hasFile ? (nextDocument.uploadedAt || new Date().toISOString()) : null
+                };
+              })()
+            : {})
         }
       }
     }));
   };
+
+  const renderDocumentMeta = (document) => (
+    <>
+      <div className="pill-row" style={{ marginTop: '0.75rem' }}>
+        <span className={getBadgeClass(getStatusTone(document?.status))}>
+          Status: {formatStatusLabel(document?.status || 'not_uploaded')}
+        </span>
+        {document?.uploadedAt && (
+          <span className="badge badge-info">Uploaded: {formatDateTime(document.uploadedAt)}</span>
+        )}
+        {document?.reviewedAt && (
+          <span className="badge badge-warning">Reviewed: {formatDateTime(document.reviewedAt)}</span>
+        )}
+      </div>
+      {document?.rejectionReason && (
+        <div className="alert alert-warning" style={{ marginTop: '0.75rem', marginBottom: 0 }}>
+          Rejection reason: {document.rejectionReason}
+        </div>
+      )}
+    </>
+  );
+
+  const renderAccountHealthWidget = () => (
+    <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+      <div className="card-header">
+        <div>
+          <h3>Account Health</h3>
+          <p style={{ color: 'var(--text-light)' }}>
+            A compact summary of your account status, role readiness, and the next action blocking role progress.
+          </p>
+        </div>
+        <span className={getBadgeClass(accountHealth?.accountStatusTone)}>
+          {accountHealth?.accountStatusLabel || formatStatusLabel(user?.accountStatus)}
+        </span>
+      </div>
+
+      <div className="pill-row" style={{ marginBottom: '1rem' }}>
+        <span className="badge badge-info">Active role: {accountHealth?.activeRoleLabel || roleLabel(user?.activeRole || 'customer')}</span>
+        <span className="badge badge-success">Primary role: {accountHealth?.primaryRoleLabel || roleLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
+        <span className="badge badge-warning">Profile: {accountHealth?.profileCompletionPercent ?? profileCompletion}%</span>
+        <span className="badge badge-info">Pending: {accountHealth?.pendingApplicationsCount ?? 0}</span>
+        <span className="badge badge-info">Unread: {accountHealth?.unreadNotificationsCount ?? unreadNotificationCount}</span>
+        <span className={getBadgeClass(accountHealth?.verificationTone)}>
+          Verification: {accountHealth?.verificationStateLabel || currentVerification?.stateLabel || 'Not Started'}
+        </span>
+      </div>
+
+      <div className="admin-list-item">
+        <div>
+          <h4>
+            Next role action
+            {accountHealth?.nextRoleAction?.roleLabel ? `: ${accountHealth.nextRoleAction.roleLabel}` : ''}
+          </h4>
+          <p>{accountHealth?.nextRoleAction?.guidance || 'Keep your account details current so role workflows stay ready.'}</p>
+          {accountHealth?.nextRoleAction?.missingRequirements?.length > 0 && (
+            <div className="pill-row" style={{ marginTop: '0.75rem' }}>
+              {accountHealth.nextRoleAction.missingRequirements.map((item) => (
+                <span key={item} className="badge badge-warning">{item}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <span className={getBadgeClass(accountHealth?.nextRoleAction?.tone)}>
+          {accountHealth?.nextRoleAction?.stateLabel || 'All Set'}
+        </span>
+      </div>
+    </div>
+  );
+
+  const renderRoleHistoryTimeline = () => (
+    <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+      <div className="card-header">
+        <div>
+          <h3>Role History</h3>
+          <p style={{ color: 'var(--text-light)' }}>
+            Review how your role requests, approvals, switches, and primary-role changes happened over time.
+          </p>
+        </div>
+        <span className="badge badge-info">{roleHistory.length} events</span>
+      </div>
+
+      {roleHistoryLoading ? (
+        <div className="reservation-empty">Loading role history...</div>
+      ) : roleHistory.length > 0 ? (
+        <div className="notification-feed">
+          {roleHistory.map((item) => (
+            <div key={item.id} className="notification-card">
+              <div className="notification-card-copy">
+                <strong>{item.title}</strong>
+                <p>{item.description}</p>
+                <small>
+                  {formatDateTime(item.createdAt)}
+                  {item.actor?.fullName ? ` | ${item.actor.isSelf ? 'You' : item.actor.fullName}` : ''}
+                </small>
+              </div>
+              {item.roleKey && (
+                <div className="notification-card-actions">
+                  <span className="badge badge-info">{roleLabel(item.roleKey)}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="reservation-empty">No role history yet. Role requests, approvals, switches, and primary-role changes will appear here.</div>
+      )}
+    </div>
+  );
 
   return (
     <div className="dashboard-layout page-content">
@@ -310,6 +516,85 @@ export default function Profile() {
 
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-danger">{error}</div>}
+
+        {renderAccountHealthWidget()}
+
+        <div className="form-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="card-header">
+            <div>
+              <h3>Verification Center</h3>
+              <p style={{ color: 'var(--text-light)' }}>
+                Check your account status, role verification, and provider application progress before switching roles or applying for review.
+              </p>
+            </div>
+            <span className={getBadgeClass(verificationCenter?.accountStatusTone)}>
+              Account {verificationCenter?.accountStatusLabel || formatStatusLabel(user?.accountStatus)}
+            </span>
+          </div>
+
+          <div className="pill-row" style={{ marginBottom: '1rem' }}>
+            <span className="badge badge-info">Current role: {roleLabel(user?.activeRole || 'customer')}</span>
+            <span className={getBadgeClass(currentVerification?.tone)}>
+              Current verification: {currentVerification?.stateLabel || 'Not Started'}
+            </span>
+            <span className="badge badge-warning">Profile completion: {profileCompletion}%</span>
+          </div>
+
+          <p style={{ color: 'var(--text-light)', marginBottom: '1rem' }}>
+            {verificationCenter?.accountGuidance || 'Complete your account details and keep role documents current so admin reviews move smoothly.'}
+          </p>
+
+          {currentVerification && (
+            <div className={`alert alert-${currentVerification.tone === 'success' ? 'success' : currentVerification.tone === 'danger' ? 'danger' : currentVerification.tone === 'warning' ? 'warning' : 'info'}`}>
+              Your current {currentVerification.roleLabel.toLowerCase()} role is marked as {currentVerification.stateLabel.toLowerCase()}.
+            </div>
+          )}
+
+          <div className="admin-stack">
+            {verificationItems.map((item) => (
+              <div key={item.roleKey} className="admin-list-item" style={{ alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <h4>
+                    {item.roleLabel}
+                    {item.roleKey === user?.activeRole ? ' (Current Role)' : ''}
+                  </h4>
+                  <p style={{ marginBottom: '0.75rem' }}>{item.guidance}</p>
+                  <div className="pill-row" style={{ marginBottom: '0.75rem' }}>
+                    <span className={getBadgeClass(item.tone)}>{item.stateLabel}</span>
+                    <span className={getBadgeClass(getStatusTone(item.roleStatus))}>Role status: {formatStatusLabel(item.roleStatus)}</span>
+                    <span className={getBadgeClass(getStatusTone(item.verificationStatus))}>Verification: {formatStatusLabel(item.verificationStatus)}</span>
+                    <span className={getBadgeClass(getStatusTone(item.applicationStatus))}>Application: {formatStatusLabel(item.applicationStatus)}</span>
+                  </div>
+
+                  {item.rejectionReason && (
+                    <div className="alert alert-warning" style={{ marginBottom: '0.75rem' }}>
+                      Rejection reason: {item.rejectionReason}
+                    </div>
+                  )}
+
+                  {item.missingRequirements?.length > 0 && (
+                    <div style={{ marginBottom: item.lastReviewedAt ? '0.75rem' : 0 }}>
+                      <strong style={{ display: 'block', marginBottom: '0.35rem' }}>Missing requirements</strong>
+                      <div className="pill-row">
+                        {item.missingRequirements.map((requirement) => (
+                          <span key={`${item.roleKey}-${requirement}`} className="badge badge-warning">
+                            {requirement}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {item.lastReviewedAt && (
+                    <p style={{ color: 'var(--text-light)' }}>
+                      Last review: {formatDateTime(item.lastReviewedAt)}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <div id="notifications" className="form-card" style={{ marginBottom: '1.5rem' }}>
           <div className="card-header">
@@ -359,6 +644,8 @@ export default function Profile() {
             <div className="reservation-empty">No notifications yet. Booking and review actions will appear here.</div>
           )}
         </div>
+
+        {renderRoleHistoryTimeline()}
 
         <div className="form-card" style={{ marginBottom: '1.5rem' }}>
           <div className="form-header">
@@ -532,40 +819,67 @@ export default function Profile() {
                 <label>Provider Onboarding Details</label>
                 <textarea rows="3" value={driverProfile.providerDetails} onChange={(e) => setDriverProfile((prev) => ({ ...prev, providerDetails: e.target.value }))} />
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>NIC / ID Document Reference</label>
-                  <input
-                    value={driverProfile.documents.nicDocument.reference}
-                    onChange={(e) => updateDriverDocument('nicDocument', 'reference', e.target.value)}
-                    placeholder="Reference or placeholder for future upload"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Driving License Proof Reference</label>
-                  <input
-                    value={driverProfile.documents.licenseProof.reference}
-                    onChange={(e) => updateDriverDocument('licenseProof', 'reference', e.target.value)}
-                    placeholder="Reference or placeholder for future upload"
-                  />
-                </div>
+              <div className="form-header" style={{ marginTop: '1rem' }}>
+                <h3>Document Metadata</h3>
+                <p style={{ color: 'var(--text-light)' }}>Add placeholder file details now. Real uploads can replace these paths later without changing the API shape.</p>
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>NIC / ID Review Notes</label>
+                  <label>NIC / ID File Name</label>
                   <input
-                    value={driverProfile.documents.nicDocument.note}
-                    onChange={(e) => updateDriverDocument('nicDocument', 'note', e.target.value)}
+                    value={driverProfile.documents.nicDocument.fileName}
+                    onChange={(e) => updateDriverDocument('nicDocument', 'fileName', e.target.value)}
+                    placeholder="nic-scan.pdf"
                   />
                 </div>
                 <div className="form-group">
-                  <label>License Proof Notes</label>
+                  <label>NIC / ID File Path / Placeholder</label>
                   <input
-                    value={driverProfile.documents.licenseProof.note}
-                    onChange={(e) => updateDriverDocument('licenseProof', 'note', e.target.value)}
+                    value={driverProfile.documents.nicDocument.filePath}
+                    onChange={(e) => updateDriverDocument('nicDocument', 'filePath', e.target.value)}
+                    placeholder="uploads/driver/nic-scan.pdf"
                   />
                 </div>
               </div>
+              {renderDocumentMeta(driverProfile.documents.nicDocument)}
+              <div className="form-row" style={{ marginTop: '1rem' }}>
+                <div className="form-group">
+                  <label>Driving License File Name</label>
+                  <input
+                    value={driverProfile.documents.drivingLicenseDocument.fileName}
+                    onChange={(e) => updateDriverDocument('drivingLicenseDocument', 'fileName', e.target.value)}
+                    placeholder="license-front.jpg"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Driving License File Path / Placeholder</label>
+                  <input
+                    value={driverProfile.documents.drivingLicenseDocument.filePath}
+                    onChange={(e) => updateDriverDocument('drivingLicenseDocument', 'filePath', e.target.value)}
+                    placeholder="uploads/driver/license-front.jpg"
+                  />
+                </div>
+              </div>
+              {renderDocumentMeta(driverProfile.documents.drivingLicenseDocument)}
+              <div className="form-row" style={{ marginTop: '1rem' }}>
+                <div className="form-group">
+                  <label>Proof of Address File Name</label>
+                  <input
+                    value={driverProfile.documents.proofOfAddressDocument.fileName}
+                    onChange={(e) => updateDriverDocument('proofOfAddressDocument', 'fileName', e.target.value)}
+                    placeholder="utility-bill.pdf"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Proof of Address File Path / Placeholder</label>
+                  <input
+                    value={driverProfile.documents.proofOfAddressDocument.filePath}
+                    onChange={(e) => updateDriverDocument('proofOfAddressDocument', 'filePath', e.target.value)}
+                    placeholder="uploads/driver/utility-bill.pdf"
+                  />
+                </div>
+              </div>
+              {renderDocumentMeta(driverProfile.documents.proofOfAddressDocument)}
               {driverRole && (
                 <button className="btn btn-secondary" type="submit" disabled={busyAction === 'driver' || driverProfileBlocked}>
                   {busyAction === 'driver' ? 'Saving...' : 'Save Driver Profile'}
@@ -652,21 +966,42 @@ export default function Profile() {
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label>Business Registration Proof Reference</label>
+                  <label>Business Registration File Name</label>
                   <input
-                    value={staffProfile.documents.businessRegistrationProof.reference}
-                    onChange={(e) => updateStaffDocument('businessRegistrationProof', 'reference', e.target.value)}
-                    placeholder="Reference or placeholder for future upload"
+                    value={staffProfile.documents.businessRegistrationDocument.fileName}
+                    onChange={(e) => updateStaffDocument('businessRegistrationDocument', 'fileName', e.target.value)}
+                    placeholder="business-registration.pdf"
                   />
                 </div>
                 <div className="form-group">
-                  <label>Business Registration Notes</label>
+                  <label>Business Registration File Path / Placeholder</label>
                   <input
-                    value={staffProfile.documents.businessRegistrationProof.note}
-                    onChange={(e) => updateStaffDocument('businessRegistrationProof', 'note', e.target.value)}
+                    value={staffProfile.documents.businessRegistrationDocument.filePath}
+                    onChange={(e) => updateStaffDocument('businessRegistrationDocument', 'filePath', e.target.value)}
+                    placeholder="uploads/staff/business-registration.pdf"
                   />
                 </div>
               </div>
+              {renderDocumentMeta(staffProfile.documents.businessRegistrationDocument)}
+              <div className="form-row" style={{ marginTop: '1rem' }}>
+                <div className="form-group">
+                  <label>Proof of Address File Name</label>
+                  <input
+                    value={staffProfile.documents.proofOfAddressDocument.fileName}
+                    onChange={(e) => updateStaffDocument('proofOfAddressDocument', 'fileName', e.target.value)}
+                    placeholder="store-utility-bill.pdf"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Proof of Address File Path / Placeholder</label>
+                  <input
+                    value={staffProfile.documents.proofOfAddressDocument.filePath}
+                    onChange={(e) => updateStaffDocument('proofOfAddressDocument', 'filePath', e.target.value)}
+                    placeholder="uploads/staff/store-utility-bill.pdf"
+                  />
+                </div>
+              </div>
+              {renderDocumentMeta(staffProfile.documents.proofOfAddressDocument)}
               {staffRole && (
                 <button className="btn btn-secondary" type="submit" disabled={busyAction === 'staff' || staffProfileBlocked}>
                   {busyAction === 'staff' ? 'Saving...' : 'Save Staff Profile'}

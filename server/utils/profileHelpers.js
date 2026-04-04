@@ -1,5 +1,14 @@
 const SUPPORTED_LANGUAGES = ['English', 'Sinhala', 'Tamil'];
-const DOCUMENT_STATUSES = ['not_provided', 'submitted', 'verified', 'rejected'];
+const DOCUMENT_STATUSES = [
+  'not_uploaded',
+  'uploaded',
+  'pending',
+  'approved',
+  'rejected',
+  'not_provided',
+  'submitted',
+  'verified'
+];
 const MIN_PASSWORD_LENGTH = 8;
 
 const trimValue = (value, fallback = '') => (
@@ -40,40 +49,143 @@ const validatePasswordStrength = (password) => {
   return null;
 };
 
+const hasDocumentFile = (input = {}) => Boolean(
+  trimValue(input.filePath, '')
+  || trimValue(input.reference, '')
+  || trimValue(input.fileName, '')
+  || trimValue(input.originalName, '')
+);
+
+const normalizeDocumentStatus = (status, hasFile = false) => {
+  const value = trimValue(status, '');
+
+  if (value === 'not_provided') {
+    return 'not_uploaded';
+  }
+
+  if (value === 'submitted') {
+    return 'uploaded';
+  }
+
+  if (value === 'verified') {
+    return 'approved';
+  }
+
+  if (['not_uploaded', 'uploaded', 'pending', 'approved', 'rejected'].includes(value)) {
+    return value;
+  }
+
+  return hasFile ? 'uploaded' : 'not_uploaded';
+};
+
 const buildDocumentMetadata = (input = {}, current = {}) => {
-  const reference = trimValue(input.reference, current.reference || '');
-  const fileName = trimValue(input.fileName, current.fileName || '');
-  const originalName = trimValue(input.originalName, current.originalName || '');
-  const note = trimValue(input.note, current.note || '');
-  const explicitStatus = trimValue(input.status, current.status || '');
-  const hasDocumentData = Boolean(reference || fileName || originalName);
-  const status = DOCUMENT_STATUSES.includes(explicitStatus)
-    ? explicitStatus
-    : (hasDocumentData ? 'submitted' : 'not_provided');
+  const currentFileName = trimValue(current.fileName, current.originalName || '');
+  const currentFilePath = trimValue(current.filePath, current.reference || '');
+  const fileName = trimValue(input.fileName, currentFileName);
+  const filePath = trimValue(input.filePath, input.reference || currentFilePath);
+  const hasCurrentFile = hasDocumentFile(current);
+  const hasNextFile = Boolean(fileName || filePath);
+  const currentStatus = normalizeDocumentStatus(current.status, hasCurrentFile);
+  const statusFromInput = input.status !== undefined
+    ? normalizeDocumentStatus(input.status, hasNextFile)
+    : '';
+  const fileChanged = fileName !== currentFileName || filePath !== currentFilePath;
+  let status = statusFromInput || currentStatus;
+
+  if (!hasNextFile) {
+    status = 'not_uploaded';
+  } else if (fileChanged) {
+    status = 'uploaded';
+  }
+
+  const uploadedAt = input.uploadedAt !== undefined
+    ? parseDate(input.uploadedAt)
+    : (fileChanged
+      ? (hasNextFile ? new Date() : null)
+      : (current.uploadedAt || (hasNextFile ? new Date() : null)));
+  const reviewedAt = fileChanged
+    ? null
+    : (input.reviewedAt !== undefined ? parseDate(input.reviewedAt) : (current.reviewedAt || null));
+  const rejectionReason = status === 'rejected' && !fileChanged
+    ? trimValue(input.rejectionReason, current.rejectionReason || '')
+    : '';
 
   return {
-    reference,
     fileName,
-    originalName,
+    filePath,
+    reference: filePath,
     status,
-    note,
-    uploadedAt: input.uploadedAt !== undefined
-      ? parseDate(input.uploadedAt)
-      : (current.uploadedAt || (hasDocumentData ? new Date() : null))
+    rejectionReason,
+    uploadedAt,
+    reviewedAt
   };
 };
 
-const mergeDriverDocuments = (payload = {}, current = {}) => ({
-  nicDocument: buildDocumentMetadata(payload.nicDocument || {}, current.nicDocument || {}),
-  licenseProof: buildDocumentMetadata(payload.licenseProof || {}, current.licenseProof || {})
+const normalizeDocumentMetadata = (input = {}) => buildDocumentMetadata({}, input);
+
+const normalizeDriverDocuments = (documents = {}) => ({
+  nicDocument: normalizeDocumentMetadata(documents.nicDocument || {}),
+  drivingLicenseDocument: normalizeDocumentMetadata(documents.drivingLicenseDocument || documents.licenseProof || {}),
+  proofOfAddressDocument: normalizeDocumentMetadata(documents.proofOfAddressDocument || {})
 });
 
-const mergeStaffDocuments = (payload = {}, current = {}) => ({
-  businessRegistrationProof: buildDocumentMetadata(
-    payload.businessRegistrationProof || {},
-    current.businessRegistrationProof || {}
-  )
+const normalizeStaffDocuments = (documents = {}) => ({
+  businessRegistrationDocument: normalizeDocumentMetadata(documents.businessRegistrationDocument || documents.businessRegistrationProof || {}),
+  proofOfAddressDocument: normalizeDocumentMetadata(documents.proofOfAddressDocument || {})
 });
+
+const mergeDriverDocuments = (payload = {}, current = {}) => {
+  const currentDocuments = normalizeDriverDocuments(current);
+
+  return {
+    nicDocument: buildDocumentMetadata(payload.nicDocument || {}, currentDocuments.nicDocument),
+    drivingLicenseDocument: buildDocumentMetadata(
+      payload.drivingLicenseDocument || payload.licenseProof || {},
+      currentDocuments.drivingLicenseDocument
+    ),
+    proofOfAddressDocument: buildDocumentMetadata(
+      payload.proofOfAddressDocument || {},
+      currentDocuments.proofOfAddressDocument
+    )
+  };
+};
+
+const mergeStaffDocuments = (payload = {}, current = {}) => {
+  const currentDocuments = normalizeStaffDocuments(current);
+
+  return {
+    businessRegistrationDocument: buildDocumentMetadata(
+      payload.businessRegistrationDocument || payload.businessRegistrationProof || {},
+      currentDocuments.businessRegistrationDocument
+    ),
+    proofOfAddressDocument: buildDocumentMetadata(
+      payload.proofOfAddressDocument || {},
+      currentDocuments.proofOfAddressDocument
+    )
+  };
+};
+
+const setDocumentCollectionStatus = (documents = {}, documentKeys = [], { status, rejectionReason = '', reviewedAt = null } = {}) => {
+  const nextDocuments = { ...documents };
+
+  documentKeys.forEach((documentKey) => {
+    const currentDocument = normalizeDocumentMetadata(documents?.[documentKey] || {});
+
+    if (!hasDocumentFile(currentDocument)) {
+      nextDocuments[documentKey] = currentDocument;
+      return;
+    }
+
+    nextDocuments[documentKey] = {
+      ...currentDocument,
+      status: normalizeDocumentStatus(status, true),
+      rejectionReason: status === 'rejected' ? trimValue(rejectionReason, '') : '',
+      reviewedAt: ['approved', 'rejected'].includes(status) ? (reviewedAt || new Date()) : null
+    };
+  });
+
+  return nextDocuments;
+};
 
 const isFilled = (value) => {
   if (Array.isArray(value)) {
@@ -85,6 +197,11 @@ const isFilled = (value) => {
   }
 
   return Boolean(trimValue(value));
+};
+
+const validateRequiredTextFields = (checks = []) => {
+  const missingField = checks.find(([, value]) => !trimValue(value, ''));
+  return missingField ? missingField[0] : '';
 };
 
 const computeProfileCompletion = (user = {}) => {
@@ -122,8 +239,15 @@ module.exports = {
   normalizePreferredLanguage,
   normalizeEmergencyContact,
   validatePasswordStrength,
+  hasDocumentFile,
+  normalizeDocumentStatus,
   buildDocumentMetadata,
+  normalizeDocumentMetadata,
+  normalizeDriverDocuments,
+  normalizeStaffDocuments,
   mergeDriverDocuments,
   mergeStaffDocuments,
+  setDocumentCollectionStatus,
+  validateRequiredTextFields,
   computeProfileCompletion
 };
