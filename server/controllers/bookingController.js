@@ -223,7 +223,7 @@ const createDriverBooking = async (req, res) => {
       }),
       addNotificationToUser(ad.driver._id, {
         type: 'booking',
-        title: 'New driver booking request',
+        title: 'New booking request',
         message: `${customerName} sent a new trip request (${booking.bookingNo}).`,
         link: '/driver/bookings'
       })
@@ -382,7 +382,7 @@ const updateDriverBookingStatus = async (req, res) => {
     }
 
     if (!['confirmed', 'completed', 'cancelled'].includes(bookingStatus)) {
-      return res.status(400).json({ message: 'Drivers can only confirm, complete, or cancel requests' })
+      return res.status(400).json({ message: 'Only the assigned provider can confirm, complete, or cancel requests' })
     }
 
     const booking = await Booking.findOne({

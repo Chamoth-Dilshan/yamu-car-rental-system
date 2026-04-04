@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { formatCurrency, formatDateRange, getBadgeClass } from '../utils/formatters'
 
 export default function DriverBookings() {
-  const { refreshNotifications } = useAuth()
+  const { user, refreshNotifications } = useAuth()
   const [bookings, setBookings] = useState([])
   const [stats, setStats] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
@@ -17,6 +17,8 @@ export default function DriverBookings() {
   const [busyAction, setBusyAction] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const activeRole = user?.activeRole || user?.role
+  const providerLabel = activeRole === 'staff' ? 'staff' : 'driver'
 
   useEffect(() => {
     setLoading(true)
@@ -62,7 +64,7 @@ export default function DriverBookings() {
       <main className="dashboard-content">
         <div className="form-header">
           <h2>Booking Requests</h2>
-          <p style={{ color: 'var(--text-light)' }}>Review customer trip requests that came in through your public driver advertisements.</p>
+          <p style={{ color: 'var(--text-light)' }}>Review customer trip requests that came in through your public {providerLabel} advertisements.</p>
         </div>
 
         {message && <div className="alert alert-success">{message}</div>}

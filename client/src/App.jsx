@@ -8,6 +8,7 @@ import ApplyRoles from './pages/ApplyRoles'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import Profile from './pages/Profile'
+import Notifications from './pages/Notifications'
 import RoleManagement from './pages/RoleManagement'
 import Vehicles from './pages/Vehicles'
 import VehicleDetails from './pages/VehicleDetails'
@@ -48,6 +49,14 @@ export default function App() {
           )}
         />
         <Route
+          path="/notifications"
+          element={(
+            <ProtectedRoute permissions={['profile.manage']}>
+              <Notifications />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
           path="/apply-roles"
           element={(
             <ProtectedRoute>
@@ -66,7 +75,7 @@ export default function App() {
         <Route
           path="/driver/ads"
           element={(
-            <ProtectedRoute roles={['driver']}>
+            <ProtectedRoute roles={['driver', 'staff']}>
               <DriverAdList />
             </ProtectedRoute>
           )}
@@ -74,7 +83,7 @@ export default function App() {
         <Route
           path="/driver/ads/new"
           element={(
-            <ProtectedRoute roles={['driver']}>
+            <ProtectedRoute roles={['driver', 'staff']}>
               <DriverAdForm />
             </ProtectedRoute>
           )}
@@ -82,7 +91,7 @@ export default function App() {
         <Route
           path="/driver/ads/:id/edit"
           element={(
-            <ProtectedRoute roles={['driver']}>
+            <ProtectedRoute roles={['driver', 'staff']}>
               <DriverAdForm />
             </ProtectedRoute>
           )}
@@ -90,7 +99,7 @@ export default function App() {
         <Route
           path="/driver/bookings"
           element={(
-            <ProtectedRoute roles={['driver']}>
+            <ProtectedRoute roles={['driver', 'staff']}>
               <DriverBookings />
             </ProtectedRoute>
           )}

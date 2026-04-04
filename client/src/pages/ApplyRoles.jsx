@@ -60,11 +60,17 @@ export default function ApplyRoles() {
           {roleCards.map((item) => {
             const role = roleMap[item.key];
             const application = applicationMap[item.key];
-            const target = item.key === 'driver' ? '/profile#driver-role' : '/profile#staff-role';
             const isApproved = role?.roleStatus === 'active' && role?.verificationStatus === 'verified';
             const isPending = application?.status === 'pending';
             const isRejected = application?.status === 'rejected';
             const isWithdrawn = application?.status === 'withdrawn';
+            const isCurrentRole = user?.activeRole === item.key;
+            const target = isCurrentRole ? '/profile' : '/switch-roles';
+            const actionLabel = isCurrentRole
+              ? 'Manage Profile'
+              : isApproved
+                ? 'Switch to Role'
+                : null;
 
             return (
               <div key={item.key} className="form-card">
@@ -73,9 +79,11 @@ export default function ApplyRoles() {
                     <h3>{item.title}</h3>
                     <p style={{ color: 'var(--text-light)' }}>{item.description}</p>
                   </div>
-                  <Link to={target} className="btn btn-outline btn-sm">
-                    {isApproved ? 'Manage Profile' : 'Open Form'}
-                  </Link>
+                  {actionLabel && (
+                    <Link to={target} className="btn btn-outline btn-sm">
+                      {actionLabel}
+                    </Link>
+                  )}
                 </div>
 
                 <div className="pill-row" style={{ marginBottom: '1rem' }}>
@@ -118,9 +126,11 @@ export default function ApplyRoles() {
                 </div>
 
                 <div className="pill-row" style={{ marginTop: '1.25rem' }}>
-                  <Link to={target} className="btn btn-primary btn-sm">
-                    {isApproved ? 'Edit Role Profile' : isPending ? 'Review Submitted Details' : 'Prepare Application'}
-                  </Link>
+                  {actionLabel && (
+                    <Link to={target} className="btn btn-primary btn-sm">
+                      {isCurrentRole ? 'Edit Role Profile' : 'Switch to This Role'}
+                    </Link>
+                  )}
                   {isPending && (
                     <button
                       type="button"

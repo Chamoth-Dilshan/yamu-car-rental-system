@@ -13,12 +13,12 @@ const upload = require('../middleware/upload')
 const router = express.Router()
 
 router.get('/', getDriverAds)
-router.get('/mine/list', protect, authorize('driver'), getMyDriverAds)
+router.get('/mine/list', protect, authorize('driver', 'staff'), getMyDriverAds)
 router.get('/:id', getDriverAdById)
 router.post(
   '/',
   protect,
-  authorize('driver'),
+  authorize('driver', 'staff'),
   (req, res, next) => { req.uploadDir = 'driver-ads'; next() },
   upload.single('photo'),
   createDriverAd
@@ -26,11 +26,11 @@ router.post(
 router.put(
   '/:id',
   protect,
-  authorize('driver'),
+  authorize('driver', 'staff'),
   (req, res, next) => { req.uploadDir = 'driver-ads'; next() },
   upload.single('photo'),
   updateDriverAd
 )
-router.delete('/:id', protect, authorize('driver'), deleteDriverAd)
+router.delete('/:id', protect, authorize('driver', 'staff'), deleteDriverAd)
 
 module.exports = router

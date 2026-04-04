@@ -2,13 +2,48 @@ const Vehicle = require('../models/Vehicle')
 const { sendServerError } = require('../utils/errorResponses')
 const { serializeVehicle } = require('../utils/reservationHelpers')
 
+const DISTRICT_LOCATION_ALIASES = {
+  Ampara: ['Ampara', 'Kalmunai', 'Akkaraipattu', 'Sainthamaruthu'],
+  Anuradhapura: ['Anuradhapura', 'Kekirawa', 'Tambuttegama'],
+  Badulla: ['Badulla', 'Bandarawela', 'Ella', 'Haputale'],
+  Batticaloa: ['Batticaloa', 'Kattankudy', 'Eravur'],
+  Colombo: ['Colombo', 'Dehiwala', 'Mount Lavinia', 'Moratuwa', 'Nugegoda', 'Maharagama', 'Battaramulla', 'Rajagiriya'],
+  Galle: ['Galle', 'Ambalangoda', 'Hikkaduwa', 'Elpitiya'],
+  Gampaha: ['Gampaha', 'Negombo', 'Ja-Ela', 'Wattala', 'Kadawatha', 'Kiribathgoda', 'Kelaniya'],
+  Hambantota: ['Hambantota', 'Tangalle', 'Beliatta'],
+  Jaffna: ['Jaffna', 'Chavakachcheri', 'Point Pedro', 'Nallur'],
+  Kalutara: ['Kalutara', 'Panadura', 'Beruwala', 'Horana', 'Matugama'],
+  Kandy: ['Kandy', 'Peradeniya', 'Katugastota', 'Gampola'],
+  Kegalle: ['Kegalle', 'Mawanella', 'Warakapola', 'Rambukkana'],
+  Kilinochchi: ['Kilinochchi', 'Pallai'],
+  Kurunegala: ['Kurunegala', 'Kuliyapitiya', 'Narammala', 'Pannala'],
+  Mannar: ['Mannar', 'Murunkan'],
+  Matale: ['Matale', 'Dambulla', 'Galewela'],
+  Matara: ['Matara', 'Weligama', 'Akuressa', 'Dikwella'],
+  Monaragala: ['Monaragala', 'Wellawaya', 'Bibile'],
+  Mullaitivu: ['Mullaitivu', 'Oddusuddan'],
+  'Nuwara Eliya': ['Nuwara Eliya', 'Hatton', 'Talawakele'],
+  Polonnaruwa: ['Polonnaruwa', 'Kaduruwela', 'Medirigiriya'],
+  Puttalam: ['Puttalam', 'Chilaw', 'Wennappuwa', 'Nattandiya'],
+  Ratnapura: ['Ratnapura', 'Balangoda', 'Embilipitiya'],
+  Trincomalee: ['Trincomalee', 'Kinniya'],
+  Vavuniya: ['Vavuniya', 'Nedunkeni']
+}
+
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 const getVehicles = async (req, res) => {
   try {
-    const { search = '', status, featured, limit } = req.query
+    const { search = '', status, district, featured, limit } = req.query
     const query = {}
 
     if (status && status !== 'all') {
       query.status = status
+    }
+
+    if (district && district !== 'all') {
+      const aliases = DISTRICT_LOCATION_ALIASES[district] || [district]
+      query.location = new RegExp(aliases.map(escapeRegex).join('|'), 'i')
     }
 
     if (featured === 'true') {

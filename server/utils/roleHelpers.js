@@ -602,7 +602,6 @@ const serializeUser = (userDoc) => {
     roles,
     accountStatus: normalizedUser.accountStatus,
     verificationStatus: activeRoleAssignment?.verificationStatus || normalizedUser.verificationStatus || 'verified',
-    customerProfile: normalizedUser.customerProfile || {},
     driverProfile,
     staffProfile,
     adminProfile: normalizedUser.adminProfile || {},

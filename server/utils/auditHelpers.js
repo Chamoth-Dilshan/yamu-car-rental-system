@@ -228,10 +228,6 @@ const buildUserAuditSnapshot = (user) => {
     })),
     preferredLanguage: rawUser.preferredLanguage || 'English',
     emergencyContact: rawUser.emergencyContact || {},
-    customerProfile: {
-      preferences: rawUser.customerProfile?.preferences || '',
-      notes: rawUser.customerProfile?.notes || ''
-    },
     driverProfile: {
       drivingLicenseNumber: rawUser.driverProfile?.drivingLicenseNumber || '',
       licenseExpiryDate: rawUser.driverProfile?.licenseExpiryDate || null,

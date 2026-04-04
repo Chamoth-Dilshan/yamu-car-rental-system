@@ -3,7 +3,6 @@ const {
   getProfile,
   getMyRoleHistory,
   updateProfile,
-  updateCustomerProfile,
   updateDriverProfile,
   updateStaffProfile,
   updateAdminProfile,
@@ -21,7 +20,6 @@ const router = express.Router();
 router.get('/profile', protect, authorizePermissions('profile.manage'), getProfile);
 router.get('/role-history', protect, authorizePermissions('profile.manage'), getMyRoleHistory);
 router.put('/profile', protect, authorizePermissions('profile.manage'), (req, res, next) => { req.uploadDir = 'profiles'; next(); }, upload.single('profilePic'), updateProfile);
-router.put('/customer-profile', protect, authorizePermissions('profile.manage'), updateCustomerProfile);
 router.put('/driver-profile', protect, authorizePermissions('profile.manage'), updateDriverProfile);
 router.put('/staff-profile', protect, authorizePermissions('profile.manage'), updateStaffProfile);
 router.put('/admin-profile', protect, authorizePermissions('profile.manage'), updateAdminProfile);

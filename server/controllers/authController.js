@@ -47,11 +47,7 @@ const register = async (req, res) => {
       role: 'customer',
       accountStatus: 'active',
       verificationStatus: 'verified',
-      roles: [buildRoleAssignment('customer', { isPrimary: true })],
-      customerProfile: {
-        preferences: '',
-        notes: ''
-      }
+      roles: [buildRoleAssignment('customer', { isPrimary: true })]
     });
 
     res.status(201).json({

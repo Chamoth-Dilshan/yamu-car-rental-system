@@ -17,7 +17,7 @@ router.post('/vehicle', protect, authorize('customer'), createVehicleBooking)
 router.post('/driver', protect, authorize('customer'), createDriverBooking)
 router.put('/:id/cancel', protect, authorize('customer'), cancelMyBooking)
 router.put('/:id/payment', protect, authorize('customer'), updateMyBookingPayment)
-router.get('/driver/list', protect, authorize('driver'), getDriverBookings)
-router.put('/:id/driver-status', protect, authorize('driver'), updateDriverBookingStatus)
+router.get('/driver/list', protect, authorize('driver', 'staff'), getDriverBookings)
+router.put('/:id/driver-status', protect, authorize('driver', 'staff'), updateDriverBookingStatus)
 
 module.exports = router

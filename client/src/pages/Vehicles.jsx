@@ -4,14 +4,78 @@ import API from '../api/axios'
 import { buildUploadUrl } from '../api/config'
 import { formatCurrency, getBadgeClass } from '../utils/formatters'
 
+const DISTRICT_LOCATION_ALIASES = {
+  Ampara: ['Ampara', 'Kalmunai', 'Akkaraipattu', 'Sainthamaruthu'],
+  Anuradhapura: ['Anuradhapura', 'Kekirawa', 'Tambuttegama'],
+  Badulla: ['Badulla', 'Bandarawela', 'Ella', 'Haputale'],
+  Batticaloa: ['Batticaloa', 'Kattankudy', 'Eravur'],
+  Colombo: ['Colombo', 'Dehiwala', 'Mount Lavinia', 'Moratuwa', 'Nugegoda', 'Maharagama', 'Battaramulla', 'Rajagiriya'],
+  Galle: ['Galle', 'Ambalangoda', 'Hikkaduwa', 'Elpitiya'],
+  Gampaha: ['Gampaha', 'Negombo', 'Ja-Ela', 'Wattala', 'Kadawatha', 'Kiribathgoda', 'Kelaniya'],
+  Hambantota: ['Hambantota', 'Tangalle', 'Beliatta'],
+  Jaffna: ['Jaffna', 'Chavakachcheri', 'Point Pedro', 'Nallur'],
+  Kalutara: ['Kalutara', 'Panadura', 'Beruwala', 'Horana', 'Matugama'],
+  Kandy: ['Kandy', 'Peradeniya', 'Katugastota', 'Gampola'],
+  Kegalle: ['Kegalle', 'Mawanella', 'Warakapola', 'Rambukkana'],
+  Kilinochchi: ['Kilinochchi', 'Pallai'],
+  Kurunegala: ['Kurunegala', 'Kuliyapitiya', 'Narammala', 'Pannala'],
+  Mannar: ['Mannar', 'Murunkan'],
+  Matale: ['Matale', 'Dambulla', 'Galewela'],
+  Matara: ['Matara', 'Weligama', 'Akuressa', 'Dikwella'],
+  Monaragala: ['Monaragala', 'Wellawaya', 'Bibile'],
+  Mullaitivu: ['Mullaitivu', 'Oddusuddan'],
+  'Nuwara Eliya': ['Nuwara Eliya', 'Hatton', 'Talawakele'],
+  Polonnaruwa: ['Polonnaruwa', 'Kaduruwela', 'Medirigiriya'],
+  Puttalam: ['Puttalam', 'Chilaw', 'Wennappuwa', 'Nattandiya'],
+  Ratnapura: ['Ratnapura', 'Balangoda', 'Embilipitiya'],
+  Trincomalee: ['Trincomalee', 'Kinniya'],
+  Vavuniya: ['Vavuniya', 'Nedunkeni']
+}
+
+const getDistrictFromLocation = (location = '') => {
+  const normalizedLocation = location.trim().toLowerCase()
+
+  if (!normalizedLocation) {
+    return null
+  }
+
+  const matchedDistrict = Object.entries(DISTRICT_LOCATION_ALIASES).find(([, aliases]) => (
+    aliases.some((alias) => alias.toLowerCase() === normalizedLocation)
+  ))
+
+  return matchedDistrict?.[0] || location
+}
+
 export default function Vehicles() {
   const [vehicles, setVehicles] = useState([])
-  const [filters, setFilters] = useState({
+  const [districtOptions, setDistrictOptions] = useState([])
+  const defaultFilters = {
     search: '',
+    district: 'all',
     status: 'available'
-  })
+  }
+  const [filters, setFilters] = useState(defaultFilters)
+  const [draftFilters, setDraftFilters] = useState(defaultFilters)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    API.get('/vehicles', {
+      params: {
+        status: 'available'
+      }
+    })
+      .then((res) => {
+        const nextDistricts = [...new Set(
+          (res.data.vehicles || [])
+            .map((vehicle) => getDistrictFromLocation(vehicle.location))
+            .filter(Boolean)
+        )].sort((left, right) => left.localeCompare(right))
+
+        setDistrictOptions(nextDistricts)
+      })
+      .catch(() => setDistrictOptions([]))
+  }, [])
 
   useEffect(() => {
     setLoading(true)
@@ -23,12 +87,35 @@ export default function Vehicles() {
       .finally(() => setLoading(false))
   }, [filters])
 
+  const handleSearchSubmit = (event) => {
+    event.preventDefault()
+    setFilters(draftFilters)
+  }
+
+  const handleDistrictChange = (event) => {
+    const nextDistrict = event.target.value
+
+    setDraftFilters((prev) => ({
+      ...prev,
+      district: nextDistrict
+    }))
+
+    setFilters((prev) => ({
+      ...prev,
+      district: nextDistrict
+    }))
+  }
+
+  const handleReset = () => {
+    setDraftFilters(defaultFilters)
+    setFilters(defaultFilters)
+  }
+
   return (
     <div className="page-content reservation-page">
       <section className="page-banner">
         <div className="container">
-          <div className="page-banner-copy">
-            <span className="page-banner-tag">Explore Cars</span>
+          <div className="page-banner-copy page-banner-copy-wide">
             <h1>Find a vehicle that fits your next reservation</h1>
             <p>Browse the current fleet, compare features, and move straight into booking from the detail page.</p>
           </div>
@@ -38,25 +125,25 @@ export default function Vehicles() {
       <section className="reservation-section">
         <div className="container">
           <div className="filter-card">
-            <div className="filter-grid filter-grid-3">
-              <input
-                value={filters.search}
-                placeholder="Search by vehicle, brand, location..."
-                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              />
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters((prev) => ({ ...prev, status: e.target.value }))}
-              >
-                <option value="all">All Statuses</option>
-                <option value="available">Available</option>
-                <option value="reserved">Reserved</option>
-                <option value="maintenance">Maintenance</option>
-              </select>
-              <button className="btn btn-outline" type="button" onClick={() => setFilters({ search: '', status: 'available' })}>
-                Reset
-              </button>
-            </div>
+            <form onSubmit={handleSearchSubmit}>
+              <div className="filter-grid filter-grid-3">
+                <input
+                  value={draftFilters.search}
+                  placeholder="Search by vehicle, brand, model..."
+                  onChange={(e) => setDraftFilters((prev) => ({ ...prev, search: e.target.value }))}
+                />
+                <select
+                  value={draftFilters.district}
+                  onChange={handleDistrictChange}
+                >
+                  <option value="all">All Districts</option>
+                  {districtOptions.map((district) => (
+                    <option key={district} value={district}>{district}</option>
+                  ))}
+                </select>
+                <button className="btn btn-primary" type="submit">Search</button>
+              </div>
+            </form>
           </div>
 
           {error && <div className="alert alert-danger">{error}</div>}
@@ -103,7 +190,12 @@ export default function Vehicles() {
                 ))}
               </div>
             ) : (
-              <div className="form-card reservation-empty">No vehicles matched the current filters.</div>
+              <div className="form-card reservation-empty">
+                No vehicles matched the current filters.
+                <div style={{ marginTop: '1rem' }}>
+                  <button className="btn btn-outline" type="button" onClick={handleReset}>Reset Filters</button>
+                </div>
+              </div>
             )
           )}
         </div>

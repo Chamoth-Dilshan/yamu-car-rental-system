@@ -95,6 +95,7 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const token = localStorage.getItem('uprm_token')
     const storedUser = localStorage.getItem('uprm_user')
+    const hasStoredUser = Boolean(storedUser)
 
     if (!token) {
       setLoading(false)
@@ -105,16 +106,31 @@ export function AuthProvider({ children }) {
       const parsedUser = JSON.parse(storedUser)
       setUserState(parsedUser)
       setUnreadNotificationCount(parsedUser.unreadNotificationCount || 0)
+      setLoading(false)
     }
 
     let active = true
 
+    const hydrateNotifications = async (baseUser = null) => {
+      try {
+        const notificationRes = await API.get('/users/notifications')
+
+        if (!active) {
+          return
+        }
+
+        setNotifications(notificationRes.data.notifications || [])
+        syncUnreadCount(notificationRes.data.unreadCount || baseUser?.unreadNotificationCount || 0, baseUser)
+      } catch (error) {
+        if (active && [401, 403].includes(error?.response?.status)) {
+          clearSession()
+        }
+      }
+    }
+
     const hydrateSession = async () => {
       try {
-        const [meRes, notificationRes] = await Promise.all([
-          API.get('/auth/me'),
-          API.get('/users/notifications')
-        ])
+        const meRes = await API.get('/auth/me')
 
         if (!active) {
           return
@@ -123,15 +139,19 @@ export function AuthProvider({ children }) {
         const nextUser = meRes.data
         setUserState(nextUser)
         localStorage.setItem('uprm_user', JSON.stringify(nextUser))
-        setNotifications(notificationRes.data.notifications || [])
-        syncUnreadCount(notificationRes.data.unreadCount || nextUser.unreadNotificationCount || 0, nextUser)
+
+        if (!hasStoredUser) {
+          setLoading(false)
+        }
+
+        hydrateNotifications(nextUser)
       } catch {
         if (!active) {
           return
         }
 
         clearSession()
-      } finally {
+
         if (active) {
           setLoading(false)
         }

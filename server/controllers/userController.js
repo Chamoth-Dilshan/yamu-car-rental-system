@@ -209,43 +209,6 @@ const updateProfile = async (req, res) => {
   }
 };
 
-const updateCustomerProfile = async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    if (!canUseRole(getRoleAssignment(user, 'customer'))) {
-      return res.status(403).json({ message: 'Customer profile access is restricted to active customer roles' });
-    }
-
-    const beforeSnapshot = buildUserAuditSnapshot(user);
-    user.customerProfile = {
-      ...user.customerProfile,
-      preferences: trimValue(req.body.preferences, ''),
-      notes: trimValue(req.body.notes, '')
-    };
-
-    await user.save({ validateModifiedOnly: true });
-    await logAuditEvent({
-      actorUserId: user._id,
-      targetUserId: user._id,
-      actionType: 'user.customer_profile.updated',
-      beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user)
-    });
-    res.json({
-      message: 'Customer profile updated',
-      customerProfile: user.customerProfile,
-      user: serializeUser(user)
-    });
-  } catch (error) {
-    sendServerError(res, error, 'Failed to update customer profile');
-  }
-};
-
 const updateDriverProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -644,7 +607,6 @@ module.exports = {
   getProfile,
   getMyRoleHistory,
   updateProfile,
-  updateCustomerProfile,
   updateDriverProfile,
   updateStaffProfile,
   updateAdminProfile,
