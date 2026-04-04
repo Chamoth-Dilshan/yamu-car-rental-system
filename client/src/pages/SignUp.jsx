@@ -25,7 +25,7 @@ export default function SignUp() {
       return '/';
     }
 
-    return '/account';
+    return '/profile';
   };
 
   const handleSubmit = async (e) => {

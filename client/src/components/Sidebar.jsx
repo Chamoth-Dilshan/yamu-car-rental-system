@@ -5,9 +5,8 @@ import { useAuth } from '../context/AuthContext'
 const menuItems = {
   customer: [
     { section: 'Account' },
-    { to: '/account', label: 'Overview', end: true },
+    { to: '/profile', label: 'User Profile', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
-    { to: '/profile', label: 'Profile Hub', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true },
     { section: 'Discover' },
@@ -19,15 +18,13 @@ const menuItems = {
     { to: '/driver/ads', label: 'My Driver Ads', end: true },
     { to: '/driver/bookings', label: 'Booking Requests', end: true },
     { section: 'Account' },
-    { to: '/account', label: 'Overview', end: true },
-    { to: '/profile', label: 'Profile Hub', end: true },
+    { to: '/profile', label: 'User Profile', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   staff: [
     { section: 'Account' },
-    { to: '/account', label: 'Overview', end: true },
-    { to: '/profile', label: 'Profile Hub', end: true },
+    { to: '/profile', label: 'User Profile', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
@@ -38,7 +35,7 @@ const menuItems = {
     { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: false },
     { section: 'Account' },
-    { to: '/profile', label: 'Profile Hub', end: true },
+    { to: '/profile', label: 'User Profile', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ]
 }

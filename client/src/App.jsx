@@ -5,7 +5,6 @@ import Home from './pages/Home'
 import AdminUsers from './pages/AdminUsers'
 import AdminBookings from './pages/AdminBookings'
 import ApplyRoles from './pages/ApplyRoles'
-import AccountOverview from './pages/AccountOverview'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import Profile from './pages/Profile'
@@ -31,14 +30,7 @@ export default function App() {
         <Route path="/signin" element={<SignIn />} />
         <Route path="/admin/signin" element={<Navigate to="/signin" replace />} />
         <Route path="/signup" element={<SignUp />} />
-        <Route
-          path="/account"
-          element={(
-            <ProtectedRoute>
-              <AccountOverview />
-            </ProtectedRoute>
-          )}
-        />
+        <Route path="/account" element={<Navigate to="/profile" replace />} />
         <Route
           path="/bookings"
           element={(

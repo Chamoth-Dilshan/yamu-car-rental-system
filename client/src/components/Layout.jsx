@@ -28,7 +28,7 @@ export default function Layout({ children }) {
   const canViewUsers = hasPermission('users.view');
   const canReviewRoles = hasPermission('roles.review');
   const canAssignRoles = hasPermission('roles.assign');
-  const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? '/account' : '/';
+  const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? '/profile' : '/';
   const recentNotifications = (notifications || []).slice(0, 5);
   const workflowNotificationCount = (notifications || []).filter((notification) => (
     [notification.title, notification.message, notification.link]
@@ -72,7 +72,7 @@ export default function Layout({ children }) {
 
           <div className="nav-links">
             {hasHomePage && <NavLink to="/">Home</NavLink>}
-            {user && !isAdmin && <NavLink to="/account">Account</NavLink>}
+            {user && !isAdmin && canManageProfile && <NavLink to="/profile">User Profile</NavLink>}
             {isDriver && <NavLink to="/driver/ads">Driver Ads</NavLink>}
             {isAdmin && canViewUsers && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
             {isAdmin && <NavLink to="/admin/bookings">Bookings</NavLink>}
@@ -132,8 +132,7 @@ export default function Layout({ children }) {
                   <img src={avatarSrc} alt={user.fullName} />
                   <span>{user.fullName?.split(' ')[0]}</span>
                   <div className="nav-user-dropdown">
-                    {!isAdmin && <Link to="/account">Account Overview</Link>}
-                    {canManageProfile && <Link to="/profile">Profile Details</Link>}
+                    {canManageProfile && <Link to="/profile">User Profile</Link>}
                     {isCustomer && <Link to="/bookings">My Bookings</Link>}
                     {isDriver && <Link to="/driver/ads">My Driver Ads</Link>}
                     {isDriver && <Link to="/driver/bookings">Booking Requests</Link>}

@@ -13,7 +13,7 @@ export default function ProtectedRoute({ children, roles, permissions, requireAl
   }
 
   if (roles && !roles.includes(user.activeRole || user.role)) {
-    return <Navigate to="/account" replace />;
+    return <Navigate to="/profile" replace />;
   }
 
   if (permissions?.length) {
@@ -22,7 +22,7 @@ export default function ProtectedRoute({ children, roles, permissions, requireAl
       : hasAnyPermission(...permissions);
 
     if (!isAllowed) {
-      return <Navigate to="/account" replace />;
+      return <Navigate to="/profile" replace />;
     }
   }
 

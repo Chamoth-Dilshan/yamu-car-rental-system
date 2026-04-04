@@ -19,7 +19,7 @@ export default function SignIn() {
       return '/';
     }
 
-    return '/account';
+    return '/profile';
   };
 
   const handleSubmit = async (e) => {
