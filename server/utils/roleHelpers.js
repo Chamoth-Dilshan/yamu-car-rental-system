@@ -6,6 +6,12 @@ const {
 } = require('./profileHelpers');
 
 const ROLE_KEYS = ['customer', 'driver', 'staff', 'admin'];
+const ROLE_DISPLAY_LABELS = {
+  customer: 'User',
+  staff: 'Store',
+  driver: 'Driver',
+  admin: 'Admin'
+};
 const PROVIDER_ROLE_KEYS = ['driver', 'staff'];
 const ACCOUNT_STATUSES = ['active', 'suspended', 'deactivated'];
 const ROLE_STATUSES = ['pending', 'active', 'rejected', 'suspended', 'deactivated'];
@@ -61,13 +67,19 @@ const buildRoleAssignment = (
   isPrimary
 });
 
-const toDisplayLabel = (value = '') => (
-  String(value)
+const toDisplayLabel = (value = '') => {
+  const normalized = String(value || '').trim();
+
+  if (ROLE_DISPLAY_LABELS[normalized]) {
+    return ROLE_DISPLAY_LABELS[normalized];
+  }
+
+  return normalized
     .split('_')
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ')
-);
+    .join(' ');
+};
 
 const getVerificationTone = (state) => {
   switch (state) {
@@ -238,7 +250,7 @@ const validateManagedUserState = ({ accountStatus, roles, activeRole, primaryRol
   const assignedRoleKeys = nextRoles.map((role) => role.roleKey);
 
   if (!assignedRoleKeys.includes('customer')) {
-    return { valid: false, message: 'Customer access must remain assigned to the account' };
+    return { valid: false, message: 'User access must remain assigned to the account' };
   }
 
   if (new Set(assignedRoleKeys).size !== assignedRoleKeys.length) {
@@ -358,6 +370,8 @@ const buildVerificationGuidance = ({
   latestApplication,
   missingRequirements
 }) => {
+  const roleLabel = toDisplayLabel(roleKey).toLowerCase();
+
   if (accountStatus !== 'active') {
     return accountStatus === 'suspended'
       ? 'Your account is suspended. Contact support or an administrator for help.'
@@ -365,33 +379,33 @@ const buildVerificationGuidance = ({
   }
 
   if (roleAssignment?.roleStatus === 'suspended' || roleAssignment?.roleStatus === 'deactivated') {
-    return `Your ${roleKey} access is currently restricted. Contact an administrator for help.`;
+    return `Your ${roleLabel} access is currently restricted. Contact an administrator for help.`;
   }
 
   if (canUseRole(roleAssignment)) {
     return roleKey === 'customer'
-      ? 'Your customer access is active and ready to use.'
+      ? 'Your user access is active and ready to use.'
       : roleKey === 'admin'
         ? 'Your admin access is active and verified.'
-        : `Your ${roleKey} role is approved and ready to use.`;
+        : `Your ${roleLabel} role is approved and ready to use.`;
   }
 
   if (latestApplication?.status === 'pending') {
-    return `Your ${roleKey} application is waiting for admin review.`;
+    return `Your ${roleLabel} application is waiting for admin review.`;
   }
 
   if (latestApplication?.status === 'rejected') {
     return latestApplication.rejectionReason
-      ? `Update the rejected items and reapply for ${roleKey} access.`
-      : `Review the rejected ${roleKey} application and reapply when ready.`;
+      ? `Update the rejected items and reapply for ${roleLabel} access.`
+      : `Review the rejected ${roleLabel} application and reapply when ready.`;
   }
 
   if (latestApplication?.status === 'withdrawn') {
-    return `Your previous ${roleKey} application was withdrawn. Complete the remaining items before applying again.`;
+    return `Your previous ${roleLabel} application was withdrawn. Complete the remaining items before applying again.`;
   }
 
   if (missingRequirements.length > 0) {
-    return `Complete the missing ${roleKey} requirements before applying for review.`;
+    return `Complete the missing ${roleLabel} requirements before applying for review.`;
   }
 
   if (roleKey === 'customer') {
@@ -402,7 +416,7 @@ const buildVerificationGuidance = ({
     return 'Admin access is only available when granted by the platform team.';
   }
 
-  return `You can apply for ${roleKey} access once the required details are filled in.`;
+  return `You can apply for ${roleLabel} access once the required details are filled in.`;
 };
 
 const buildVerificationItem = (user, roleKey) => {
@@ -433,7 +447,7 @@ const buildVerificationItem = (user, roleKey) => {
 
   return {
     roleKey,
-    roleLabel: roleKey.charAt(0).toUpperCase() + roleKey.slice(1),
+    roleLabel: toDisplayLabel(roleKey),
     state,
     stateLabel: toDisplayLabel(state),
     tone: getVerificationTone(state),
@@ -602,7 +616,6 @@ const serializeUser = (userDoc) => {
     roles,
     accountStatus: normalizedUser.accountStatus,
     verificationStatus: activeRoleAssignment?.verificationStatus || normalizedUser.verificationStatus || 'verified',
-    customerProfile: normalizedUser.customerProfile || {},
     driverProfile,
     staffProfile,
     adminProfile: normalizedUser.adminProfile || {},

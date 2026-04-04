@@ -7,6 +7,10 @@ const {
   addNotificationToUser
 } = require('../utils/notificationHelpers')
 const {
+  canUseRole,
+  getRoleAssignment
+} = require('../utils/roleHelpers')
+const {
   BOOKING_STATUSES,
   PAYMENT_STATUSES,
   serializeBooking,
@@ -16,7 +20,13 @@ const {
 const bookingPopulate = [
   { path: 'customer', select: 'fullName email phone city profilePic' },
   { path: 'driver', select: 'fullName email phone city profilePic' },
-  { path: 'vehicle' },
+  {
+    path: 'vehicle',
+    populate: {
+      path: 'owner',
+      select: 'fullName email phone city profilePic staffProfile.storeName'
+    }
+  },
   {
     path: 'driverAd',
     populate: {
@@ -107,10 +117,23 @@ const createVehicleBooking = async (req, res) => {
       return res.status(400).json({ message: dateRange.error })
     }
 
-    const vehicle = await Vehicle.findById(vehicleId)
+    const vehicle = await Vehicle.findById(vehicleId).populate('owner', 'fullName email phone city profilePic accountStatus roles role staffProfile.storeName')
 
     if (!vehicle || vehicle.status !== 'available') {
       return res.status(404).json({ message: 'Selected vehicle is not available for booking' })
+    }
+
+    if (!vehicle.owner) {
+      return res.status(400).json({ message: 'Selected vehicle is not published by a store yet' })
+    }
+
+    if (String(vehicle.owner._id) === String(req.user._id)) {
+      return res.status(400).json({ message: 'You cannot book your own store vehicle listing' })
+    }
+
+    const storeRoleAssignment = getRoleAssignment(vehicle.owner, 'staff')
+    if (vehicle.owner.accountStatus !== 'active' || !canUseRole(storeRoleAssignment)) {
+      return res.status(400).json({ message: 'Selected vehicle store is not currently available' })
     }
 
     const conflictingBooking = await Booking.findOne(
@@ -143,7 +166,7 @@ const createVehicleBooking = async (req, res) => {
     const createdBooking = await Booking.findById(booking._id).populate(bookingPopulate)
     const customerName = createdBooking.customer?.fullName || req.user.fullName
 
-    await Promise.all([
+    const notificationTasks = [
       addNotificationToUser(req.user._id, {
         type: 'booking',
         title: 'Vehicle booking created',
@@ -156,7 +179,18 @@ const createVehicleBooking = async (req, res) => {
         message: `${customerName} created vehicle booking ${booking.bookingNo} for ${vehicle.name}.`,
         link: '/admin/bookings'
       })
-    ])
+    ]
+
+    if (vehicle.owner) {
+      notificationTasks.push(addNotificationToUser(vehicle.owner, {
+        type: 'booking',
+        title: 'New vehicle booking request',
+        message: `${customerName} created booking ${booking.bookingNo} for ${vehicle.name}.`,
+        link: '/staff/bookings'
+      }))
+    }
+
+    await Promise.all(notificationTasks)
 
     res.status(201).json({
       message: 'Vehicle booking created successfully',
@@ -176,10 +210,23 @@ const createDriverBooking = async (req, res) => {
       return res.status(400).json({ message: dateRange.error })
     }
 
-    const ad = await DriverAd.findById(driverAdId).populate('driver', 'fullName email phone city profilePic')
+    const ad = await DriverAd.findById(driverAdId).populate('driver', 'fullName email phone city profilePic accountStatus roles role')
 
     if (!ad || ad.visibility !== 'active' || ad.availability === 'unavailable') {
       return res.status(404).json({ message: 'Selected driver advertisement is not available' })
+    }
+
+    if (!ad.driver) {
+      return res.status(400).json({ message: 'Selected driver advertisement has no assigned driver' })
+    }
+
+    if (String(ad.driver._id) === String(req.user._id)) {
+      return res.status(400).json({ message: 'You cannot book your own driver advertisement' })
+    }
+
+    const driverRoleAssignment = getRoleAssignment(ad.driver, 'driver')
+    if (ad.driver.accountStatus !== 'active' || !canUseRole(driverRoleAssignment)) {
+      return res.status(400).json({ message: 'Selected driver is not currently available' })
     }
 
     const conflictingBooking = await Booking.findOne(
@@ -223,7 +270,7 @@ const createDriverBooking = async (req, res) => {
       }),
       addNotificationToUser(ad.driver._id, {
         type: 'booking',
-        title: 'New driver booking request',
+        title: 'New booking request',
         message: `${customerName} sent a new trip request (${booking.bookingNo}).`,
         link: '/driver/bookings'
       })
@@ -272,6 +319,15 @@ const cancelMyBooking = async (req, res) => {
     }
 
     if (booking.bookingType === 'vehicle') {
+      if (booking.vehicle?.owner?._id || booking.vehicle?.owner) {
+        notificationTasks.push(addNotificationToUser(booking.vehicle.owner._id || booking.vehicle.owner, {
+          type: 'booking',
+          title: 'Vehicle booking cancelled',
+          message: `Customer cancelled vehicle booking ${booking.bookingNo}.`,
+          link: '/staff/bookings'
+        }))
+      }
+
       notificationTasks.push(addNotificationToAdmins({
         type: 'booking',
         title: 'Vehicle booking cancelled',
@@ -322,6 +378,15 @@ const updateMyBookingPayment = async (req, res) => {
     ]
 
     if (booking.bookingType === 'vehicle') {
+      if (booking.vehicle?.owner?._id || booking.vehicle?.owner) {
+        notificationTasks.push(addNotificationToUser(booking.vehicle.owner._id || booking.vehicle.owner, {
+          type: 'payment',
+          title: 'Vehicle booking payment updated',
+          message: `Booking ${booking.bookingNo} payment was marked as ${paymentStatus}.`,
+          link: '/staff/bookings'
+        }))
+      }
+
       notificationTasks.push(addNotificationToAdmins({
         type: 'payment',
         title: 'Vehicle booking payment updated',
@@ -382,7 +447,7 @@ const updateDriverBookingStatus = async (req, res) => {
     }
 
     if (!['confirmed', 'completed', 'cancelled'].includes(bookingStatus)) {
-      return res.status(400).json({ message: 'Drivers can only confirm, complete, or cancel requests' })
+      return res.status(400).json({ message: 'Only the assigned provider can confirm, complete, or cancel requests' })
     }
 
     const booking = await Booking.findOne({
@@ -423,6 +488,87 @@ const updateDriverBookingStatus = async (req, res) => {
   }
 }
 
+const getStaffVehicleBookings = async (req, res) => {
+  try {
+    const { status, paymentStatus, search = '' } = req.query
+    const ownedVehicleIds = await Vehicle.find({ owner: req.user._id }).distinct('_id')
+    const query = {
+      bookingType: 'vehicle',
+      vehicle: { $in: ownedVehicleIds }
+    }
+    const searchQuery = buildSearchQuery(search)
+
+    if (status && status !== 'all') {
+      query.bookingStatus = status
+    }
+
+    if (paymentStatus && paymentStatus !== 'all') {
+      query.paymentStatus = paymentStatus
+    }
+
+    const bookings = await Booking.find(searchQuery ? { ...query, ...searchQuery } : query)
+      .populate(bookingPopulate)
+      .sort({ createdAt: -1 })
+
+    res.json({
+      bookings: bookings.map(serializeBooking),
+      stats: buildStats(bookings)
+    })
+  } catch (error) {
+    sendServerError(res, error, 'Failed to load vehicle booking requests')
+  }
+}
+
+const updateStaffVehicleBookingStatus = async (req, res) => {
+  try {
+    const { bookingStatus } = req.body
+
+    if (!BOOKING_STATUSES.includes(bookingStatus)) {
+      return res.status(400).json({ message: 'Invalid booking status' })
+    }
+
+    if (!['confirmed', 'completed', 'closed', 'cancelled'].includes(bookingStatus)) {
+      return res.status(400).json({ message: 'Stores can only confirm, complete, close, or cancel requests' })
+    }
+
+    const ownedVehicleIds = await Vehicle.find({ owner: req.user._id }).distinct('_id')
+    const booking = await Booking.findOne({
+      _id: req.params.id,
+      bookingType: 'vehicle',
+      vehicle: { $in: ownedVehicleIds }
+    }).populate(bookingPopulate)
+
+    if (!booking) {
+      return res.status(404).json({ message: 'Vehicle booking not found' })
+    }
+
+    booking.bookingStatus = bookingStatus
+    await booking.save()
+
+    await Promise.all([
+      addNotificationToUser(req.user._id, {
+        type: 'booking',
+        title: 'Vehicle booking updated',
+        message: `You marked booking ${booking.bookingNo} as ${bookingStatus}.`,
+        link: '/staff/bookings'
+      }),
+      addNotificationToUser(booking.customer?._id || booking.customer, {
+        type: 'booking',
+        title: 'Store updated your vehicle booking',
+        message: `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
+        link: '/bookings'
+      })
+    ])
+
+    res.json({
+      message: 'Vehicle booking updated',
+      booking: serializeBooking(booking)
+    })
+  } catch (error) {
+    sendServerError(res, error, 'Failed to update vehicle booking')
+  }
+}
+
 module.exports = {
   getMyBookings,
   createVehicleBooking,
@@ -430,5 +576,7 @@ module.exports = {
   cancelMyBooking,
   updateMyBookingPayment,
   getDriverBookings,
-  updateDriverBookingStatus
+  updateDriverBookingStatus,
+  getStaffVehicleBookings,
+  updateStaffVehicleBookingStatus
 }

@@ -2,6 +2,7 @@ const mongoose = require('mongoose')
 const { VEHICLE_STATUSES } = require('../utils/reservationHelpers')
 
 const vehicleSchema = new mongoose.Schema({
+  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   vehicleCode: { type: String, required: true, unique: true },
   name: { type: String, required: true, trim: true },
   brand: { type: String, required: true, trim: true },

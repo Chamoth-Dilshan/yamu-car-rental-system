@@ -21,6 +21,7 @@ export default function DriverDetails() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const isOwnDriverAd = Boolean(user && ad?.driver?._id && String(ad.driver._id) === String(user._id))
 
   useEffect(() => {
     setLoading(true)
@@ -42,8 +43,13 @@ export default function DriverDetails() {
       return
     }
 
+    if (isOwnDriverAd) {
+      setError('You cannot book your own driver advertisement.')
+      return
+    }
+
     if ((user.activeRole || user.role) !== 'customer') {
-      setError('Switch to the customer role before requesting a driver.')
+      setError('Switch to the user role before requesting a driver.')
       return
     }
 
@@ -209,10 +215,15 @@ export default function DriverDetails() {
                       placeholder="Share traveller count, luggage, route notes, or any special request"
                     />
                   </div>
-                  <button className="btn btn-primary" type="submit" disabled={busy}>
+                  <button className="btn btn-primary" type="submit" disabled={busy || isOwnDriverAd}>
                     {busy ? 'Sending...' : 'Send Request'}
                   </button>
                 </form>
+                {isOwnDriverAd && (
+                  <p className="reservation-note" style={{ marginTop: '0.75rem' }}>
+                    This is your own driver listing. Booking is disabled.
+                  </p>
+                )}
               </section>
 
               <section className="form-card">

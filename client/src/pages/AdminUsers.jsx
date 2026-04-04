@@ -6,6 +6,12 @@ import { useAuth } from '../context/AuthContext';
 import { formatDateTime } from '../utils/formatters';
 
 const manageableRoles = ['customer', 'driver', 'staff', 'admin'];
+const roleDisplayMap = {
+  customer: 'User',
+  staff: 'Store',
+  driver: 'Driver',
+  admin: 'Admin'
+};
 const accountStatuses = ['active', 'suspended', 'deactivated'];
 const roleStatuses = ['pending', 'active', 'rejected', 'suspended', 'deactivated'];
 const verificationStatuses = ['unverified', 'pending', 'verified', 'rejected'];
@@ -32,6 +38,11 @@ const canUseRole = (role) => role.roleStatus === 'active' && role.verificationSt
 const isProtectedAdmin = (user) => Boolean(user?.isSystemAdmin);
 
 const formatLabel = (value) => String(value)
+  .trim()
+  .replace(/^customer$/, roleDisplayMap.customer)
+  .replace(/^staff$/, roleDisplayMap.staff)
+  .replace(/^driver$/, roleDisplayMap.driver)
+  .replace(/^admin$/, roleDisplayMap.admin)
   .replace(/([A-Z])/g, ' $1')
   .replace(/[_-]/g, ' ')
   .replace(/\b\w/g, (char) => char.toUpperCase())

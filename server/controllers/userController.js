@@ -34,7 +34,12 @@ const {
   validatePasswordStrength
 } = require('../utils/profileHelpers');
 
-const roleLabel = (value) => value.charAt(0).toUpperCase() + value.slice(1);
+const roleLabel = (value) => ({
+  customer: 'User',
+  staff: 'Store',
+  driver: 'Driver',
+  admin: 'Admin'
+}[value] || value.charAt(0).toUpperCase() + value.slice(1));
 
 const ensureUniqueIdentityFields = async (userId, email, username) => {
   const normalizedEmail = String(email).trim().toLowerCase();
@@ -209,43 +214,6 @@ const updateProfile = async (req, res) => {
   }
 };
 
-const updateCustomerProfile = async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    if (!canUseRole(getRoleAssignment(user, 'customer'))) {
-      return res.status(403).json({ message: 'Customer profile access is restricted to active customer roles' });
-    }
-
-    const beforeSnapshot = buildUserAuditSnapshot(user);
-    user.customerProfile = {
-      ...user.customerProfile,
-      preferences: trimValue(req.body.preferences, ''),
-      notes: trimValue(req.body.notes, '')
-    };
-
-    await user.save({ validateModifiedOnly: true });
-    await logAuditEvent({
-      actorUserId: user._id,
-      targetUserId: user._id,
-      actionType: 'user.customer_profile.updated',
-      beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user)
-    });
-    res.json({
-      message: 'Customer profile updated',
-      customerProfile: user.customerProfile,
-      user: serializeUser(user)
-    });
-  } catch (error) {
-    sendServerError(res, error, 'Failed to update customer profile');
-  }
-};
-
 const updateDriverProfile = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -309,7 +277,7 @@ const updateStaffProfile = async (req, res) => {
 
     const roleAssignment = getRoleAssignment(user, 'staff');
     if (!canManageRoleProfile(roleAssignment)) {
-      return res.status(403).json({ message: 'Staff onboarding is available only for assigned staff applicants or roles' });
+      return res.status(403).json({ message: 'Store onboarding is available only for assigned store applicants or roles' });
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
@@ -343,12 +311,12 @@ const updateStaffProfile = async (req, res) => {
       afterSnapshot: buildUserAuditSnapshot(user)
     });
     res.json({
-      message: 'Staff profile updated',
+      message: 'Store profile updated',
       staffProfile: user.staffProfile,
       user: serializeUser(user)
     });
   } catch (error) {
-    sendServerError(res, error, 'Failed to update staff profile');
+    sendServerError(res, error, 'Failed to update store profile');
   }
 };
 
@@ -404,7 +372,7 @@ const applyForProviderRole = async (req, res) => {
     }
 
     if (!canUseRole(getRoleAssignment(user, 'customer'))) {
-      return res.status(403).json({ message: 'Only accounts with active customer access can apply for provider roles' });
+      return res.status(403).json({ message: 'Only accounts with active user access can apply for provider roles' });
     }
 
     const roleAssignment = getRoleAssignment(user, roleKey);
@@ -644,7 +612,6 @@ module.exports = {
   getProfile,
   getMyRoleHistory,
   updateProfile,
-  updateCustomerProfile,
   updateDriverProfile,
   updateStaffProfile,
   updateAdminProfile,

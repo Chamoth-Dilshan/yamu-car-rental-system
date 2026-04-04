@@ -117,10 +117,6 @@ const seed = async () => {
         buildRoleAssignment('driver', { roleStatus: 'active', verificationStatus: 'verified' }),
         buildRoleAssignment('staff', { roleStatus: 'active', verificationStatus: 'verified' })
       ],
-      customerProfile: {
-        preferences: 'Automatic vehicles, city pickups',
-        notes: 'Frequent airport trips and short weekend hires'
-      },
       driverProfile: {
         drivingLicenseNumber: 'B1234567',
         nicId: '901234567V',
@@ -221,9 +217,6 @@ const seed = async () => {
         buildRoleAssignment('customer', { isPrimary: true }),
         buildRoleAssignment('driver', { roleStatus: 'pending', verificationStatus: 'pending' })
       ],
-      customerProfile: {
-        preferences: 'Weekend-only travel'
-      },
       driverProfile: {
         drivingLicenseNumber: 'C9876543',
         nicId: '921234567V',
@@ -285,9 +278,6 @@ const seed = async () => {
         buildRoleAssignment('customer'),
         buildRoleAssignment('driver', { roleStatus: 'active', verificationStatus: 'verified', isPrimary: true })
       ],
-      customerProfile: {
-        preferences: 'Day tours and airport transfers'
-      },
       driverProfile: {
         drivingLicenseNumber: 'DL-443322',
         nicId: '891112223V',
@@ -386,10 +376,6 @@ const seed = async () => {
       accountStatus: 'active',
       verificationStatus: 'verified',
       roles: [buildRoleAssignment('customer', { isPrimary: true })],
-      customerProfile: {
-        preferences: 'Private tours and chauffeur support',
-        notes: 'Usually books outstation trips with luggage space'
-      },
       notifications: [
         buildSeedNotification(
           'booking',
@@ -411,6 +397,7 @@ const seed = async () => {
 
     const [nissanKicks, wagonR, audiQ8] = await Vehicle.create([
       {
+        owner: alex._id,
         vehicleCode: 'CAR-1005',
         name: 'Nissan Kicks',
         brand: 'Nissan',
@@ -431,6 +418,7 @@ const seed = async () => {
         featured: true
       },
       {
+        owner: alex._id,
         vehicleCode: 'CAR-1001',
         name: 'Maruti Suzuki Wagon R',
         brand: 'Maruti Suzuki',
@@ -451,6 +439,7 @@ const seed = async () => {
         featured: true
       },
       {
+        owner: alex._id,
         vehicleCode: 'CAR-1003',
         name: 'Audi Q8',
         brand: 'Audi',
@@ -471,6 +460,7 @@ const seed = async () => {
         featured: true
       },
       {
+        owner: alex._id,
         vehicleCode: 'CAR-1010',
         name: 'Honda Vezel',
         brand: 'Honda',

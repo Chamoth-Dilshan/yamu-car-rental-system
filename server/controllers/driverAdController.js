@@ -33,7 +33,13 @@ const getDriverAdPayload = (body, file, existingAd, user) => {
     payload: {
       title,
       tagline: String(body.tagline || existingAd?.tagline || '').trim(),
-      serviceLocation: String(body.serviceLocation || existingAd?.serviceLocation || user.driverProfile?.serviceArea || '').trim(),
+      serviceLocation: String(
+        body.serviceLocation
+        || existingAd?.serviceLocation
+        || user.driverProfile?.serviceArea
+        || user.city
+        || ''
+      ).trim(),
       languages: parseListField(body.languages || existingAd?.languages || []),
       experienceYears: Number.isFinite(experienceYears) && experienceYears >= 0 ? experienceYears : 0,
       dailyRate,

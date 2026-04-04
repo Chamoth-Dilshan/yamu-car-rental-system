@@ -93,10 +93,6 @@ const userSchema = new mongoose.Schema({
     default: 'verified'
   },
   roles: [roleAssignmentSchema],
-  customerProfile: {
-    preferences: { type: String, default: '' },
-    notes: { type: String, default: '' }
-  },
   driverProfile: {
     drivingLicenseNumber: { type: String, default: '' },
     licenseExpiryDate: { type: Date, default: null },

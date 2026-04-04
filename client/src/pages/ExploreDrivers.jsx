@@ -6,11 +6,13 @@ import { getMediaImage, getUserAvatar } from '../utils/media'
 
 export default function ExploreDrivers() {
   const [ads, setAds] = useState([])
-  const [filters, setFilters] = useState({
+  const defaultFilters = {
     search: '',
     location: 'all',
     availability: 'all'
-  })
+  }
+  const [filters, setFilters] = useState(defaultFilters)
+  const [draftFilters, setDraftFilters] = useState(defaultFilters)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -25,6 +27,16 @@ export default function ExploreDrivers() {
   }, [filters])
 
   const uniqueLocations = [...new Set(ads.map((ad) => ad.serviceLocation).filter(Boolean))]
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault()
+    setFilters(draftFilters)
+  }
+
+  const handleReset = () => {
+    setDraftFilters(defaultFilters)
+    setFilters(defaultFilters)
+  }
 
   return (
     <div className="page-content reservation-page">
@@ -41,29 +53,29 @@ export default function ExploreDrivers() {
       <section className="reservation-section">
         <div className="container">
           <div className="filter-card">
-            <div className="filter-grid filter-grid-4">
-              <input
-                value={filters.search}
-                placeholder="Search by driver, title, language..."
-                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              />
-              <select value={filters.location} onChange={(e) => setFilters((prev) => ({ ...prev, location: e.target.value }))}>
-                <option value="all">All Locations</option>
-                {uniqueLocations.map((location) => <option key={location} value={location}>{location}</option>)}
-              </select>
-              <select
-                value={filters.availability}
-                onChange={(e) => setFilters((prev) => ({ ...prev, availability: e.target.value }))}
-              >
-                <option value="all">All Availability</option>
-                <option value="available">Available</option>
-                <option value="limited">Limited</option>
-                <option value="unavailable">Unavailable</option>
-              </select>
-              <button className="btn btn-outline" type="button" onClick={() => setFilters({ search: '', location: 'all', availability: 'all' })}>
-                Reset
-              </button>
-            </div>
+            <form onSubmit={handleSearchSubmit}>
+              <div className="filter-grid filter-grid-4">
+                <input
+                  value={draftFilters.search}
+                  placeholder="Search by driver, title, language..."
+                  onChange={(e) => setDraftFilters((prev) => ({ ...prev, search: e.target.value }))}
+                />
+                <select value={draftFilters.location} onChange={(e) => setDraftFilters((prev) => ({ ...prev, location: e.target.value }))}>
+                  <option value="all">All Locations</option>
+                  {uniqueLocations.map((location) => <option key={location} value={location}>{location}</option>)}
+                </select>
+                <select
+                  value={draftFilters.availability}
+                  onChange={(e) => setDraftFilters((prev) => ({ ...prev, availability: e.target.value }))}
+                >
+                  <option value="all">All Availability</option>
+                  <option value="available">Available</option>
+                  <option value="limited">Limited</option>
+                  <option value="unavailable">Unavailable</option>
+                </select>
+                <button className="btn btn-primary" type="submit">Search</button>
+              </div>
+            </form>
           </div>
 
           {error && <div className="alert alert-danger">{error}</div>}
@@ -117,7 +129,12 @@ export default function ExploreDrivers() {
                 ))}
               </div>
             ) : (
-              <div className="form-card reservation-empty">No driver advertisements matched the current filters.</div>
+              <div className="form-card reservation-empty">
+                No driver advertisements matched the current filters.
+                <div style={{ marginTop: '1rem' }}>
+                  <button className="btn btn-outline" type="button" onClick={handleReset}>Reset Filters</button>
+                </div>
+              </div>
             )
           )}
         </div>

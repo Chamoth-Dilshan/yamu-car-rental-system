@@ -8,6 +8,7 @@ import ApplyRoles from './pages/ApplyRoles'
 import SignIn from './pages/SignIn'
 import SignUp from './pages/SignUp'
 import Profile from './pages/Profile'
+import Notifications from './pages/Notifications'
 import RoleManagement from './pages/RoleManagement'
 import Vehicles from './pages/Vehicles'
 import VehicleDetails from './pages/VehicleDetails'
@@ -17,6 +18,9 @@ import DriverDetails from './pages/DriverDetails'
 import DriverAdList from './pages/DriverAdList'
 import DriverAdForm from './pages/DriverAdForm'
 import DriverBookings from './pages/DriverBookings'
+import StaffVehicleList from './pages/StaffVehicleList'
+import StaffVehicleForm from './pages/StaffVehicleForm'
+import StaffVehicleBookings from './pages/StaffVehicleBookings'
 
 export default function App() {
   return (
@@ -44,6 +48,14 @@ export default function App() {
           element={(
             <ProtectedRoute permissions={['profile.manage']}>
               <Profile />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/notifications"
+          element={(
+            <ProtectedRoute permissions={['profile.manage']}>
+              <Notifications />
             </ProtectedRoute>
           )}
         />
@@ -92,6 +104,38 @@ export default function App() {
           element={(
             <ProtectedRoute roles={['driver']}>
               <DriverBookings />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/staff/vehicles"
+          element={(
+            <ProtectedRoute roles={['staff']}>
+              <StaffVehicleList />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/staff/vehicles/new"
+          element={(
+            <ProtectedRoute roles={['staff']}>
+              <StaffVehicleForm />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/staff/vehicles/:id/edit"
+          element={(
+            <ProtectedRoute roles={['staff']}>
+              <StaffVehicleForm />
+            </ProtectedRoute>
+          )}
+        />
+        <Route
+          path="/staff/bookings"
+          element={(
+            <ProtectedRoute roles={['staff']}>
+              <StaffVehicleBookings />
             </ProtectedRoute>
           )}
         />

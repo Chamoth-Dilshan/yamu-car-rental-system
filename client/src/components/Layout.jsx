@@ -1,9 +1,25 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { buildUploadUrl } from '../api/config';
 import { formatDateTime } from '../utils/formatters';
+import { formatRoleLabel } from '../utils/roles';
 import BrandLogo from './BrandLogo';
 import Footer from './Footer';
+
+const NotificationBellIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    aria-hidden="true"
+    focusable="false"
+    className="nav-notification-icon"
+  >
+    <path
+      d="M12 3.75a4.25 4.25 0 0 0-4.25 4.25v1.07c0 .9-.3 1.77-.85 2.48L5.8 12.98a2.75 2.75 0 0 0 2.16 4.52h8.08a2.75 2.75 0 0 0 2.16-4.52l-1.1-1.43a4.02 4.02 0 0 1-.85-2.48V8A4.25 4.25 0 0 0 12 3.75Zm0 17.5a2.73 2.73 0 0 1-2.58-1.84.75.75 0 0 1 1.42-.48.03.03 0 0 0 .01.02A1.23 1.23 0 0 0 12 19.75c.53 0 1 .33 1.17.82a.75.75 0 0 1-1.17.68Z"
+      fill="currentColor"
+    />
+  </svg>
+);
 
 export default function Layout({ children }) {
   const {
@@ -17,25 +33,57 @@ export default function Layout({ children }) {
   } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const notificationRef = useRef(null);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const activeRole = user?.activeRole || user?.role;
   const isCustomer = activeRole === 'customer';
   const isDriver = activeRole === 'driver';
+  const isStaff = activeRole === 'staff';
   const isAdmin = activeRole === 'admin';
   const hasHomePage = !user || activeRole === 'customer';
+  const showDiscoverLinks = hasHomePage;
+  const isAccountWorkspaceRoute = ['/profile', '/notifications', '/bookings', '/apply-roles', '/switch-roles'].some((path) => (
+    location.pathname === path || location.pathname.startsWith(`${path}/`)
+  ));
   const footerHiddenPaths = new Set(['/signin']);
-  const showFooter = !footerHiddenPaths.has(location.pathname) && (!user || isCustomer);
+  const showFooter = !footerHiddenPaths.has(location.pathname) && (!user || (isCustomer && !isAccountWorkspaceRoute));
   const canManageProfile = hasPermission('profile.manage');
   const canViewUsers = hasPermission('users.view');
   const canReviewRoles = hasPermission('roles.review');
   const canAssignRoles = hasPermission('roles.assign');
   const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? '/profile' : '/';
+  const profileNavLabel = `${formatRoleLabel(activeRole || 'customer')} Profile`;
   const recentNotifications = (notifications || []).slice(0, 5);
-  const workflowNotificationCount = (notifications || []).filter((notification) => (
-    [notification.title, notification.message, notification.link]
-      .join(' ')
-      .toLowerCase()
-      .match(/profile|role|verification|approval|application|switch/)
-  )).length;
+
+  useEffect(() => {
+    setIsNotificationOpen(false);
+  }, [location.pathname]);
+
+  useLayoutEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handlePointerDown = (event) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
+        setIsNotificationOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsNotificationOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const handleLogout = () => {
     logout()
@@ -51,6 +99,8 @@ export default function Layout({ children }) {
       }
     }
 
+    setIsNotificationOpen(false)
+
     if (notification.link) {
       navigate(notification.link)
     }
@@ -63,7 +113,7 @@ export default function Layout({ children }) {
       : ''
 
   return (
-    <>
+    <div className="app-shell">
       <nav className="navbar">
         <div className="container">
           <Link to={logoTarget} className="logo" aria-label="YAMU Car Rental">
@@ -72,8 +122,11 @@ export default function Layout({ children }) {
 
           <div className="nav-links">
             {hasHomePage && <NavLink to="/">Home</NavLink>}
-            {user && !isAdmin && canManageProfile && <NavLink to="/profile">User Profile</NavLink>}
+            {showDiscoverLinks && <NavLink to="/cars">Explore Cars</NavLink>}
+            {showDiscoverLinks && <NavLink to="/drivers">Explore Drivers</NavLink>}
+            {user && !isAdmin && canManageProfile && <NavLink to="/profile">{profileNavLabel}</NavLink>}
             {isDriver && <NavLink to="/driver/ads">Driver Ads</NavLink>}
+            {isStaff && <NavLink to="/staff/vehicles">Store Vehicles</NavLink>}
             {isAdmin && canViewUsers && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
             {isAdmin && <NavLink to="/admin/bookings">Bookings</NavLink>}
           </div>
@@ -81,18 +134,28 @@ export default function Layout({ children }) {
           <div className="nav-auth">
             {user ? (
               <>
-                <div className="nav-notification">
-                  <button type="button" className="nav-notification-trigger">
-                    Alerts
+                <div
+                  ref={notificationRef}
+                  className={`nav-notification${isNotificationOpen ? ' open' : ''}`}
+                >
+                  <button
+                    type="button"
+                    className="nav-notification-trigger"
+                    aria-label="Notifications"
+                    aria-expanded={isNotificationOpen}
+                    aria-controls="nav-notification-panel"
+                    onClick={() => setIsNotificationOpen((current) => !current)}
+                  >
+                    <NotificationBellIcon />
                     {unreadNotificationCount > 0 && (
                       <span className="nav-notification-count">{unreadNotificationCount}</span>
                     )}
                   </button>
-                  <div className="nav-notification-panel">
+                  <div id="nav-notification-panel" className="nav-notification-panel">
                     <div className="nav-notification-header">
                       <div>
                         <strong>Notifications</strong>
-                        <small>{workflowNotificationCount} profile or role updates</small>
+                        <small>{notifications?.length || 0} total notifications</small>
                       </div>
                       {unreadNotificationCount > 0 && (
                         <button type="button" onClick={() => markAllNotificationsRead()}>
@@ -121,7 +184,11 @@ export default function Layout({ children }) {
                     )}
 
                     {canManageProfile && (
-                      <Link to="/profile#notifications" className="nav-notification-footer">
+                      <Link
+                        to="/notifications"
+                        className="nav-notification-footer"
+                        onClick={() => setIsNotificationOpen(false)}
+                      >
                         Open notification center
                       </Link>
                     )}
@@ -132,10 +199,15 @@ export default function Layout({ children }) {
                   <img src={avatarSrc} alt={user.fullName} />
                   <span>{user.fullName?.split(' ')[0]}</span>
                   <div className="nav-user-dropdown">
-                    {canManageProfile && <Link to="/profile">User Profile</Link>}
+                    {showDiscoverLinks && <Link to="/cars">Explore Cars</Link>}
+                    {showDiscoverLinks && <Link to="/drivers">Explore Drivers</Link>}
+                    {canManageProfile && <Link to="/profile">{profileNavLabel}</Link>}
+                    {canManageProfile && <Link to="/notifications">Notifications</Link>}
                     {isCustomer && <Link to="/bookings">My Bookings</Link>}
                     {isDriver && <Link to="/driver/ads">My Driver Ads</Link>}
                     {isDriver && <Link to="/driver/bookings">Booking Requests</Link>}
+                    {isStaff && <Link to="/staff/vehicles">My Vehicles</Link>}
+                    {isStaff && <Link to="/staff/bookings">Vehicle Requests</Link>}
                     {!isAdmin && <Link to="/apply-roles">Role Applications</Link>}
                     <Link to="/switch-roles">Switch Roles</Link>
                     {isAdmin && canViewUsers && <Link to="/admin/dashboard">Overview</Link>}
@@ -157,8 +229,8 @@ export default function Layout({ children }) {
         </div>
       </nav>
 
-      <main>{children}</main>
+      <main className="app-main">{children}</main>
       {showFooter && <Footer />}
-    </>
+    </div>
   )
 }

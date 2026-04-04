@@ -52,6 +52,8 @@ export default function VehicleDetails() {
   })()
 
   const totalAmount = billableDays > 0 ? billableDays * Number(vehicle?.pricePerDay || 0) : 0
+  const isOwnVehicleListing = Boolean(user && vehicle?.owner?._id && String(vehicle.owner._id) === String(user._id))
+  const listedStoreName = vehicle?.owner?.storeName || vehicle?.owner?.fullName || ''
 
   const submitBooking = async (event) => {
     event.preventDefault()
@@ -63,8 +65,13 @@ export default function VehicleDetails() {
       return
     }
 
+    if (isOwnVehicleListing) {
+      setError('You cannot book your own store vehicle listing.')
+      return
+    }
+
     if ((user.activeRole || user.role) !== 'customer') {
-      setError('Switch to the customer role before creating a reservation.')
+      setError('Switch to the user role before creating a reservation.')
       return
     }
 
@@ -187,13 +194,16 @@ export default function VehicleDetails() {
                   <span>Total</span>
                   <strong>{billableDays > 0 ? formatCurrency(totalAmount) : 'Select dates'}</strong>
                 </div>
-                <button className="btn btn-primary btn-block" type="submit" disabled={busy || vehicle.status !== 'available'}>
+                <button className="btn btn-primary btn-block" type="submit" disabled={busy || vehicle.status !== 'available' || isOwnVehicleListing}>
                   {busy ? 'Booking...' : 'Reserve Vehicle'}
                 </button>
               </form>
+              {isOwnVehicleListing && (
+                <p className="reservation-note">This is your own store listing. Booking is disabled.</p>
+              )}
               {(user && (user.activeRole || user.role) !== 'customer') && (
                 <p className="reservation-note">
-                  Need to book as a customer? <Link to="/switch-roles">Switch active role</Link>
+                  Need to book as a user? <Link to="/switch-roles">Switch active role</Link>
                 </p>
               )}
             </aside>
@@ -216,6 +226,7 @@ export default function VehicleDetails() {
                 <div><span>Seats</span><strong>{vehicle.seats}</strong></div>
                 <div><span>Engine</span><strong>{vehicle.engineCapacity || 'Not specified'}</strong></div>
                 <div><span>Location</span><strong>{vehicle.location}</strong></div>
+                <div><span>Listed By</span><strong>{listedStoreName || 'Store pending'}</strong></div>
                 <div><span>Owner Contact</span><strong>{vehicle.ownerContact || 'Available on request'}</strong></div>
                 <div><span>Vehicle ID</span><strong>{vehicle.vehicleCode}</strong></div>
               </div>

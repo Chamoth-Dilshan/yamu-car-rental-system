@@ -1,30 +1,34 @@
 import { NavLink } from 'react-router-dom'
 import { buildUploadUrl } from '../api/config'
 import { useAuth } from '../context/AuthContext'
+import { formatRoleLabel } from '../utils/roles'
 
 const menuItems = {
   customer: [
     { section: 'Account' },
     { to: '/profile', label: 'User Profile', end: true },
+    { to: '/notifications', label: 'Notifications', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
-    { to: '/switch-roles', label: 'Switch Roles', end: true },
-    { section: 'Discover' },
-    { to: '/cars', label: 'Explore Cars', end: true },
-    { to: '/drivers', label: 'Explore Drivers', end: true }
+    { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   driver: [
     { section: 'Driver Workspace' },
     { to: '/driver/ads', label: 'My Driver Ads', end: true },
     { to: '/driver/bookings', label: 'Booking Requests', end: true },
     { section: 'Account' },
-    { to: '/profile', label: 'User Profile', end: true },
+    { to: '/profile', label: 'Driver Profile', end: true },
+    { to: '/notifications', label: 'Notifications', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   staff: [
+    { section: 'Store Workspace' },
+    { to: '/staff/vehicles', label: 'My Vehicles', end: true },
+    { to: '/staff/bookings', label: 'Vehicle Requests', end: true },
     { section: 'Account' },
-    { to: '/profile', label: 'User Profile', end: true },
+    { to: '/profile', label: 'Store Profile', end: true },
+    { to: '/notifications', label: 'Notifications', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
@@ -35,7 +39,8 @@ const menuItems = {
     { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: false },
     { section: 'Account' },
-    { to: '/profile', label: 'User Profile', end: true },
+    { to: '/profile', label: 'Admin Profile', end: true },
+    { to: '/notifications', label: 'Notifications', end: true },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ]
 }
@@ -48,7 +53,7 @@ export default function Sidebar() {
       return true
     }
 
-    if (item.to === '/profile') {
+    if (item.to === '/profile' || item.to === '/notifications') {
       return hasPermission('profile.manage')
     }
 
@@ -75,8 +80,8 @@ export default function Sidebar() {
       <div className="sidebar-user">
         <img src={avatarSrc} alt={user?.fullName} />
         <h4>{user?.fullName}</h4>
-        <span>{user?.activeRole}</span>
-        <small>{user?.primaryRole ? `Primary: ${user.primaryRole}` : 'Primary role pending'}</small>
+        <span>{formatRoleLabel(user?.activeRole)}</span>
+        <small>{user?.primaryRole ? `Primary: ${formatRoleLabel(user.primaryRole)}` : 'Primary role pending'}</small>
       </div>
       <nav className="sidebar-nav">
         {items.map((item) => {

@@ -9,7 +9,7 @@ export const getUserAvatar = (user, fallbackName = 'User') => {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=f0a500&color=0d1b2a&bold=true`
 }
 
-export const getMediaImage = (value, fallbackName = 'Yamu') => {
+export const getMediaImage = (value, fallbackName = 'යමු') => {
   if (value && value !== 'avatar.png') {
     return buildUploadUrl(value)
   }

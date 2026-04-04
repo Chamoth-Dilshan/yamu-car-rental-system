@@ -74,11 +74,15 @@ const validateDateRange = (startDate, endDate) => {
 }
 
 const serializeUserSummary = (user) => {
-  if (!user) {
+  if (!user || typeof user !== 'object') {
     return null
   }
 
   const rawUser = user?.toObject ? user.toObject() : { ...user }
+
+  if (!rawUser._id && !rawUser.fullName && !rawUser.email) {
+    return null
+  }
 
   return {
     _id: rawUser._id,
@@ -86,7 +90,8 @@ const serializeUserSummary = (user) => {
     email: rawUser.email,
     phone: rawUser.phone || '',
     city: rawUser.city || '',
-    profilePic: rawUser.profilePic || 'avatar.png'
+    profilePic: rawUser.profilePic || 'avatar.png',
+    storeName: rawUser.staffProfile?.storeName || ''
   }
 }
 
@@ -111,6 +116,7 @@ const serializeVehicle = (vehicle) => {
     location: rawVehicle.location,
     engineCapacity: rawVehicle.engineCapacity || '',
     ownerContact: rawVehicle.ownerContact || '',
+    owner: serializeUserSummary(rawVehicle.owner),
     description: rawVehicle.description || '',
     features: rawVehicle.features || [],
     images: rawVehicle.images || [],
