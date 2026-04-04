@@ -197,6 +197,69 @@ const seed = async () => {
       ]
     })
 
+    const sahan = await User.create({
+      username: 'sahan',
+      email: 'sahan@example.com',
+      password: '12345',
+      fullName: 'Sahan Wijesinghe',
+      role: 'staff',
+      city: 'Colombo',
+      phone: '0112233445',
+      address: '12 Main Street, Colombo',
+      preferredLanguage: 'English',
+      emergencyContact: {
+        name: 'Ishara Wijesinghe',
+        phone: '0773332221',
+        relationship: 'Sister'
+      },
+      accountStatus: 'active',
+      verificationStatus: 'verified',
+      roles: [
+        buildRoleAssignment('customer'),
+        buildRoleAssignment('staff', { roleStatus: 'active', verificationStatus: 'verified', isPrimary: true })
+      ],
+      staffProfile: {
+        storeName: 'CityLine Rentals',
+        storeOwner: 'Sahan Wijesinghe',
+        businessRegistrationNumber: 'BR-2026-002',
+        storeAddress: '12 Main Street, Colombo',
+        storeContactNumber: '0112233445',
+        storeEmail: 'sahan@example.com',
+        documents: {
+          businessRegistrationProof: {
+            reference: 'BR-SHN-2026',
+            status: 'verified',
+            note: 'Seeded document metadata'
+          }
+        }
+      },
+      providerApplications: [
+        {
+          roleKey: 'staff',
+          status: 'approved',
+          submittedAt: new Date('2026-02-11'),
+          reviewedAt: new Date('2026-02-13'),
+          reviewedBy: admin._id,
+          applicationData: {
+            storeName: 'CityLine Rentals',
+            businessRegistrationNumber: 'BR-2026-002',
+            storeAddress: '12 Main Street, Colombo',
+            storeContactNumber: '0112233445',
+            storeEmail: 'sahan@example.com'
+          }
+        }
+      ],
+      notifications: [
+        buildSeedNotification(
+          'booking',
+          'New vehicle booking request',
+          'Alex Perera created booking BOOK80280 for Audi Q8.',
+          '/staff/bookings',
+          '2026-03-20T10:05:00.000Z'
+        )
+      ]
+    })
+
     await User.create({
       username: 'kasun',
       email: 'kasun@example.com',
@@ -397,7 +460,7 @@ const seed = async () => {
 
     const [nissanKicks, wagonR, audiQ8] = await Vehicle.create([
       {
-        owner: alex._id,
+        owner: sahan._id,
         vehicleCode: 'CAR-1005',
         name: 'Nissan Kicks',
         brand: 'Nissan',
@@ -418,7 +481,7 @@ const seed = async () => {
         featured: true
       },
       {
-        owner: alex._id,
+        owner: sahan._id,
         vehicleCode: 'CAR-1001',
         name: 'Maruti Suzuki Wagon R',
         brand: 'Maruti Suzuki',
@@ -439,7 +502,7 @@ const seed = async () => {
         featured: true
       },
       {
-        owner: alex._id,
+        owner: sahan._id,
         vehicleCode: 'CAR-1003',
         name: 'Audi Q8',
         brand: 'Audi',
@@ -460,7 +523,7 @@ const seed = async () => {
         featured: true
       },
       {
-        owner: alex._id,
+        owner: sahan._id,
         vehicleCode: 'CAR-1010',
         name: 'Honda Vezel',
         brand: 'Honda',
@@ -671,6 +734,7 @@ const seed = async () => {
     console.log('Seed complete')
     console.log('Admin: admin@example.com / 12345')
     console.log('Customer with vehicle bookings: alex@example.com / 12345')
+    console.log('Store workspace demo: sahan@example.com / 12345')
     console.log('Driver: nadeesha@example.com / 12345')
     console.log('Customer with driver requests: deshan@example.com / 12345')
     console.log('Pending driver applicant: kasun@example.com / 12345')

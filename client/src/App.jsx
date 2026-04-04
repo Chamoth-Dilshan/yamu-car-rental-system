@@ -21,6 +21,16 @@ import DriverBookings from './pages/DriverBookings'
 import StaffVehicleList from './pages/StaffVehicleList'
 import StaffVehicleForm from './pages/StaffVehicleForm'
 import StaffVehicleBookings from './pages/StaffVehicleBookings'
+import { useAuth } from './context/AuthContext'
+import { getProfilePathForRole } from './utils/roles'
+
+function ProfileEntryRedirect() {
+  const { user } = useAuth()
+  const activeRole = user?.activeRole || user?.role
+  const target = getProfilePathForRole(activeRole)
+
+  return <Navigate to={target} replace />
+}
 
 export default function App() {
   return (
@@ -34,7 +44,8 @@ export default function App() {
         <Route path="/signin" element={<SignIn />} />
         <Route path="/admin/signin" element={<Navigate to="/signin" replace />} />
         <Route path="/signup" element={<SignUp />} />
-        <Route path="/account" element={<Navigate to="/profile" replace />} />
+        <Route path="/account" element={<ProfileEntryRedirect />} />
+        <Route path="/profile" element={<ProfileEntryRedirect />} />
         <Route
           path="/bookings"
           element={(
@@ -44,7 +55,7 @@ export default function App() {
           )}
         />
         <Route
-          path="/profile"
+          path="/profile/*"
           element={(
             <ProtectedRoute permissions={['profile.manage']}>
               <Profile />

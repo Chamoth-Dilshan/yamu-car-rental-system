@@ -14,19 +14,6 @@ export default function SignUp() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const getPostLoginRoute = (nextUser) => {
-    const nextRole = nextUser.activeRole || nextUser.role;
-
-    if (nextRole === 'admin') {
-      return '/admin/dashboard';
-    }
-
-    if (nextRole === 'customer') {
-      return '/';
-    }
-
-    return '/profile';
-  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -40,13 +27,18 @@ export default function SignUp() {
     setError('');
 
     try {
-      const nextUser = await register({
+      const result = await register({
         fullName: form.fullName,
         username: form.username,
         email: form.email,
         password: form.password
       });
-      navigate(getPostLoginRoute(nextUser));
+      navigate('/signin', {
+        state: {
+          message: result?.message || 'Registration submitted. Wait for admin approval before signing in.'
+        },
+        replace: true
+      });
     } catch (err) {
       setError(err.response?.data?.message || 'Registration failed');
     } finally {

@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import API from '../api/axios';
 import { buildUploadUrl } from '../api/config';
@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 import { formatDateTime } from '../utils/formatters';
 import { isRoleManagementNotification } from '../utils/notifications';
-import { formatRoleLabel } from '../utils/roles';
+import { formatRoleLabel, getProfilePathForRole } from '../utils/roles';
 
 const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
 const blockedApplicationStatuses = ['suspended', 'deactivated'];
@@ -88,6 +88,8 @@ export default function Profile() {
     notifications,
     refreshNotifications
   } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState({
     fullName: '',
     username: '',
@@ -121,11 +123,6 @@ export default function Profile() {
     storeEmail: '',
     documents: createStaffDocumentsDraft()
   });
-  const [adminProfile, setAdminProfile] = useState({
-    accessScope: '',
-    controlNotes: ''
-  });
-  const [profilePic, setProfilePic] = useState(null);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyAction, setBusyAction] = useState('');
@@ -180,11 +177,6 @@ export default function Profile() {
       storeContactNumber: user.staffProfile?.storeContactNumber || '',
       storeEmail: user.staffProfile?.storeEmail || '',
       documents: createStaffDocumentsDraft(user.staffProfile?.documents || {})
-    });
-
-    setAdminProfile({
-      accessScope: user.adminProfile?.accessScope || '',
-      controlNotes: user.adminProfile?.controlNotes || ''
     });
   }, [user]);
 
@@ -250,16 +242,11 @@ export default function Profile() {
         }
       });
 
-      if (profilePic) {
-        formData.append('profilePic', profilePic);
-      }
-
       const res = await API.put('/users/profile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setUser(res.data);
       setProfile((prev) => ({ ...prev, currentPassword: '', password: '' }));
-      setProfilePic(null);
       setIsEditMode(false);
       setMessage('User profile updated successfully');
     } catch (err) {
@@ -351,14 +338,57 @@ export default function Profile() {
     hasDocumentReference(staffProfile.documents.businessRegistrationDocument),
     hasDocumentReference(staffProfile.documents.proofOfAddressDocument)
   ]);
-  const currentRoleProfileLabel = `${roleLabel(activeRoleKey)} Profile`;
-  const showCommonProfile = !['driver', 'staff'].includes(activeRoleKey);
-  const heroPrimaryProfileHref = showCommonProfile
-    ? '#common-profile'
-    : activeRoleKey === 'driver'
-      ? '#driver-role'
-      : '#staff-role';
-  const heroPrimaryProfileLabel = showCommonProfile ? 'User Profile' : currentRoleProfileLabel;
+  const defaultProfileSection = activeRoleKey === 'driver'
+    ? 'driver'
+    : activeRoleKey === 'staff'
+      ? 'store'
+      : activeRoleKey === 'admin'
+        ? 'admin'
+        : 'user';
+  const pathSection = location.pathname.startsWith('/profile/')
+    ? location.pathname.split('/')[2] || ''
+    : '';
+  const selectedProfileSection = ['user', 'driver', 'store', 'admin'].includes(pathSection)
+    ? pathSection
+    : defaultProfileSection;
+  const profileTabs = [
+    ...(activeRoleKey === 'customer' ? [{ key: 'user', to: '/profile/user', label: 'User Profile' }] : []),
+    ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driver', label: 'Driver Profile' }] : []),
+    ...(['customer', 'staff'].includes(activeRoleKey) ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
+    ...(activeRoleKey === 'admin' ? [{ key: 'admin', to: '/profile/admin', label: 'Admin Profile' }] : [])
+  ];
+  const availableProfileSections = profileTabs.map((tab) => tab.key);
+  const resolvedProfileSection = availableProfileSections.includes(selectedProfileSection)
+    ? selectedProfileSection
+    : defaultProfileSection;
+  const selectedProfileLabel = resolvedProfileSection === 'driver'
+    ? 'Driver Profile'
+    : resolvedProfileSection === 'store'
+      ? 'Store Profile'
+      : resolvedProfileSection === 'admin'
+        ? 'Admin Profile'
+        : 'User Profile';
+  const profileHeroName = resolvedProfileSection === 'store'
+    ? staffProfile.storeName || user?.staffProfile?.storeName || user?.fullName
+    : user?.fullName;
+  const showUserProfile = resolvedProfileSection === 'user';
+  const showDriverProfile = ['customer', 'driver'].includes(activeRoleKey) && resolvedProfileSection === 'driver';
+  const showStaffProfile = ['customer', 'staff'].includes(activeRoleKey) && resolvedProfileSection === 'store';
+  const showAdminProfile = activeRoleKey === 'admin' && resolvedProfileSection === 'admin';
+  const showProfileTabs = profileTabs.length > 1;
+  const showRoleSwitcher = activeRoleKey !== 'admin';
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const targetProfilePath = getProfilePathForRole(resolvedProfileSection);
+
+    if (location.pathname !== targetProfilePath) {
+      navigate(targetProfilePath, { replace: true });
+    }
+  }, [location.pathname, navigate, resolvedProfileSection, user]);
 
   const handleRoleSwitch = async (roleKey) => {
     if (!roleKey || roleKey === activeRoleKey) {
@@ -549,8 +579,8 @@ export default function Profile() {
             <div className="profile-hero-identity">
               <img className="profile-hero-avatar" src={avatarSrc} alt={user?.fullName} />
               <div className="profile-hero-copy">
-                <span className="profile-hero-kicker">{currentRoleProfileLabel}</span>
-                <h2>{user?.fullName}</h2>
+                <span className="profile-hero-kicker">{selectedProfileLabel}</span>
+                <h2>{profileHeroName}</h2>
                 <p>{user?.email}</p>
                 <div className="profile-hero-meta">
                   <span className="badge badge-info">Active role: {roleLabel(user?.activeRole || 'customer')}</span>
@@ -572,67 +602,83 @@ export default function Profile() {
                 <p>{pendingApplicationsCount} pending role request(s) and {unreadManagedNotificationsCount} unread workflow notification(s).</p>
               </div>
 
-              <div className="profile-hero-actions">
-                <a className="btn btn-primary btn-sm" href={heroPrimaryProfileHref}>{heroPrimaryProfileLabel}</a>
-                <div className={`profile-role-switcher${isRoleMenuOpen ? ' open' : ''}`} ref={roleMenuRef}>
-                  <button
-                    className="btn btn-outline btn-sm profile-role-trigger"
-                    type="button"
-                    onClick={() => setIsRoleMenuOpen((prev) => !prev)}
-                    aria-haspopup="menu"
-                    aria-expanded={isRoleMenuOpen}
-                    disabled={Boolean(switchingRole)}
-                  >
-                    <span>{switchingRole ? 'Switching...' : 'Switch Roles'}</span>
-                    <span className="profile-role-trigger-icon" aria-hidden="true">v</span>
-                  </button>
-
-                  <div className="profile-role-menu" role="menu" aria-label="Available roles">
-                    {switchableRoles.length > 0 ? switchableRoles.map((roleItem) => {
-                      const isCurrentRole = roleItem.roleKey === activeRoleKey;
-                      const isSwitchingThisRole = switchingRole === roleItem.roleKey;
-
-                      return (
-                        <button
-                          key={roleItem.roleKey}
-                          className={`profile-role-menu-item${isCurrentRole ? ' active' : ''}`}
-                          type="button"
-                          role="menuitem"
-                          onClick={() => handleRoleSwitch(roleItem.roleKey)}
-                          disabled={isCurrentRole || Boolean(switchingRole)}
+              {(showProfileTabs || showRoleSwitcher) && (
+                <div className="profile-hero-actions">
+                  {showProfileTabs && (
+                    <div className="profile-section-nav" aria-label="Profile sections">
+                      {profileTabs.map((tab) => (
+                        <Link
+                          key={tab.key}
+                          to={tab.to}
+                          className={resolvedProfileSection === tab.key ? 'active' : ''}
                         >
-                          <span>{roleLabel(roleItem.roleKey)}</span>
-                          <small>
-                            {isCurrentRole
-                              ? 'Current role'
-                              : isSwitchingThisRole
-                                ? 'Switching now...'
-                                : roleItem.isPrimary
-                                  ? 'Primary role'
-                                  : 'Available to switch'}
-                          </small>
-                        </button>
-                      );
-                    }) : (
-                      <div className="profile-role-menu-empty">No verified roles available to switch.</div>
-                    )}
-                  </div>
+                          {tab.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                  {showRoleSwitcher && (
+                    <div className={`profile-role-switcher${isRoleMenuOpen ? ' open' : ''}`} ref={roleMenuRef}>
+                      <button
+                        className="btn btn-outline btn-sm profile-role-trigger"
+                        type="button"
+                        onClick={() => setIsRoleMenuOpen((prev) => !prev)}
+                        aria-haspopup="menu"
+                        aria-expanded={isRoleMenuOpen}
+                        disabled={Boolean(switchingRole)}
+                      >
+                        <span>{switchingRole ? 'Switching...' : 'Switch Roles'}</span>
+                        <span className="profile-role-trigger-icon" aria-hidden="true">v</span>
+                      </button>
+
+                      <div className="profile-role-menu" role="menu" aria-label="Available roles">
+                        {switchableRoles.length > 0 ? switchableRoles.map((roleItem) => {
+                          const isCurrentRole = roleItem.roleKey === activeRoleKey;
+                          const isSwitchingThisRole = switchingRole === roleItem.roleKey;
+
+                          return (
+                            <button
+                              key={roleItem.roleKey}
+                              className={`profile-role-menu-item${isCurrentRole ? ' active' : ''}`}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => handleRoleSwitch(roleItem.roleKey)}
+                              disabled={isCurrentRole || Boolean(switchingRole)}
+                            >
+                              <span>{roleLabel(roleItem.roleKey)}</span>
+                              <small>
+                                {isCurrentRole
+                                  ? 'Current role'
+                                  : isSwitchingThisRole
+                                    ? 'Switching now...'
+                                    : roleItem.isPrimary
+                                      ? 'Primary role'
+                                      : 'Available to switch'}
+                              </small>
+                            </button>
+                          );
+                        }) : (
+                          <div className="profile-role-menu-empty">No verified roles available to switch.</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </section>
 
         {(driverApplication?.status === 'pending' || staffApplication?.status === 'pending') && (
           <div className="alert alert-info">
-            A role application is waiting for admin review. You can keep the driver or store profile details updated while it is pending.
+            A role application is waiting for admin review. Use Role Applications to review the role details and any admin feedback.
           </div>
         )}
 
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-danger">{error}</div>}
 
-        {showCommonProfile && (
+        {showUserProfile && (
           <div id="common-profile" className="form-card profile-section-card" style={{ marginBottom: '1.5rem' }}>
             <div className="profile-section-heading">
               <div>
@@ -737,10 +783,6 @@ export default function Profile() {
                   <input disabled={!isEditMode} type="password" value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
                 </div>
               </div>
-              <div className="form-group">
-                <label>Profile Picture</label>
-                <input disabled={!isEditMode} type="file" accept="image/*" onChange={(e) => setProfilePic(e.target.files?.[0] || null)} />
-              </div>
               <div className="profile-form-actions">
                 <button className="btn btn-primary" type="submit" disabled={busyAction === 'basic' || !isEditMode}>
                   {busyAction === 'basic' ? 'Saving...' : 'Save User Profile'}
@@ -750,7 +792,7 @@ export default function Profile() {
           </div>
         )}
 
-        {(activeRoleKey === 'driver' || activeRoleKey === 'customer') && (
+        {showDriverProfile && (
           <div id="driver-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
             <div className="profile-section-heading">
               <div>
@@ -920,7 +962,7 @@ export default function Profile() {
           </div>
         )}
 
-        {(activeRoleKey === 'staff' || activeRoleKey === 'customer') && (
+        {showStaffProfile && (
           <div id="staff-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
             <div className="profile-section-heading">
               <div>
@@ -930,35 +972,6 @@ export default function Profile() {
               <span className={getBadgeClass(staffOnboardingState.tone)}>{staffOnboardingState.stateLabel}</span>
             </div>
 
-            <div className="role-onboarding-summary-grid">
-              <div className="admin-data-item">
-                <span>Readiness</span>
-                <strong>{staffOnboardingState.readinessPercent}%</strong>
-              </div>
-              <div className="admin-data-item">
-                <span>Role status</span>
-                <strong>{formatStatusLabel(staffRole?.roleStatus || 'not_assigned')}</strong>
-              </div>
-              <div className="admin-data-item">
-                <span>Verification</span>
-                <strong>{formatStatusLabel(staffRole?.verificationStatus || 'unverified')}</strong>
-              </div>
-              <div className="admin-data-item">
-                <span>Application</span>
-                <strong>{formatStatusLabel(staffApplication?.status || 'not_submitted')}</strong>
-              </div>
-            </div>
-
-            <div className={`profile-next-step profile-next-step-${staffOnboardingState.tone}`}>
-              <strong>{staffOnboardingState.helperTitle}</strong>
-              <p>{staffOnboardingState.helperText}</p>
-            </div>
-
-            <div className="pill-row profile-panel-pills">
-              <span className="badge badge-info">Role status: {staffRole?.roleStatus || 'not assigned'}</span>
-              <span className="badge badge-warning">Verification: {staffRole?.verificationStatus || 'unverified'}</span>
-              <span className="badge badge-success">Application: {staffApplication?.status || 'not submitted'}</span>
-            </div>
             {staffApplication?.rejectionReason && (
               <div className="alert alert-warning">Admin note: {staffApplication.rejectionReason}</div>
             )}
@@ -1018,7 +1031,6 @@ export default function Profile() {
                   />
                 </div>
               </div>
-              {renderDocumentMeta(staffProfile.documents.businessRegistrationDocument)}
               <div className="form-row" style={{ marginTop: '1rem' }}>
                 <div className="form-group">
                   <label>Proof of Address File Name</label>
@@ -1037,7 +1049,6 @@ export default function Profile() {
                   />
                 </div>
               </div>
-              {renderDocumentMeta(staffProfile.documents.proofOfAddressDocument)}
               <div className="profile-form-actions">
                 {staffRole && (
                   <button className="btn btn-secondary" type="submit" disabled={busyAction === 'staff' || staffProfileBlocked}>
@@ -1046,57 +1057,117 @@ export default function Profile() {
                 )}
               </div>
             </form>
-            {customerRole && !staffApplicationBlocked && (
-              <div className="profile-form-actions">
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  disabled={
-                    busyAction === 'apply-staff'
-                    || staffApplication?.status === 'pending'
-                    || (staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified')
-                  }
-                  onClick={() => submitProviderApplication('staff', staffProfile)}
-                >
-                  {busyAction === 'apply-staff'
-                    ? 'Submitting...'
-                    : staffApplication?.status === 'pending'
-                      ? 'Store Application Pending'
-                      : staffApplication?.status === 'rejected'
-                        ? 'Re-apply for Store Role'
-                        : staffRole?.roleStatus === 'active' && staffRole?.verificationStatus === 'verified'
-                          ? 'Store Role Approved'
-                          : 'Apply for Store Role'}
-                </button>
-              </div>
-            )}
           </div>
         )}
 
-        {activeRoleKey === 'admin' && adminRole && (
+        {showAdminProfile && adminRole && (
           <div id="admin-profile" className="form-card profile-section-card">
             <div className="profile-section-heading">
               <div>
                 <h3>Admin Profile</h3>
-                <p>Reserved for seeded administrators and internal control notes.</p>
+                <p>Update your admin account details here.</p>
               </div>
+              <label className="profile-edit-toggle">
+                <input
+                  type="checkbox"
+                  checked={isEditMode}
+                  onChange={(e) => setIsEditMode(e.target.checked)}
+                />
+                <span>Edit Mode</span>
+              </label>
             </div>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              saveRoleProfile('/users/admin-profile', adminProfile, 'Admin profile updated successfully', 'admin');
-            }}
-            >
-              <div className="form-group">
-                <label>Access Scope</label>
-                <input value={adminProfile.accessScope} onChange={(e) => setAdminProfile((prev) => ({ ...prev, accessScope: e.target.value }))} />
+            <form onSubmit={saveBasicProfile}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input disabled={!isEditMode} value={profile.fullName} onChange={(e) => setProfile((prev) => ({ ...prev, fullName: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Username</label>
+                  <input disabled={!isEditMode} value={profile.username} onChange={(e) => setProfile((prev) => ({ ...prev, username: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Email</label>
+                  <input disabled={!isEditMode} type="email" value={profile.email} onChange={(e) => setProfile((prev) => ({ ...prev, email: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input disabled={!isEditMode} value={profile.phone} onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>City</label>
+                  <input disabled={!isEditMode} value={profile.city} onChange={(e) => setProfile((prev) => ({ ...prev, city: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Date of Birth</label>
+                  <input disabled={!isEditMode} type="date" value={profile.dob} onChange={(e) => setProfile((prev) => ({ ...prev, dob: e.target.value }))} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Preferred Language</label>
+                  <select
+                    disabled={!isEditMode}
+                    value={profile.preferredLanguage}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, preferredLanguage: e.target.value }))}
+                  >
+                    <option value="English">English</option>
+                    <option value="Sinhala">Sinhala</option>
+                    <option value="Tamil">Tamil</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Emergency Contact Name</label>
+                  <input
+                    disabled={!isEditMode}
+                    value={profile.emergencyContactName}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactName: e.target.value }))}
+                  />
+                </div>
               </div>
               <div className="form-group">
-                <label>Control Notes</label>
-                <textarea rows="4" value={adminProfile.controlNotes} onChange={(e) => setAdminProfile((prev) => ({ ...prev, controlNotes: e.target.value }))} />
+                <label>Address</label>
+                <input disabled={!isEditMode} value={profile.address} onChange={(e) => setProfile((prev) => ({ ...prev, address: e.target.value }))} />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Emergency Contact Phone</label>
+                  <input
+                    disabled={!isEditMode}
+                    value={profile.emergencyContactPhone}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactPhone: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Relationship</label>
+                  <input
+                    disabled={!isEditMode}
+                    value={profile.emergencyContactRelationship}
+                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactRelationship: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Bio</label>
+                  <textarea disabled={!isEditMode} rows="3" value={profile.bio} onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Current Password</label>
+                  <input disabled={!isEditMode} type="password" value={profile.currentPassword} onChange={(e) => setProfile((prev) => ({ ...prev, currentPassword: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>New Password</label>
+                  <input disabled={!isEditMode} type="password" value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                </div>
               </div>
               <div className="profile-form-actions">
-                <button className="btn btn-primary" type="submit" disabled={busyAction === 'admin'}>
-                  {busyAction === 'admin' ? 'Saving...' : 'Save Admin Profile'}
+                <button className="btn btn-primary" type="submit" disabled={busyAction === 'basic' || !isEditMode}>
+                  {busyAction === 'basic' ? 'Saving...' : 'Save Admin Profile'}
                 </button>
               </div>
             </form>

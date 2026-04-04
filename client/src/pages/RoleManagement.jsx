@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
-import { formatRoleLabel } from '../utils/roles';
+import { formatRoleLabel, getProfilePathForRole } from '../utils/roles';
 
 const usableStatuses = ['active'];
 
@@ -90,6 +90,7 @@ export default function RoleManagement() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loadingRole, setLoadingRole] = useState('');
+  const profileHubPath = getProfilePathForRole(user?.activeRole || user?.role);
 
   const roles = user?.roles || [];
   const switchableRoles = useMemo(
@@ -126,7 +127,7 @@ export default function RoleManagement() {
                 Review which roles are ready, which ones still need approval, and what will change before you switch.
               </p>
               <div className="profile-hero-actions">
-                <Link className="btn btn-primary btn-sm" to="/profile">Open Profile Hub</Link>
+                <Link className="btn btn-primary btn-sm" to={profileHubPath}>Open Profile Hub</Link>
                 <Link className="btn btn-outline btn-sm" to="/apply-roles">Open Role Requests</Link>
               </div>
             </div>

@@ -5,6 +5,20 @@ const ROLE_LABELS = {
   admin: 'Admin'
 };
 
+export const getProfilePathForRole = (role = '') => {
+  switch (role) {
+    case 'driver':
+      return '/profile/driver';
+    case 'store':
+    case 'staff':
+      return '/profile/store';
+    case 'admin':
+      return '/profile/admin';
+    default:
+      return '/profile/user';
+  }
+};
+
 export const formatRoleLabel = (value = '') => {
   const normalized = String(value || '').trim();
 

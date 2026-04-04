@@ -1,6 +1,7 @@
 const Vehicle = require('../models/Vehicle')
 const Booking = require('../models/Booking')
 const { sendServerError } = require('../utils/errorResponses')
+const { canUseRole, getRoleAssignment } = require('../utils/roleHelpers')
 const { serializeVehicle, VEHICLE_STATUSES, parseListField } = require('../utils/reservationHelpers')
 
 const DISTRICT_LOCATION_ALIASES = {
@@ -36,6 +37,31 @@ const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const vehicleSummaryPopulate = {
   path: 'owner',
   select: 'fullName email phone city profilePic staffProfile.storeName'
+}
+
+const publicVehiclePopulate = {
+  path: 'owner',
+  select: 'fullName email phone city profilePic staffProfile.storeName accountStatus roles',
+  match: {
+    accountStatus: 'active',
+    roles: {
+      $elemMatch: {
+        roleKey: 'staff',
+        roleStatus: 'active',
+        verificationStatus: 'verified'
+      }
+    }
+  }
+}
+
+const hasBookableStoreOwner = (vehicle) => {
+  const owner = vehicle?.owner
+
+  if (!owner || owner.accountStatus !== 'active') {
+    return false
+  }
+
+  return canUseRole(getRoleAssignment(owner, 'staff'))
 }
 
 const generateVehicleCode = async () => {
@@ -140,7 +166,7 @@ const buildVehicleStats = (vehicles) => ({
 const getVehicles = async (req, res) => {
   try {
     const { search = '', status, district, featured, limit } = req.query
-    const query = { owner: { $ne: null } }
+    const query = {}
 
     if (status && status !== 'all') {
       query.status = status
@@ -168,14 +194,14 @@ const getVehicles = async (req, res) => {
     }
 
     const vehicleQuery = Vehicle.find(query)
-      .populate(vehicleSummaryPopulate)
+      .populate(publicVehiclePopulate)
       .sort({ featured: -1, createdAt: -1 })
 
     if (limit) {
       vehicleQuery.limit(Number(limit))
     }
 
-    const vehicles = await vehicleQuery
+    const vehicles = (await vehicleQuery).filter(hasBookableStoreOwner)
 
     res.json({
       vehicles: vehicles.map(serializeVehicle)
@@ -187,10 +213,10 @@ const getVehicles = async (req, res) => {
 
 const getVehicleById = async (req, res) => {
   try {
-    const vehicle = await Vehicle.findById(req.params.id).populate(vehicleSummaryPopulate)
+    const vehicle = await Vehicle.findById(req.params.id).populate(publicVehiclePopulate)
 
-    if (!vehicle || !vehicle.owner) {
-      return res.status(404).json({ message: 'Vehicle not found' })
+    if (!vehicle || !hasBookableStoreOwner(vehicle)) {
+      return res.status(404).json({ message: 'Vehicle not found or no longer available for booking' })
     }
 
     res.json(serializeVehicle(vehicle))

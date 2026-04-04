@@ -23,8 +23,12 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ message: 'User not found' });
       }
 
-      if (['suspended', 'deactivated'].includes(user.accountStatus)) {
-        return res.status(403).json({ message: 'Your account is suspended or deactivated' });
+      if (user.accountStatus !== 'active') {
+        return res.status(403).json({
+          message: user.accountStatus === 'pending'
+            ? 'Your account is pending admin approval'
+            : 'Your account is not active'
+        });
       }
 
       syncUserRoles(user);
