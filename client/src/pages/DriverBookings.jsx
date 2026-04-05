@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import API from '../api/axios'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
+import { confirmBookingStatusChange } from '../utils/confirmations'
 import { formatCurrency, formatDateRange, getBadgeClass } from '../utils/formatters'
 
 export default function DriverBookings() {
@@ -32,6 +33,17 @@ export default function DriverBookings() {
   }, [filters, reloadKey])
 
   const updateStatus = async (bookingId, bookingStatus) => {
+    const targetBooking = bookings.find((item) => item._id === bookingId)
+    const actionLabel = bookingStatus === 'confirmed'
+      ? 'confirm'
+      : bookingStatus === 'completed'
+        ? 'complete'
+        : 'cancel'
+
+    if (!confirmBookingStatusChange(targetBooking?.bookingNo || 'this request', actionLabel)) {
+      return
+    }
+
     const actionKey = `${bookingId}-${bookingStatus}`
     setBusyAction(actionKey)
     setMessage('')

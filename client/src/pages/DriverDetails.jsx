@@ -4,6 +4,7 @@ import API from '../api/axios'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, formatList, getBadgeClass } from '../utils/formatters'
 import { getMediaImage, getUserAvatar } from '../utils/media'
+import { getTodayDateInputValue, trimValue, validateReservationForm } from '../utils/validators'
 
 export default function DriverDetails() {
   const { id } = useParams()
@@ -22,6 +23,7 @@ export default function DriverDetails() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const isOwnDriverAd = Boolean(user && ad?.driver?._id && String(ad.driver._id) === String(user._id))
+  const todayDate = getTodayDateInputValue()
 
   useEffect(() => {
     setLoading(true)
@@ -53,12 +55,22 @@ export default function DriverDetails() {
       return
     }
 
+    const validationError = validateReservationForm(form)
+
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
     setBusy(true)
 
     try {
       await API.post('/bookings/driver', {
         driverAdId: ad._id,
-        ...form
+        ...form,
+        pickupLocation: trimValue(form.pickupLocation),
+        destination: trimValue(form.destination),
+        notes: trimValue(form.notes)
       })
       await refreshNotifications().catch(() => {})
       setMessage('Driver request sent successfully. You can follow it from My Bookings.')
@@ -173,6 +185,7 @@ export default function DriverDetails() {
                       <label>Start Date</label>
                       <input
                         type="date"
+                        min={todayDate}
                         value={form.startDate}
                         onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))}
                         required
@@ -182,6 +195,7 @@ export default function DriverDetails() {
                       <label>End Date</label>
                       <input
                         type="date"
+                        min={form.startDate || todayDate}
                         value={form.endDate}
                         onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))}
                         required

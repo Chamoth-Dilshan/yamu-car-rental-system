@@ -4,6 +4,7 @@ import API from '../api/axios'
 import { buildUploadUrl } from '../api/config'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
+import { validateVehicleListingForm } from '../utils/validators'
 
 const emptyForm = {
   name: '',
@@ -85,6 +86,18 @@ export default function StaffVehicleForm() {
 
   const submitForm = async (event) => {
     event.preventDefault()
+    const validationError = validateVehicleListingForm(form, {
+      isEditMode,
+      currentImages,
+      imageFiles
+    })
+
+    if (validationError) {
+      setError(validationError)
+      setMessage('')
+      return
+    }
+
     setBusy(true)
     setMessage('')
     setError('')

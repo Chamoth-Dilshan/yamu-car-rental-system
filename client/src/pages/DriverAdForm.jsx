@@ -4,6 +4,7 @@ import API from '../api/axios'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
 import { getMediaImage, getUserAvatar } from '../utils/media'
+import { validateDriverAdInput } from '../utils/validators'
 
 const emptyForm = {
   title: '',
@@ -77,6 +78,14 @@ export default function DriverAdForm() {
 
   const submitForm = async (event) => {
     event.preventDefault()
+    const validationError = validateDriverAdInput(form, { photoFile })
+
+    if (validationError) {
+      setError(validationError)
+      setMessage('')
+      return
+    }
+
     setBusy(true)
     setMessage('')
     setError('')

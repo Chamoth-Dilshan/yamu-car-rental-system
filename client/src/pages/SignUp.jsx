@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { trimValue, validateSignUpForm } from '../utils/validators';
 
 export default function SignUp() {
   const { register } = useAuth();
@@ -17,9 +18,10 @@ export default function SignUp() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const validationError = validateSignUpForm(form);
 
-    if (form.password !== form.confirmPassword) {
-      setError('Passwords do not match');
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -28,9 +30,9 @@ export default function SignUp() {
 
     try {
       const result = await register({
-        fullName: form.fullName,
-        username: form.username,
-        email: form.email,
+        fullName: trimValue(form.fullName),
+        username: trimValue(form.username),
+        email: trimValue(form.email),
         password: form.password
       });
       navigate('/signin', {

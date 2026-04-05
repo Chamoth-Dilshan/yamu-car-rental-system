@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import API from '../api/axios'
 import Sidebar from '../components/Sidebar'
 import { useAuth } from '../context/AuthContext'
+import { confirmBookingStatusChange, confirmPaymentUpdate } from '../utils/confirmations'
 import { formatCurrency, formatDateRange, getBadgeClass } from '../utils/formatters'
 
 export default function MyBookings() {
@@ -155,12 +156,18 @@ export default function MyBookings() {
                               className="btn btn-secondary btn-sm"
                               type="button"
                               disabled={busyAction === `pay-${booking._id}`}
-                              onClick={() => updateBooking(
-                                `/bookings/${booking._id}/payment`,
-                                { paymentStatus: 'paid' },
-                                'Payment marked as paid',
-                                `pay-${booking._id}`
-                              )}
+                              onClick={() => {
+                                if (!confirmPaymentUpdate(booking.bookingNo)) {
+                                  return
+                                }
+
+                                updateBooking(
+                                  `/bookings/${booking._id}/payment`,
+                                  { paymentStatus: 'paid' },
+                                  'Payment marked as paid',
+                                  `pay-${booking._id}`
+                                )
+                              }}
                             >
                               {busyAction === `pay-${booking._id}` ? 'Saving...' : 'Mark Paid'}
                             </button>
@@ -170,12 +177,18 @@ export default function MyBookings() {
                               className="btn btn-danger btn-sm"
                               type="button"
                               disabled={busyAction === `cancel-${booking._id}`}
-                              onClick={() => updateBooking(
-                                `/bookings/${booking._id}/cancel`,
-                                {},
-                                'Booking cancelled',
-                                `cancel-${booking._id}`
-                              )}
+                              onClick={() => {
+                                if (!confirmBookingStatusChange(booking.bookingNo, 'cancel')) {
+                                  return
+                                }
+
+                                updateBooking(
+                                  `/bookings/${booking._id}/cancel`,
+                                  {},
+                                  'Booking cancelled',
+                                  `cancel-${booking._id}`
+                                )
+                              }}
                             >
                               {busyAction === `cancel-${booking._id}` ? 'Cancelling...' : 'Cancel'}
                             </button>

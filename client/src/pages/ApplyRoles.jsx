@@ -5,6 +5,10 @@ import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { formatDateTime } from '../utils/formatters';
 import { formatRoleLabel, getProfilePathForRole } from '../utils/roles';
+import {
+  validateDriverApplicationPayload,
+  validateStaffApplicationPayload
+} from '../utils/validators';
 
 const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
 const blockedApplicationStatuses = ['suspended', 'deactivated'];
@@ -209,6 +213,16 @@ export default function ApplyRoles() {
   };
 
   const submitProviderApplication = async (roleKey, payload) => {
+    const validationError = roleKey === 'driver'
+      ? validateDriverApplicationPayload(payload)
+      : validateStaffApplicationPayload(payload);
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
     setBusyAction(`apply-${roleKey}`);
     setMessage('');
     setError('');

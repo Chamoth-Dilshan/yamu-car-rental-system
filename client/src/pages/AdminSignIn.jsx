@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { trimValue, validateSignInForm } from '../utils/validators';
 
 export default function AdminSignIn() {
   const { login, logout, switchRole } = useAuth();
@@ -11,11 +12,18 @@ export default function AdminSignIn() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const validationError = validateSignInForm(form);
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      const nextUser = await login(form.email, form.password);
+      const nextUser = await login(trimValue(form.email), form.password);
       const nextRole = nextUser.activeRole || nextUser.role;
 
       if (nextRole === 'admin') {

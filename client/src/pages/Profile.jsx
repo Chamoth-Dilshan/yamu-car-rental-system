@@ -7,6 +7,11 @@ import Sidebar from '../components/Sidebar';
 import { formatDateTime } from '../utils/formatters';
 import { isRoleManagementNotification } from '../utils/notifications';
 import { formatRoleLabel, getProfilePathForRole } from '../utils/roles';
+import {
+  validateBasicProfileForm,
+  validateDriverApplicationPayload,
+  validateStaffApplicationPayload
+} from '../utils/validators';
 
 const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
 const blockedApplicationStatuses = ['suspended', 'deactivated'];
@@ -216,6 +221,14 @@ export default function Profile() {
 
   const saveBasicProfile = async (event) => {
     event.preventDefault();
+    const validationError = validateBasicProfileForm(profile);
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
     setBusyAction('basic');
     setMessage('');
     setError('');
@@ -273,6 +286,16 @@ export default function Profile() {
   };
 
   const submitProviderApplication = async (roleKey, payload) => {
+    const validationError = roleKey === 'driver'
+      ? validateDriverApplicationPayload(payload)
+      : validateStaffApplicationPayload(payload);
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
     setBusyAction(`apply-${roleKey}`);
     setMessage('');
     setError('');

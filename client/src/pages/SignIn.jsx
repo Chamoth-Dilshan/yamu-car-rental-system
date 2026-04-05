@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getProfilePathForRole } from '../utils/roles';
+import { trimValue, validateSignInForm } from '../utils/validators';
 
 const REMEMBERED_SIGNIN_KEY = 'uprm_remembered_signin';
 
@@ -56,14 +57,25 @@ export default function SignIn() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const validationError = validateSignInForm(form);
+
+    if (validationError) {
+      setError(validationError);
+      setMessage('');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setMessage('');
     try {
-      const nextUser = await login(form.email, form.password);
+      const nextUser = await login(trimValue(form.email), form.password);
 
       if (rememberMe) {
-        localStorage.setItem(REMEMBERED_SIGNIN_KEY, JSON.stringify(form));
+        localStorage.setItem(REMEMBERED_SIGNIN_KEY, JSON.stringify({
+          email: trimValue(form.email),
+          password: form.password
+        }));
       } else {
         localStorage.removeItem(REMEMBERED_SIGNIN_KEY);
       }

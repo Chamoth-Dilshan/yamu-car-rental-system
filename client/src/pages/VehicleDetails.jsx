@@ -4,6 +4,7 @@ import API from '../api/axios'
 import { buildUploadUrl } from '../api/config'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency, getBadgeClass } from '../utils/formatters'
+import { getTodayDateInputValue, trimValue, validateReservationForm } from '../utils/validators'
 
 export default function VehicleDetails() {
   const { id } = useParams()
@@ -52,6 +53,7 @@ export default function VehicleDetails() {
   })()
 
   const totalAmount = billableDays > 0 ? billableDays * Number(vehicle?.pricePerDay || 0) : 0
+  const todayDate = getTodayDateInputValue()
   const isOwnVehicleListing = Boolean(user && vehicle?.owner?._id && String(vehicle.owner._id) === String(user._id))
   const storeUnavailable = !vehicle?.owner
   const listedStoreName = vehicle?.owner?.storeName || vehicle?.owner?.fullName || ''
@@ -81,12 +83,22 @@ export default function VehicleDetails() {
       return
     }
 
+    const validationError = validateReservationForm(bookingForm)
+
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
     setBusy(true)
 
     try {
       await API.post('/bookings/vehicle', {
         vehicleId: vehicle._id,
-        ...bookingForm
+        ...bookingForm,
+        pickupLocation: trimValue(bookingForm.pickupLocation),
+        destination: trimValue(bookingForm.destination),
+        notes: trimValue(bookingForm.notes)
       })
       await refreshNotifications().catch(() => {})
       setMessage('Reservation created successfully. You can review it from My Bookings.')
@@ -157,6 +169,7 @@ export default function VehicleDetails() {
                   <label>Start Date</label>
                   <input
                     type="date"
+                    min={todayDate}
                     value={bookingForm.startDate}
                     onChange={(e) => setBookingForm((prev) => ({ ...prev, startDate: e.target.value }))}
                     required
@@ -166,6 +179,7 @@ export default function VehicleDetails() {
                   <label>End Date</label>
                   <input
                     type="date"
+                    min={bookingForm.startDate || todayDate}
                     value={bookingForm.endDate}
                     onChange={(e) => setBookingForm((prev) => ({ ...prev, endDate: e.target.value }))}
                     required
