@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import API from '../api/axios';
 import { buildUploadUrl } from '../api/config';
@@ -297,7 +297,16 @@ export default function Profile() {
   const staffProfileBlocked = staffRole && blockedProfileStatuses.includes(staffRole.roleStatus);
   const driverApplicationBlocked = driverRole && blockedApplicationStatuses.includes(driverRole.roleStatus);
   const staffApplicationBlocked = staffRole && blockedApplicationStatuses.includes(staffRole.roleStatus);
-  const profileCompletion = user?.profileCompletion?.percent || 0;
+  const baseProfileCompletion = calculateCompletionPercent([
+    profile.fullName,
+    profile.email,
+    profile.phone,
+    profile.address,
+    profile.city,
+    profile.preferredLanguage,
+    profile.emergencyContactName,
+    profile.emergencyContactPhone
+  ]);
   const pendingApplicationsCount = (user?.providerApplications || []).filter((item) => item.status === 'pending').length;
   const managedNotifications = useMemo(() => (
     (notifications || []).filter((notification) => isRoleManagementNotification(notification))
@@ -354,7 +363,7 @@ export default function Profile() {
   const profileTabs = [
     ...(activeRoleKey === 'customer' ? [{ key: 'user', to: '/profile/user', label: 'User Profile' }] : []),
     ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driver', label: 'Driver Profile' }] : []),
-    ...(['customer', 'staff'].includes(activeRoleKey) ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
+    ...(activeRoleKey === 'staff' ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
     ...(activeRoleKey === 'admin' ? [{ key: 'admin', to: '/profile/admin', label: 'Admin Profile' }] : [])
   ];
   const availableProfileSections = profileTabs.map((tab) => tab.key);
@@ -373,10 +382,14 @@ export default function Profile() {
     : user?.fullName;
   const showUserProfile = resolvedProfileSection === 'user';
   const showDriverProfile = ['customer', 'driver'].includes(activeRoleKey) && resolvedProfileSection === 'driver';
-  const showStaffProfile = ['customer', 'staff'].includes(activeRoleKey) && resolvedProfileSection === 'store';
+  const showStaffProfile = activeRoleKey === 'staff' && resolvedProfileSection === 'store';
   const showAdminProfile = activeRoleKey === 'admin' && resolvedProfileSection === 'admin';
-  const showProfileTabs = profileTabs.length > 1;
   const showRoleSwitcher = activeRoleKey !== 'admin';
+  const visibleProfileCompletion = resolvedProfileSection === 'driver'
+    ? driverReadiness
+    : resolvedProfileSection === 'store'
+      ? staffReadiness
+      : baseProfileCompletion;
 
   useEffect(() => {
     if (!user) {
@@ -593,30 +606,17 @@ export default function Profile() {
             <div className="profile-hero-aside">
               <div className="profile-progress-card">
                 <div className="profile-progress-header">
-                  <strong>{profileCompletion}%</strong>
+                  <strong>{visibleProfileCompletion}%</strong>
                   <span>profile completion</span>
                 </div>
                 <div className="account-progress-track">
-                  <div className="account-progress-fill" style={{ width: `${profileCompletion}%` }} />
+                  <div className="account-progress-fill" style={{ width: `${visibleProfileCompletion}%` }} />
                 </div>
                 <p>{pendingApplicationsCount} pending role request(s) and {unreadManagedNotificationsCount} unread workflow notification(s).</p>
               </div>
 
-              {(showProfileTabs || showRoleSwitcher) && (
+              {showRoleSwitcher && (
                 <div className="profile-hero-actions">
-                  {showProfileTabs && (
-                    <div className="profile-section-nav" aria-label="Profile sections">
-                      {profileTabs.map((tab) => (
-                        <Link
-                          key={tab.key}
-                          to={tab.to}
-                          className={resolvedProfileSection === tab.key ? 'active' : ''}
-                        >
-                          {tab.label}
-                        </Link>
-                      ))}
-                    </div>
-                  )}
                   {showRoleSwitcher && (
                     <div className={`profile-role-switcher${isRoleMenuOpen ? ' open' : ''}`} ref={roleMenuRef}>
                       <button

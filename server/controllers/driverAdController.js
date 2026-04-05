@@ -149,6 +149,12 @@ const getMyDriverAds = async (req, res) => {
 
 const createDriverAd = async (req, res) => {
   try {
+    const existingAd = await DriverAd.findOne({ driver: req.user._id }).select('_id')
+
+    if (existingAd) {
+      return res.status(400).json({ message: 'You already have a driver advertisement. Update the existing ad instead.' })
+    }
+
     const { payload, error } = getDriverAdPayload(req.body, req.file, null, req.user)
 
     if (error) {

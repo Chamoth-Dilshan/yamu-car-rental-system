@@ -182,7 +182,7 @@ export default function AccountOverview() {
                     {application.reviewedAt && <p>Reviewed: {new Date(application.reviewedAt).toLocaleDateString()}</p>}
                     {application.rejectionReason && <p>Admin note: {application.rejectionReason}</p>}
                   </div>
-                  <Link to={`/apply-roles#${application.roleKey}-role`} className="btn btn-outline btn-sm">Open Role Form</Link>
+                  <Link to={getProfilePathForRole(application.roleKey)} className="btn btn-outline btn-sm">Open Role Form</Link>
                 </div>
               ))}
             </div>

@@ -9,17 +9,17 @@ const menuItems = {
     { to: '/profile/user', label: 'User Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
-    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: false },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   driver: [
     { section: 'Driver Workspace' },
-    { to: '/driver/ads', label: 'My Driver Ads', end: true },
+    { to: '/driver/ads', label: 'My Driver Ad', end: true },
     { to: '/driver/bookings', label: 'Booking Requests', end: true },
     { section: 'Account' },
     { to: '/profile/driver', label: 'Driver Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
-    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: false },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   staff: [
@@ -29,7 +29,7 @@ const menuItems = {
     { section: 'Account' },
     { to: '/profile/store', label: 'Store Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
-    { to: '/apply-roles', label: 'Role Requests', end: true },
+    { to: '/apply-roles', label: 'Role Requests', end: false },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
   admin: [

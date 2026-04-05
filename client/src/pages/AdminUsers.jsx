@@ -36,6 +36,11 @@ const adminSections = {
 
 const canUseRole = (role) => role.roleStatus === 'active' && role.verificationStatus === 'verified';
 const isProtectedAdmin = (user) => Boolean(user?.isSystemAdmin);
+const isAdminAccount = (user) => (
+  user?.roles?.some((role) => role.roleKey === 'admin')
+  || user?.primaryRole === 'admin'
+  || user?.activeRole === 'admin'
+);
 
 const formatLabel = (value) => String(value)
   .trim()
@@ -267,7 +272,7 @@ export default function AdminUsers() {
 
     return left.fullName.localeCompare(right.fullName);
   });
-  const visibleUsers = orderedUsers;
+  const visibleUsers = orderedUsers.filter((user) => !isAdminAccount(user));
   const normalizedSearch = userSearch.trim().toLowerCase();
   const filteredUsers = visibleUsers.filter((user) => {
     const matchesSearch = !normalizedSearch || [
@@ -293,11 +298,8 @@ export default function AdminUsers() {
     ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
     const matchesRole = roleFilter === 'all'
       || getPendingApplications(user).some((application) => application.roleKey === roleFilter);
-    const matchesStatus = statusFilter === 'all'
-      || (statusFilter === 'active' && user.accountStatus === 'active')
-      || (statusFilter === 'inactive' && ['pending', 'suspended', 'deactivated'].includes(user.accountStatus));
 
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesRole;
   });
   const selectedPendingUser = visibleUsers.find((user) => user._id === pendingDetailUserId) || null;
   const selectedRoleUser = visibleUsers.find((user) => user._id === roleDetailUserId) || null;
@@ -306,11 +308,6 @@ export default function AdminUsers() {
     { label: 'Visible Users', value: filteredUsers.length },
     { label: 'Inactive Accounts', value: filteredUsers.filter((item) => ['pending', 'suspended', 'deactivated'].includes(item.accountStatus)).length },
     { label: 'Pending Reviews', value: filteredUsers.reduce((total, item) => total + getPendingApplications(item).length, 0) }
-  ];
-  const pendingSectionStats = [
-    { label: 'Visible Reviews', value: filteredPendingUsers.length },
-    { label: 'Queue Items', value: filteredPendingUsers.reduce((total, item) => total + getPendingApplications(item).length, 0) },
-    { label: 'Ready Accounts', value: filteredPendingUsers.filter((item) => item.accountStatus === 'active').length }
   ];
   const roleSectionStats = [
     { label: 'Visible Records', value: filteredUsers.length },
@@ -349,14 +346,16 @@ export default function AdminUsers() {
   } else if (isRolesPath) {
     currentSection = adminSections['/admin/roles'];
   }
+  const nonAdminUsers = users.filter((user) => !isAdminAccount(user));
   const roleSummary = manageableRoles.map((roleKey) => ({
     roleKey,
     assignedCount: users.filter((user) => user.roles.some((role) => role.roleKey === roleKey)).length,
     usableCount: users.filter((user) => user.roles.some((role) => role.roleKey === roleKey && canUseRole(role))).length,
     pendingCount: users.filter((user) => (user.providerApplications || []).some((application) => application.roleKey === roleKey && application.status === 'pending')).length
   }));
+  const roleCoverageSummary = roleSummary.filter((item) => item.roleKey !== 'admin');
   const dashboardStats = [
-    { label: 'Total Accounts', value: users.length },
+    { label: 'User Accounts', value: nonAdminUsers.length },
     { label: 'Pending Approvals', value: pendingReviewUsers.reduce((total, user) => total + getPendingApplications(user).length, 0) },
     {
       label: 'Active Provider Roles',
@@ -378,6 +377,12 @@ export default function AdminUsers() {
       .then((res) => setUsers(res.data))
       .catch((err) => setError(err.response?.data?.message || 'Failed to load users'));
   }, [canViewUsersPermission]);
+
+  useEffect(() => {
+    if (isUsersPath && roleFilter === 'admin') {
+      setRoleFilter('all');
+    }
+  }, [isUsersPath, roleFilter]);
 
   useEffect(() => {
     if (!canViewUsersPermission || !timelineUserId) {
@@ -839,10 +844,10 @@ export default function AdminUsers() {
     return (
       <article
         key={user._id}
-        className={`form-card admin-user-summary-card${isSelected ? ' active' : ''}`}
+        className={`form-card admin-user-summary-card admin-user-summary-shell${isSelected ? ' active' : ''}`}
       >
         <div className="admin-user-summary-main">
-          <div>
+          <div className="admin-user-summary-copy">
             <h3>{user.fullName}</h3>
             <p>{user.email}</p>
             <div className="admin-user-summary-tags">
@@ -853,22 +858,6 @@ export default function AdminUsers() {
                 <span key={application.roleKey} className="badge badge-info">{formatLabel(application.roleKey)}</span>
               ))}
             </div>
-          </div>
-          <span className="badge badge-info">{formatLabel(user.activeRole)}</span>
-        </div>
-
-        <div className="admin-card-stat-row">
-          <div className="admin-mini-stat">
-            <span>Profile</span>
-            <strong>{user.profileCompletion?.percent || 0}%</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Assigned roles</span>
-            <strong>{user.roles.length}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Queue focus</span>
-            <strong>{pendingApplications.map((application) => formatLabel(application.roleKey)).join(', ')}</strong>
           </div>
         </div>
 
@@ -974,88 +963,35 @@ export default function AdminUsers() {
   };
 
   const renderRoleSummaryCard = (user) => {
-    const hasAdminRole = user.roles.some((role) => role.roleKey === 'admin');
     const protectedAdmin = isProtectedAdmin(user);
     const pendingApplications = getPendingApplications(user);
     const isSelected = roleDetailUserId === user._id;
-    const switchableRoles = user.roles.filter(canUseRole);
-    const blockedRoles = user.roles.length - switchableRoles.length;
     const primaryRoleLabel = formatLabel(user.primaryRole || user.activeRole);
-    const activeRoleLabel = formatLabel(user.activeRole);
-    const roleAccessSummary = pendingApplications.length > 0
-      ? `${pendingApplications.length} role request${pendingApplications.length > 1 ? 's are' : ' is'} waiting for review.`
-      : blockedRoles > 0
-        ? `${blockedRoles} assigned role${blockedRoles > 1 ? 's still need' : ' still needs'} review or verification.`
-        : 'All assigned roles are ready to use.';
 
     return (
       <article
         key={user._id}
-        className={`form-card admin-user-summary-card admin-role-summary-card${isSelected ? ' active' : ''}`}
+        className={`form-card admin-user-summary-card admin-user-summary-shell${isSelected ? ' active' : ''}`}
       >
-        <div className="admin-role-card-top">
-          <div className="admin-role-card-identity">
-            <div className="admin-role-card-copy">
-              <span className="admin-role-card-eyebrow">Role access</span>
-              <h3>{user.fullName}</h3>
-              <p>{user.email}</p>
-            </div>
+        <div className="admin-user-summary-main">
+          <div className="admin-user-summary-copy">
+            <h3>{user.fullName}</h3>
+            <p>{user.email}</p>
             <div className="admin-user-summary-tags">
               <span className={`badge ${getStatusBadgeClass(user.accountStatus)}`}>{formatLabel(user.accountStatus)}</span>
-              <span className="badge badge-info">{user.roles.length} assigned roles</span>
+              <span className="badge badge-info">Primary: {primaryRoleLabel}</span>
               {pendingApplications.length > 0 && (
                 <span className="badge badge-warning">{pendingApplications.length} pending</span>
               )}
               {protectedAdmin && <span className="badge badge-warning">Protected admin</span>}
-              {!protectedAdmin && hasAdminRole && <span className="badge badge-info">Admin assigned</span>}
             </div>
           </div>
-          <div className="admin-role-card-primary">
-            <span>Primary role</span>
-            <strong>{primaryRoleLabel}</strong>
-            <small>Active now: {activeRoleLabel}</small>
-          </div>
         </div>
 
-        <div className="admin-role-chip-row">
-          {user.roles.map((role) => (
-            <span key={role.roleKey} className={`badge ${getRoleAccessBadgeClass(role)}`}>
-              {formatLabel(role.roleKey)}
-              {role.isPrimary ? ' / Primary' : canUseRole(role) ? ' / Ready' : ''}
-            </span>
-          ))}
-        </div>
-
-        <div className="admin-card-stat-row admin-role-stat-row">
-          <div className="admin-mini-stat">
-            <span>Assigned roles</span>
-            <strong>{user.roles.length}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Switchable</span>
-            <strong>{switchableRoles.length}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Active / Primary</span>
-            <strong>{activeRoleLabel} / {primaryRoleLabel}</strong>
-          </div>
-        </div>
-
-        <div className="admin-role-card-footer">
-          <p className="admin-role-card-note">{roleAccessSummary}</p>
-          <div className="admin-user-card-actions">
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => openRolePanel(user._id, 'view')}>
-              View
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={protectedAdmin || !canAssignRolesPermission}
-              onClick={() => openRolePanel(user._id, 'edit')}
-            >
-              Edit
-            </button>
-          </div>
+        <div className="admin-user-card-actions">
+          <button type="button" className="btn btn-outline btn-sm" onClick={() => openRolePanel(user._id, 'view')}>
+            View
+          </button>
         </div>
       </article>
     );
@@ -1316,7 +1252,6 @@ export default function AdminUsers() {
     const canDeactivateUser = canEditUsersPermission && !protectedAdmin && currentUser?._id !== user._id && user.accountStatus !== 'deactivated';
     const canRestoreUser = canEditUsersPermission && !protectedAdmin && user.accountStatus === 'deactivated';
     const isSelected = selectedUserId === user._id;
-    const usableRoles = user.roles.filter(canUseRole);
 
     return (
       <article
@@ -1324,7 +1259,7 @@ export default function AdminUsers() {
         className={`form-card admin-user-summary-card admin-user-summary-shell${isSelected ? ' active' : ''}`}
       >
         <div className="admin-user-summary-main">
-          <div>
+          <div className="admin-user-summary-copy">
             <h3>{user.fullName}</h3>
             <p>{user.email}</p>
             <div className="admin-user-summary-tags">
@@ -1336,25 +1271,8 @@ export default function AdminUsers() {
               )}
               {protectedAdmin && <span className="badge badge-warning">Protected admin</span>}
               {!protectedAdmin && hasAdminRole && <span className="badge badge-info">Admin assigned</span>}
+              <span className="badge badge-info">Primary: {formatLabel(user.primaryRole || user.activeRole)}</span>
             </div>
-          </div>
-          <span className={`badge ${hasAdminRole ? 'badge-warning' : 'badge-info'}`}>
-            {formatLabel(user.activeRole)}
-          </span>
-        </div>
-
-        <div className="admin-card-stat-row">
-          <div className="admin-mini-stat">
-            <span>Primary role</span>
-            <strong>{formatLabel(user.primaryRole || user.activeRole)}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Usable roles</span>
-            <strong>{usableRoles.length}</strong>
-          </div>
-          <div className="admin-mini-stat">
-            <span>Profile</span>
-            <strong>{user.profileCompletion?.percent || 0}%</strong>
           </div>
         </div>
 
@@ -1654,7 +1572,7 @@ export default function AdminUsers() {
             <Link className="btn btn-outline btn-sm" to="/admin/roles">Manage Roles</Link>
           </div>
           <div className="stats-grid admin-summary-grid">
-            {roleSummary.map((item) => (
+            {roleCoverageSummary.map((item) => (
               <div key={item.roleKey} className="card">
                 <div className="card-body">
                   <h4>{formatLabel(item.roleKey)}</h4>
@@ -1680,14 +1598,6 @@ export default function AdminUsers() {
             <p className="profile-section-helper">Filter the queue, then open a focused review panel for each user.</p>
           </div>
         </div>
-        <div className="admin-card-stat-row admin-card-stat-row-detail">
-          {pendingSectionStats.map((item) => (
-            <div key={item.label} className="admin-mini-stat">
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-            </div>
-          ))}
-        </div>
         <div className="admin-user-filters">
           <div className="form-group">
             <label htmlFor="pending-search">Search</label>
@@ -1706,14 +1616,6 @@ export default function AdminUsers() {
               {manageableRoles.map((role) => (
                 <option key={role} value={role}>{formatLabel(role)}</option>
               ))}
-            </select>
-          </div>
-          <div className="form-group">
-            <label htmlFor="pending-status-filter">Status</label>
-            <select id="pending-status-filter" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
             </select>
           </div>
         </div>
@@ -1760,7 +1662,7 @@ export default function AdminUsers() {
             <label htmlFor="user-role-filter">Role</label>
             <select id="user-role-filter" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
               <option value="all">All Roles</option>
-              {manageableRoles.map((role) => (
+              {manageableRoles.filter((role) => role !== 'admin').map((role) => (
                 <option key={role} value={role}>{formatLabel(role)}</option>
               ))}
             </select>
