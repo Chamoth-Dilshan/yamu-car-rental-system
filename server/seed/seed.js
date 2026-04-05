@@ -7,26 +7,44 @@ const DriverAd = require('../models/DriverAd')
 const Booking = require('../models/Booking')
 const { buildRoleAssignment } = require('../utils/roleHelpers')
 
+const isVehicleOnlySeed = process.argv.includes('--vehicles-only')
+
 const vehicleImages = {
-  audi: [
-    'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1544636331-e26879cd4d9b?auto=format&fit=crop&w=1200&q=80'
+  audiQ8: [
+    'https://upload.wikimedia.org/wikipedia/commons/f/f7/2019_Audi_Q8_Front.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/6/63/2019_Audi_Q8_Rear.jpg'
   ],
   wagonR: [
-    'https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1494905998402-395d579af36f?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1485291571150-772bcfc10da5?auto=format&fit=crop&w=1200&q=80'
+    'https://upload.wikimedia.org/wikipedia/commons/d/d8/Maruti_Suzuki_-_WagonR_LXi_%28front%29.JPG',
+    'https://upload.wikimedia.org/wikipedia/commons/9/9a/Maruti_Suzuki_-_WagonR_LXi_%28rear%29.JPG'
   ],
   kicks: [
-    'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1519641471654-76ce0107ad1b?auto=format&fit=crop&w=1200&q=80'
+    'https://upload.wikimedia.org/wikipedia/commons/4/4c/Nissan_KICKS_AUTECH_%286AA-P15%29_front.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/1/10/Nissan_KICKS_AUTECH_%286AA-P15%29_rear.jpg'
   ],
   vezel: [
-    'https://images.unsplash.com/photo-1502161254066-6c74afbf07aa?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?auto=format&fit=crop&w=1200&q=80',
-    'https://images.unsplash.com/photo-1517142089942-ba376ce32a2e?auto=format&fit=crop&w=1200&q=80'
+    'https://upload.wikimedia.org/wikipedia/commons/8/82/Honda_VEZEL_e-HEV_X_2WD_%286AA-RV5%29.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/8/80/Honda_VEZEL_e-HEV_X_2WD_%286AA-RV5%29_rear.jpg'
+  ],
+  aqua: [
+    'https://upload.wikimedia.org/wikipedia/commons/f/f4/Toyota_Aqua_102.JPG',
+    'https://upload.wikimedia.org/wikipedia/commons/3/3c/2015_Toyota_Aqua.jpg'
+  ],
+  axio: [
+    'https://upload.wikimedia.org/wikipedia/commons/b/b3/Toyota_Corolla_Axio_1.5_G_in_Mellow_Silver_Metallic%2C_front_right.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/2/21/Toyota_Corolla_Axio_%28Jamaica%29.jpg'
+  ],
+  alto: [
+    'https://upload.wikimedia.org/wikipedia/commons/2/23/Suzuki_Alto%281%29.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/3/3b/Suzuki_Alto_rear.jpg'
+  ],
+  hiace: [
+    'https://upload.wikimedia.org/wikipedia/commons/9/9e/2022_Toyota_Hiace_3.0_Commuter_in_white%2C_front_right.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/0/08/Toyota_HiAce.jpg'
+  ],
+  mgZs: [
+    'https://upload.wikimedia.org/wikipedia/commons/5/59/MG_ZS_front.jpg',
+    'https://upload.wikimedia.org/wikipedia/commons/1/10/2018_MG_ZS_Exclusive_1.5_Rear.jpg'
   ]
 }
 
@@ -40,6 +58,292 @@ const buildSeedNotification = (type, title, message, link, createdAt, isRead = f
   createdAt: new Date(createdAt)
 })
 
+const buildVehicleSeeds = (ownerId) => ([
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1005',
+    name: 'Nissan Kicks',
+    brand: 'Nissan',
+    model: 'Kicks',
+    year: 2021,
+    category: 'SUV',
+    fuelType: 'Petrol',
+    transmission: 'Automatic',
+    seats: 5,
+    location: 'Colombo',
+    engineCapacity: '1500cc',
+    ownerContact: '0115551005',
+    description: 'Comfortable compact SUV for airport transfers, daily travel, and family-friendly city rides.',
+    features: ['Air conditioning', 'Reverse camera', 'Bluetooth audio', 'USB charging', 'ABS braking'],
+    images: vehicleImages.kicks,
+    pricePerDay: 6500,
+    status: 'available',
+    featured: true
+  },
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1001',
+    name: 'Maruti Suzuki Wagon R',
+    brand: 'Maruti Suzuki',
+    model: 'Wagon R',
+    year: 2020,
+    category: 'Hatchback',
+    fuelType: 'Petrol',
+    transmission: 'Automatic',
+    seats: 5,
+    location: 'Colombo',
+    engineCapacity: '1200cc',
+    ownerContact: '0115551001',
+    description: 'Affordable automatic hatchback that works well for short city hops and practical daily bookings.',
+    features: ['Air conditioning', 'Parking sensors', 'Power steering', 'Foldable rear seats', 'Good mileage'],
+    images: vehicleImages.wagonR,
+    pricePerDay: 4500,
+    status: 'available',
+    featured: true
+  },
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1003',
+    name: 'Audi Q8',
+    brand: 'Audi',
+    model: 'Q8',
+    year: 2023,
+    category: 'Luxury SUV',
+    fuelType: 'Petrol',
+    transmission: 'Automatic',
+    seats: 5,
+    location: 'Negombo',
+    engineCapacity: '3000cc',
+    ownerContact: '0115551003',
+    description: 'Premium SUV for executive transfers, wedding transport, and polished leisure travel.',
+    features: ['Leather seats', 'Premium audio', '360 camera', 'Panoramic roof', 'Cruise control'],
+    images: vehicleImages.audiQ8,
+    pricePerDay: 6500,
+    status: 'available',
+    featured: true
+  },
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1010',
+    name: 'Honda Vezel',
+    brand: 'Honda',
+    model: 'Vezel',
+    year: 2022,
+    category: 'Crossover',
+    fuelType: 'Hybrid',
+    transmission: 'Automatic',
+    seats: 5,
+    location: 'Kandy',
+    engineCapacity: '1500cc',
+    ownerContact: '0115551010',
+    description: 'Efficient crossover for outstation travel with generous luggage room and a refined cabin.',
+    features: ['Hybrid economy', 'Push start', 'Lane assist', 'Apple CarPlay', 'Traction control'],
+    images: vehicleImages.vezel,
+    pricePerDay: 7000,
+    status: 'available',
+    featured: false
+  },
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1011',
+    name: 'Toyota Aqua',
+    brand: 'Toyota',
+    model: 'Aqua',
+    year: 2018,
+    category: 'Hybrid Hatchback',
+    fuelType: 'Hybrid',
+    transmission: 'Automatic',
+    seats: 5,
+    location: 'Colombo',
+    engineCapacity: '1500cc',
+    ownerContact: '0115551011',
+    description: 'Easy-to-drive hybrid hatchback for city errands, office commutes, and budget-friendly daily rentals.',
+    features: ['Excellent fuel economy', 'Reverse camera', 'Keyless entry', 'Bluetooth audio', 'Dual airbags'],
+    images: vehicleImages.aqua,
+    pricePerDay: 5200,
+    status: 'available',
+    featured: true
+  },
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1012',
+    name: 'Toyota Corolla Axio',
+    brand: 'Toyota',
+    model: 'Corolla Axio',
+    year: 2019,
+    category: 'Sedan',
+    fuelType: 'Hybrid',
+    transmission: 'Automatic',
+    seats: 5,
+    location: 'Galle',
+    engineCapacity: '1500cc',
+    ownerContact: '0115551012',
+    description: 'Comfortable sedan for business trips, intercity travel, and guests who want a refined cabin with hybrid efficiency.',
+    features: ['Climate control', 'Push start', 'Spacious boot', 'Lane assist', 'ABS braking'],
+    images: vehicleImages.axio,
+    pricePerDay: 6100,
+    status: 'available',
+    featured: false
+  },
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1013',
+    name: 'Suzuki Alto',
+    brand: 'Suzuki',
+    model: 'Alto',
+    year: 2019,
+    category: 'Compact Hatchback',
+    fuelType: 'Petrol',
+    transmission: 'Manual',
+    seats: 4,
+    location: 'Kandy',
+    engineCapacity: '800cc',
+    ownerContact: '0115551013',
+    description: 'Compact and economical hatchback that works best for solo travelers, quick errands, and short-distance driving.',
+    features: ['Low running cost', 'Compact parking size', 'Air conditioning', 'Foldable rear seats', 'Power steering'],
+    images: vehicleImages.alto,
+    pricePerDay: 3500,
+    status: 'available',
+    featured: false
+  },
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1014',
+    name: 'Toyota Hiace Commuter',
+    brand: 'Toyota',
+    model: 'Hiace Commuter',
+    year: 2022,
+    category: 'Van',
+    fuelType: 'Diesel',
+    transmission: 'Manual',
+    seats: 14,
+    location: 'Negombo',
+    engineCapacity: '3000cc',
+    ownerContact: '0115551014',
+    description: 'Large people-mover for airport group transfers, hotel shuttles, pilgrimage trips, and family tours with luggage.',
+    features: ['High roof cabin', 'Rear AC vents', 'Sliding door', 'Large luggage space', 'Ideal for groups'],
+    images: vehicleImages.hiace,
+    pricePerDay: 12000,
+    status: 'available',
+    featured: true
+  },
+  {
+    owner: ownerId,
+    vehicleCode: 'CAR-1015',
+    name: 'MG ZS',
+    brand: 'MG',
+    model: 'ZS',
+    year: 2021,
+    category: 'SUV',
+    fuelType: 'Petrol',
+    transmission: 'Automatic',
+    seats: 5,
+    location: 'Battaramulla',
+    engineCapacity: '1500cc',
+    ownerContact: '0115551015',
+    description: 'Modern crossover SUV with a roomy cabin and practical tech for weekend getaways, family travel, and urban driving.',
+    features: ['Touchscreen infotainment', 'Reverse camera', 'Cruise control', 'Apple CarPlay', 'Spacious rear seats'],
+    images: vehicleImages.mgZs,
+    pricePerDay: 7800,
+    status: 'available',
+    featured: true
+  }
+])
+
+const buildVehicleSeedOwnerPayload = () => ({
+  username: 'sahan',
+  email: 'sahan@example.com',
+  password: '12345',
+  fullName: 'Sahan Wijesinghe',
+  role: 'staff',
+  city: 'Colombo',
+  phone: '0112233445',
+  address: '12 Main Street, Colombo',
+  preferredLanguage: 'English',
+  emergencyContact: {
+    name: 'Ishara Wijesinghe',
+    phone: '0773332221',
+    relationship: 'Sister'
+  },
+  accountStatus: 'active',
+  verificationStatus: 'verified',
+  roles: [
+    buildRoleAssignment('customer'),
+    buildRoleAssignment('staff', { roleStatus: 'active', verificationStatus: 'verified', isPrimary: true })
+  ],
+  staffProfile: {
+    storeName: 'CityLine Rentals',
+    storeOwner: 'Sahan Wijesinghe',
+    businessRegistrationNumber: 'BR-2026-002',
+    storeAddress: '12 Main Street, Colombo',
+    storeContactNumber: '0112233445',
+    storeEmail: 'sahan@example.com'
+  }
+})
+
+const ensureVehicleSeedOwner = async () => {
+  const activeVerifiedStaffQuery = {
+    accountStatus: 'active',
+    roles: {
+      $elemMatch: {
+        roleKey: 'staff',
+        roleStatus: 'active',
+        verificationStatus: 'verified'
+      }
+    }
+  }
+
+  const preferredOwner = await User.findOne({
+    ...activeVerifiedStaffQuery,
+    email: 'sahan@example.com'
+  })
+
+  if (preferredOwner) {
+    return preferredOwner
+  }
+
+  const existingSeedOwner = await User.findOne({ email: 'sahan@example.com' })
+
+  if (existingSeedOwner) {
+    Object.assign(existingSeedOwner, buildVehicleSeedOwnerPayload())
+    await existingSeedOwner.save()
+    return existingSeedOwner
+  }
+
+  const existingStaffOwner = await User.findOne(activeVerifiedStaffQuery).sort({ createdAt: 1 })
+
+  if (existingStaffOwner) {
+    return existingStaffOwner
+  }
+
+  return User.create(buildVehicleSeedOwnerPayload())
+}
+
+const seedVehiclesOnly = async () => {
+  const owner = await ensureVehicleSeedOwner()
+  const vehicleSeeds = buildVehicleSeeds(owner._id)
+
+  const seededVehicles = await Promise.all(
+    vehicleSeeds.map((vehicle) => Vehicle.findOneAndUpdate(
+      { vehicleCode: vehicle.vehicleCode },
+      { $set: vehicle },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+        setDefaultsOnInsert: true
+      }
+    ))
+  )
+
+  console.log(`Seeded ${seededVehicles.length} vehicles for ${owner.email}`)
+  seededVehicles
+    .sort((left, right) => left.vehicleCode.localeCompare(right.vehicleCode))
+    .forEach((vehicle) => {
+      console.log(`${vehicle.vehicleCode} - ${vehicle.name} (${vehicle.location})`)
+    })
+}
+
 const seed = async () => {
   try {
     const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI
@@ -50,6 +354,11 @@ const seed = async () => {
 
     await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 8000 })
     console.log('MongoDB Connected for seeding...')
+
+    if (isVehicleOnlySeed) {
+      await seedVehiclesOnly()
+      process.exit(0)
+    }
 
     await Booking.deleteMany({})
     await DriverAd.deleteMany({})
@@ -458,92 +767,7 @@ const seed = async () => {
       ]
     })
 
-    const [nissanKicks, wagonR, audiQ8] = await Vehicle.create([
-      {
-        owner: sahan._id,
-        vehicleCode: 'CAR-1005',
-        name: 'Nissan Kicks',
-        brand: 'Nissan',
-        model: 'Kicks',
-        year: 2021,
-        category: 'SUV',
-        fuelType: 'Petrol',
-        transmission: 'Automatic',
-        seats: 5,
-        location: 'Colombo',
-        engineCapacity: '1500cc',
-        ownerContact: '0115551005',
-        description: 'Comfortable compact SUV for airport transfers, daily travel, and family-friendly city rides.',
-        features: ['Air conditioning', 'Reverse camera', 'Bluetooth audio', 'USB charging', 'ABS braking'],
-        images: vehicleImages.kicks,
-        pricePerDay: 6500,
-        status: 'available',
-        featured: true
-      },
-      {
-        owner: sahan._id,
-        vehicleCode: 'CAR-1001',
-        name: 'Maruti Suzuki Wagon R',
-        brand: 'Maruti Suzuki',
-        model: 'Wagon R',
-        year: 2020,
-        category: 'Hatchback',
-        fuelType: 'Petrol',
-        transmission: 'Automatic',
-        seats: 5,
-        location: 'Colombo',
-        engineCapacity: '1200cc',
-        ownerContact: '0115551001',
-        description: 'Affordable automatic hatchback that works well for short city hops and practical daily bookings.',
-        features: ['Air conditioning', 'Parking sensors', 'Power steering', 'Foldable rear seats', 'Good mileage'],
-        images: vehicleImages.wagonR,
-        pricePerDay: 4500,
-        status: 'available',
-        featured: true
-      },
-      {
-        owner: sahan._id,
-        vehicleCode: 'CAR-1003',
-        name: 'Audi Q8',
-        brand: 'Audi',
-        model: 'Q8',
-        year: 2023,
-        category: 'Luxury SUV',
-        fuelType: 'Petrol',
-        transmission: 'Automatic',
-        seats: 5,
-        location: 'Negombo',
-        engineCapacity: '3000cc',
-        ownerContact: '0115551003',
-        description: 'Premium SUV for executive transfers, wedding transport, and polished leisure travel.',
-        features: ['Leather seats', 'Premium audio', '360 camera', 'Panoramic roof', 'Cruise control'],
-        images: vehicleImages.audi,
-        pricePerDay: 6500,
-        status: 'available',
-        featured: true
-      },
-      {
-        owner: sahan._id,
-        vehicleCode: 'CAR-1010',
-        name: 'Honda Vezel',
-        brand: 'Honda',
-        model: 'Vezel',
-        year: 2022,
-        category: 'Crossover',
-        fuelType: 'Hybrid',
-        transmission: 'Automatic',
-        seats: 5,
-        location: 'Kandy',
-        engineCapacity: '1500cc',
-        ownerContact: '0115551010',
-        description: 'Efficient crossover for outstation travel with generous luggage room and a refined cabin.',
-        features: ['Hybrid economy', 'Push start', 'Lane assist', 'Apple CarPlay', 'Traction control'],
-        images: vehicleImages.vezel,
-        pricePerDay: 7000,
-        status: 'available',
-        featured: false
-      }
-    ])
+    const [nissanKicks, wagonR, audiQ8] = await Vehicle.create(buildVehicleSeeds(sahan._id))
 
     const [nadeeshaAd, shanAd] = await DriverAd.create([
       {

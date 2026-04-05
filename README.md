@@ -29,8 +29,12 @@ cd server
 npm install
 copy .env.example .env
 npm run seed
+npm run seed:vehicles
 npm run dev
 ```
+
+Use `npm run seed` to reset and repopulate the full demo dataset.
+Use `npm run seed:vehicles` to upsert just the demo vehicle listings without clearing users, bookings, or driver ads.
 
 ### 2. Client
 
