@@ -17,7 +17,7 @@ const ACCOUNT_STATUSES = ['pending', 'active', 'suspended', 'deactivated'];
 const ROLE_STATUSES = ['pending', 'active', 'rejected', 'suspended', 'deactivated'];
 const VERIFICATION_STATUSES = ['unverified', 'pending', 'verified', 'rejected'];
 const APPLICATION_STATUSES = ['pending', 'approved', 'rejected', 'withdrawn'];
-const PERMISSIONS = ['users.view', 'users.edit', 'roles.review', 'roles.assign', 'profile.manage', 'bookings.manage'];
+const PERMISSIONS = ['users.view', 'users.edit', 'roles.review', 'roles.assign', 'profile.manage', 'bookings.manage', 'payments.manage'];
 const PROVIDER_REQUIREMENT_CONFIG = {
   driver: {
     fields: [

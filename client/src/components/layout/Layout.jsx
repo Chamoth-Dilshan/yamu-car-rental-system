@@ -42,7 +42,7 @@ export default function Layout({ children }) {
   const isAdmin = activeRole === 'admin';
   const hasHomePage = !user || activeRole === 'customer';
   const showDiscoverLinks = hasHomePage;
-  const isAccountWorkspaceRoute = ['/profile', '/notifications', '/bookings', '/apply-roles', '/switch-roles'].some((path) => (
+  const isAccountWorkspaceRoute = ['/profile', '/notifications', '/bookings', '/payments', '/apply-roles', '/switch-roles'].some((path) => (
     location.pathname === path || location.pathname.startsWith(`${path}/`)
   ));
   const footerHiddenPaths = new Set(['/signin']);
@@ -51,6 +51,7 @@ export default function Layout({ children }) {
   const canViewUsers = hasPermission('users.view');
   const canReviewRoles = hasPermission('roles.review');
   const canAssignRoles = hasPermission('roles.assign');
+  const canManagePayments = hasPermission('payments.manage');
   const userProfilePath = getProfilePathForRole('customer');
   const roleProfilePath = getProfilePathForRole(activeRole);
   const logoTarget = isAdmin && canViewUsers ? '/admin/dashboard' : user ? roleProfilePath : '/';
@@ -133,6 +134,7 @@ export default function Layout({ children }) {
             {isStaff && <NavLink to="/staff/vehicles">Store Vehicles</NavLink>}
             {isAdmin && canViewUsers && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
             {isAdmin && <NavLink to="/admin/bookings">Bookings</NavLink>}
+            {isAdmin && canManagePayments && <NavLink to="/admin/payments">Payments</NavLink>}
           </div>
 
           <div className="nav-auth">
@@ -210,6 +212,7 @@ export default function Layout({ children }) {
                     {canManageProfile && isAdmin && <Link to={roleProfilePath}>Admin Profile</Link>}
                     {canManageProfile && <Link to="/notifications">Notifications</Link>}
                     {isCustomer && <Link to="/bookings">My Bookings</Link>}
+                    {isCustomer && <Link to="/payments/history">Payments</Link>}
                     {isDriver && <Link to="/driver/ads">My Driver Ad</Link>}
                     {isDriver && <Link to="/driver/bookings">Booking Requests</Link>}
                     {isStaff && <Link to="/staff/vehicles">My Vehicles</Link>}
@@ -218,6 +221,7 @@ export default function Layout({ children }) {
                     {!isAdmin && <Link to="/switch-roles">Switch Roles</Link>}
                     {isAdmin && canViewUsers && <Link to="/admin/dashboard">Overview</Link>}
                     {isAdmin && <Link to="/admin/bookings">Bookings</Link>}
+                    {isAdmin && canManagePayments && <Link to="/admin/payments">Payments</Link>}
                     {isAdmin && canViewUsers && canReviewRoles && <Link to="/admin/pending-approvals">Pending Approvals</Link>}
                     {isAdmin && canViewUsers && <Link to="/admin/users">Users</Link>}
                     {isAdmin && canViewUsers && canAssignRoles && <Link to="/admin/roles">Role Access</Link>}

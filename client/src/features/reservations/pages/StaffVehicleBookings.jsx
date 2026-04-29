@@ -157,7 +157,7 @@ export default function StaffVehicleBookings() {
                               {busyAction === `confirm-${booking._id}` ? 'Saving...' : 'Confirm'}
                             </button>
                           )}
-                          {['pending', 'confirmed'].includes(booking.bookingStatus) && (
+                          {booking.bookingStatus === 'confirmed' && (
                             <button
                               className="btn btn-secondary btn-sm"
                               type="button"
@@ -167,7 +167,7 @@ export default function StaffVehicleBookings() {
                               {busyAction === `complete-${booking._id}` ? 'Saving...' : 'Complete'}
                             </button>
                           )}
-                          {!['cancelled', 'closed'].includes(booking.bookingStatus) && (
+                          {['completed', 'cancelled'].includes(booking.bookingStatus) && (
                             <button
                               className="btn btn-outline btn-sm"
                               type="button"
@@ -177,7 +177,7 @@ export default function StaffVehicleBookings() {
                               {busyAction === `close-${booking._id}` ? 'Saving...' : 'Close'}
                             </button>
                           )}
-                          {booking.bookingStatus !== 'cancelled' && (
+                          {['pending', 'confirmed'].includes(booking.bookingStatus) && (
                             <button
                               className="btn btn-danger btn-sm"
                               type="button"

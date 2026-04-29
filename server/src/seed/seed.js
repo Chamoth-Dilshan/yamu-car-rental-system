@@ -6,6 +6,8 @@ const User = require('../modules/users/user.model')
 const Vehicle = require('../modules/vehicles/vehicle.model')
 const DriverAd = require('../modules/drivers/driverAd.model')
 const Booking = require('../modules/reservations/booking.model')
+const Payment = require('../modules/payments/payment.model')
+const PaymentMethod = require('../modules/payments/paymentMethod.model')
 const { buildRoleAssignment } = require('../utils/roleHelpers')
 
 const DEFAULT_PASSWORD = '12345'
@@ -920,6 +922,8 @@ const seed = async () => {
     console.log('MongoDB Connected for seeding...')
     console.log(`Target counts -> users: ${targets.totalUsers}, staff: ${targets.staffCount}, drivers: ${targets.driverCount}, vehicles: ${targets.vehicleCount}`)
 
+    await Payment.deleteMany({})
+    await PaymentMethod.deleteMany({})
     await Booking.deleteMany({})
     await DriverAd.deleteMany({})
     await Vehicle.deleteMany({})

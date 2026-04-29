@@ -89,7 +89,9 @@ export default function VehicleDetails() {
         ...bookingForm
       })
       await refreshNotifications().catch(() => {})
-      setMessage('Reservation created successfully. You can review it from My Bookings.')
+      navigate('/bookings', {
+        state: { message: 'Your reservation request has been sent. Please wait for provider approval.' }
+      })
       setBookingForm({
         startDate: '',
         endDate: '',

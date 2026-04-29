@@ -3,7 +3,6 @@ const { sendServerError } = require('../../utils/errorResponses')
 const { addNotificationToUser } = require('../../utils/notificationHelpers')
 const {
   BOOKING_STATUSES,
-  PAYMENT_STATUSES,
   serializeBooking
 } = require('../../utils/reservationHelpers')
 
@@ -68,7 +67,13 @@ const getAdminBookings = async (req, res) => {
 
 const updateAdminBooking = async (req, res) => {
   try {
-    const { bookingStatus, paymentStatus, adminNote = '' } = req.body
+    const { bookingStatus, adminNote = '' } = req.body
+
+    if (Object.prototype.hasOwnProperty.call(req.body, 'paymentStatus')) {
+      return res.status(400).json({
+        message: 'Booking payment status can only be changed through payment verification or refund actions'
+      })
+    }
     const booking = await Booking.findOne({
       _id: req.params.id,
       bookingType: 'vehicle'
@@ -102,14 +107,6 @@ const updateAdminBooking = async (req, res) => {
       }
 
       booking.bookingStatus = bookingStatus
-    }
-
-    if (paymentStatus) {
-      if (!PAYMENT_STATUSES.includes(paymentStatus)) {
-        return res.status(400).json({ message: 'Invalid payment status' })
-      }
-
-      booking.paymentStatus = paymentStatus
     }
 
     booking.adminNote = String(adminNote).trim()

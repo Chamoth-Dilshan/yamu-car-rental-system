@@ -9,6 +9,8 @@ const menuItems = {
     { to: '/profile/user', label: 'User Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
+    { to: '/payments/history', label: 'Payments', end: true },
+    { to: '/payments/cards', label: 'Saved Cards', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: false },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],
@@ -38,6 +40,7 @@ const menuItems = {
     { to: '/admin/pending-approvals', label: 'Pending Approvals', end: false },
     { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: false },
+    { to: '/admin/payments', label: 'Payments', end: true },
     { section: 'Account' },
     { to: '/profile/admin', label: 'Admin Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true }
@@ -66,6 +69,10 @@ export default function Sidebar() {
 
     if (item.to === '/admin/roles') {
       return hasPermission('users.view') && hasPermission('roles.assign')
+    }
+
+    if (item.to === '/admin/payments') {
+      return hasPermission('payments.manage')
     }
 
     return true

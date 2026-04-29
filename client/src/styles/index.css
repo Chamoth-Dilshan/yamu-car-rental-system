@@ -608,6 +608,19 @@ input:focus, select:focus, textarea:focus {
 
 .form-group { margin-bottom: 1.25rem; }
 .form-group label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--text); }
+.form-help {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--text-light);
+  font-size: 0.8rem;
+}
+.field-error {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--danger);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
 .form-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
 .form-card {
   background: var(--bg-card);
@@ -1044,6 +1057,9 @@ input:focus, select:focus, textarea:focus {
 .alert-danger { background: rgba(239,68,68,0.1); color: #dc2626; border: 1px solid rgba(239,68,68,0.2); }
 .alert-warning { background: rgba(245,158,11,0.1); color: #d97706; border: 1px solid rgba(245,158,11,0.2); }
 .alert-info { background: rgba(59,130,246,0.1); color: #2563eb; border: 1px solid rgba(59,130,246,0.2); }
+.alert .link-button {
+  margin-left: 0.75rem;
+}
 
 .badge {
   display: inline-flex;
@@ -1057,6 +1073,16 @@ input:focus, select:focus, textarea:focus {
 .badge-danger { background: rgba(239,68,68,0.1); color: #dc2626; }
 .badge-warning { background: rgba(245,158,11,0.1); color: #d97706; }
 .badge-info { background: rgba(59,130,246,0.1); color: #2563eb; }
+.link-button {
+  background: transparent;
+  color: var(--accent-hover);
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+}
+.link-button:hover {
+  color: var(--primary);
+}
 
 .profile-summary-card {
   background: var(--bg-card);
@@ -2011,6 +2037,284 @@ input:focus, select:focus, textarea:focus {
   flex-wrap: wrap;
   gap: 0.5rem;
 }
+.payment-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.75fr);
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+.payment-main-card,
+.payment-summary-card {
+  border: 1px solid rgba(15,23,42,0.06);
+}
+.payment-summary-card {
+  position: sticky;
+  top: calc(var(--navbar-height) + 1.5rem);
+}
+.payment-summary-card h3 {
+  margin: 0.75rem 0 0.25rem;
+  color: var(--primary);
+}
+.payment-summary-card p {
+  color: var(--text-light);
+  margin-bottom: 1.25rem;
+}
+.payment-method-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.payment-method-card {
+  min-height: 112px;
+  padding: 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  color: var(--text);
+  text-align: left;
+}
+.payment-method-card:hover,
+.payment-method-card.active {
+  border-color: var(--accent);
+  background: rgba(240,165,0,0.08);
+  box-shadow: 0 0 0 3px rgba(240,165,0,0.08);
+}
+.payment-method-card strong,
+.payment-method-card span {
+  display: block;
+}
+.payment-method-card strong {
+  color: var(--primary);
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+}
+.payment-method-card span {
+  color: var(--text-light);
+  font-size: 0.86rem;
+}
+.payment-form-grid {
+  display: grid;
+  gap: 0.25rem;
+}
+.payment-summary-list {
+  display: grid;
+  gap: 0.8rem;
+  margin-bottom: 1.5rem;
+}
+.payment-summary-list > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+.payment-summary-list span {
+  color: var(--text-light);
+  font-size: 0.85rem;
+}
+.payment-summary-list strong {
+  color: var(--primary);
+  text-align: right;
+}
+.payment-discount-row strong {
+  color: var(--success);
+}
+.payment-summary-list .payment-total-row {
+  align-items: center;
+  border-bottom: 0;
+  padding: 0.85rem;
+  border-radius: var(--radius-sm);
+  background: rgba(15,23,42,0.04);
+}
+.payment-total-row strong {
+  color: var(--accent-hover);
+  font-size: 1.2rem;
+}
+.payment-discount-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+.payment-summary-card .btn-block + .btn-block {
+  margin-top: 0.75rem;
+}
+.payment-submit-row {
+  grid-column: 2;
+  display: grid;
+  gap: 0.75rem;
+}
+.payment-check-row {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0.5rem 0 1.25rem;
+}
+.payment-check-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.payment-check-row input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  accent-color: var(--accent);
+}
+.payment-info-panel,
+.payment-empty-panel {
+  padding: 1rem;
+  border: 1px solid rgba(59,130,246,0.18);
+  border-radius: var(--radius-sm);
+  background: rgba(59,130,246,0.06);
+  color: var(--text);
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+.payment-empty-panel {
+  border-color: var(--border);
+  background: rgba(15,23,42,0.03);
+  color: var(--text-light);
+}
+.saved-card-grid {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+}
+.saved-card-item,
+.saved-card-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  padding: 1rem;
+}
+.saved-card-item {
+  text-align: left;
+}
+.saved-card-item.active {
+  border-color: var(--accent);
+  background: rgba(240,165,0,0.08);
+  box-shadow: 0 0 0 3px rgba(240,165,0,0.08);
+}
+.saved-card-item strong,
+.saved-card-item span,
+.saved-card-item small,
+.saved-card-row strong,
+.saved-card-row span,
+.saved-card-row small {
+  display: block;
+}
+.saved-card-item strong,
+.saved-card-row strong {
+  color: var(--primary);
+}
+.saved-card-item span,
+.saved-card-row span {
+  color: var(--text-light);
+  font-size: 0.88rem;
+  margin-top: 0.25rem;
+}
+.saved-card-item small,
+.saved-card-row small {
+  color: var(--gray-500);
+  margin-top: 0.25rem;
+}
+.payment-card-list {
+  display: grid;
+  gap: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+.admin-manual-payment-card {
+  margin-bottom: 1.5rem;
+}
+.admin-manual-payment-card textarea {
+  grid-column: 1 / -1;
+}
+.saved-card-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.receipt-card {
+  max-width: 920px;
+}
+.receipt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+.receipt-brand {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--accent);
+  font-weight: 800;
+  margin-bottom: 0.75rem;
+}
+.receipt-header h3 {
+  color: var(--primary);
+  font-size: 1.35rem;
+}
+.receipt-header p {
+  color: var(--text-light);
+}
+.receipt-total {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  border-radius: var(--radius-sm);
+  background: rgba(15,23,42,0.04);
+}
+.receipt-total span,
+.receipt-total small {
+  color: var(--text-light);
+}
+.receipt-total strong {
+  color: var(--accent-hover);
+  font-size: 1.6rem;
+}
+.receipt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.receipt-grid div {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.72);
+}
+.receipt-grid span {
+  display: block;
+  color: var(--text-light);
+  font-size: 0.78rem;
+  margin-bottom: 0.35rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.receipt-grid strong {
+  color: var(--primary);
+  overflow-wrap: anywhere;
+}
+.receipt-note {
+  color: var(--text-light);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  margin: 1rem 0 1.25rem;
+}
 .driver-card {
   padding: 1.5rem;
 }
@@ -2243,8 +2547,15 @@ input:focus, select:focus, textarea:focus {
   }
   .vehicle-detail-grid,
   .vehicle-specs-grid,
-  .driver-detail-grid {
+  .driver-detail-grid,
+  .payment-layout {
     grid-template-columns: 1fr;
+  }
+  .payment-summary-card {
+    position: static;
+  }
+  .payment-submit-row {
+    grid-column: 1;
   }
   .home-hero-grid,
   .home-showcase {
@@ -2299,6 +2610,17 @@ input:focus, select:focus, textarea:focus {
   .home-hero-actions,
   .home-itinerary-footer {
     flex-direction: column;
+  }
+  .payment-discount-input {
+    grid-template-columns: 1fr;
+  }
+  .saved-card-row,
+  .receipt-header {
+    flex-direction: column;
+  }
+  .receipt-grid,
+  .receipt-total {
+    grid-template-columns: 1fr;
   }
   .home-trust-row {
     display: grid;

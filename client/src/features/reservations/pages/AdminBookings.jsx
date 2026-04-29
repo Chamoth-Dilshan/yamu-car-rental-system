@@ -109,7 +109,7 @@ export default function AdminBookings() {
             <div>
               <h3>Vehicle Reservation Info</h3>
               <p style={{ color: 'var(--text-light)' }}>
-                Search vehicle bookings by reservation number or route, then update payment and booking status from one place.
+                Search vehicle bookings by reservation number or route. Payment status is controlled from Payment Management.
               </p>
             </div>
           </div>
@@ -201,7 +201,7 @@ export default function AdminBookings() {
                               disabled={busyAction === `complete-${booking._id}`}
                               onClick={() => updateBooking(
                                 booking._id,
-                                { bookingStatus: 'completed', paymentStatus: booking.paymentStatus === 'paid' ? 'paid' : 'pending' },
+                                { bookingStatus: 'completed' },
                                 'Vehicle booking marked as completed',
                                 `complete-${booking._id}`
                               )}
