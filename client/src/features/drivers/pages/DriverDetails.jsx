@@ -61,7 +61,9 @@ export default function DriverDetails() {
         ...form
       })
       await refreshNotifications().catch(() => {})
-      setMessage('Driver request sent successfully. You can follow it from My Bookings.')
+      navigate('/bookings', {
+        state: { message: 'Your reservation request has been sent. Please wait for provider approval.' }
+      })
       setForm({
         startDate: '',
         endDate: '',
@@ -216,7 +218,7 @@ export default function DriverDetails() {
                     />
                   </div>
                   <button className="btn btn-primary" type="submit" disabled={busy || isOwnDriverAd}>
-                    {busy ? 'Sending...' : 'Send Request'}
+                    {busy ? 'Sending...' : 'Request Driver'}
                   </button>
                 </form>
                 {isOwnDriverAd && (

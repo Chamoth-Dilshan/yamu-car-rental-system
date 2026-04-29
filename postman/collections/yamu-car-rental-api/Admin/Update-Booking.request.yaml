@@ -12,6 +12,5 @@ body:
   type: json
   content: |-
     {
-      "bookingStatus": "confirmed",
-      "paymentStatus": "paid"
+      "bookingStatus": "confirmed"
     }

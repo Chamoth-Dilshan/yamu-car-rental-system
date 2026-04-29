@@ -12,7 +12,6 @@ const {
 } = require('../../utils/roleHelpers')
 const {
   BOOKING_STATUSES,
-  PAYMENT_STATUSES,
   serializeBooking,
   validateDateRange
 } = require('../../utils/reservationHelpers')
@@ -347,68 +346,10 @@ const cancelMyBooking = async (req, res) => {
   }
 }
 
-const updateMyBookingPayment = async (req, res) => {
+const updateMyBookingPayment = async (_req, res) => {
   try {
-    const { paymentStatus } = req.body
-
-    if (!PAYMENT_STATUSES.includes(paymentStatus)) {
-      return res.status(400).json({ message: 'Invalid payment status' })
-    }
-
-    const booking = await Booking.findOne({ _id: req.params.id, customer: req.user._id }).populate(bookingPopulate)
-
-    if (!booking) {
-      return res.status(404).json({ message: 'Booking not found' })
-    }
-
-    if (booking.bookingStatus === 'cancelled') {
-      return res.status(400).json({ message: 'Cancelled bookings cannot update payment state here' })
-    }
-
-    booking.paymentStatus = paymentStatus
-    await booking.save()
-
-    const notificationTasks = [
-      addNotificationToUser(req.user._id, {
-        type: 'payment',
-        title: 'Payment status updated',
-        message: `Booking ${booking.bookingNo} payment is now marked as ${paymentStatus}.`,
-        link: '/bookings'
-      })
-    ]
-
-    if (booking.bookingType === 'vehicle') {
-      if (booking.vehicle?.owner?._id || booking.vehicle?.owner) {
-        notificationTasks.push(addNotificationToUser(booking.vehicle.owner._id || booking.vehicle.owner, {
-          type: 'payment',
-          title: 'Vehicle booking payment updated',
-          message: `Booking ${booking.bookingNo} payment was marked as ${paymentStatus}.`,
-          link: '/staff/bookings'
-        }))
-      }
-
-      notificationTasks.push(addNotificationToAdmins({
-        type: 'payment',
-        title: 'Vehicle booking payment updated',
-        message: `Booking ${booking.bookingNo} payment was marked as ${paymentStatus}.`,
-        link: '/admin/bookings'
-      }))
-    }
-
-    if (booking.bookingType === 'driver' && booking.driver) {
-      notificationTasks.push(addNotificationToUser(booking.driver._id, {
-        type: 'payment',
-        title: 'Trip payment updated',
-        message: `Booking ${booking.bookingNo} payment was marked as ${paymentStatus}.`,
-        link: '/driver/bookings'
-      }))
-    }
-
-    await Promise.all(notificationTasks)
-
-    res.json({
-      message: 'Payment status updated',
-      booking: serializeBooking(booking)
+    return res.status(400).json({
+      message: 'Please use the payment checkout process to pay for this booking.'
     })
   } catch (error) {
     sendServerError(res, error, 'Failed to update payment status')
@@ -460,6 +401,18 @@ const updateDriverBookingStatus = async (req, res) => {
       return res.status(404).json({ message: 'Booking request not found' })
     }
 
+    if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
+      return res.status(400).json({ message: 'Only pending driver requests can be confirmed' })
+    }
+
+    if (bookingStatus === 'completed' && booking.bookingStatus !== 'confirmed') {
+      return res.status(400).json({ message: 'Only confirmed driver requests can be completed' })
+    }
+
+    if (bookingStatus === 'cancelled' && !['pending', 'confirmed'].includes(booking.bookingStatus)) {
+      return res.status(400).json({ message: 'Only pending or confirmed driver requests can be cancelled' })
+    }
+
     booking.bookingStatus = bookingStatus
     booking.driverResponseNote = String(driverResponseNote).trim()
     await booking.save()
@@ -473,8 +426,10 @@ const updateDriverBookingStatus = async (req, res) => {
       }),
       addNotificationToUser(booking.customer?._id || booking.customer, {
         type: 'booking',
-        title: 'Driver updated your trip request',
-        message: `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
+        title: bookingStatus === 'confirmed' ? 'Driver request accepted' : 'Driver updated your trip request',
+        message: bookingStatus === 'confirmed'
+          ? 'Your driver request has been accepted. You can now complete payment.'
+          : `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
         link: '/bookings'
       })
     ])
@@ -542,6 +497,22 @@ const updateStaffVehicleBookingStatus = async (req, res) => {
       return res.status(404).json({ message: 'Vehicle booking not found' })
     }
 
+    if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
+      return res.status(400).json({ message: 'Only pending vehicle bookings can be confirmed' })
+    }
+
+    if (bookingStatus === 'completed' && booking.bookingStatus !== 'confirmed') {
+      return res.status(400).json({ message: 'Only confirmed vehicle bookings can be completed' })
+    }
+
+    if (bookingStatus === 'cancelled' && !['pending', 'confirmed'].includes(booking.bookingStatus)) {
+      return res.status(400).json({ message: 'Only pending or confirmed vehicle bookings can be cancelled' })
+    }
+
+    if (bookingStatus === 'closed' && !['completed', 'cancelled'].includes(booking.bookingStatus)) {
+      return res.status(400).json({ message: 'Only completed or cancelled vehicle bookings can be closed' })
+    }
+
     booking.bookingStatus = bookingStatus
     await booking.save()
 
@@ -554,8 +525,10 @@ const updateStaffVehicleBookingStatus = async (req, res) => {
       }),
       addNotificationToUser(booking.customer?._id || booking.customer, {
         type: 'booking',
-        title: 'Store updated your vehicle booking',
-        message: `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
+        title: bookingStatus === 'confirmed' ? 'Reservation accepted' : 'Store updated your vehicle booking',
+        message: bookingStatus === 'confirmed'
+          ? 'Your reservation has been accepted. You can now complete payment.'
+          : `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
         link: '/bookings'
       })
     ])

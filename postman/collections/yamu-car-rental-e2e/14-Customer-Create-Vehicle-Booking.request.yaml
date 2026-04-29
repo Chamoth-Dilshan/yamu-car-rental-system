@@ -62,4 +62,5 @@ scripts:
       if (json.booking && json.booking._id) {
         pm.environment.set("e2eBookingId", json.booking._id);
         pm.environment.set("e2eBookingNo", json.booking.bookingNo);
+        pm.environment.set("e2eBookingTotal", json.booking.totalAmount);
       }

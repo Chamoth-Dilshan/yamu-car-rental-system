@@ -2,6 +2,7 @@ import { Navigate, Route } from 'react-router-dom'
 
 import ProtectedRoute from '../components/common/ProtectedRoute'
 import AdminUsers from '../features/admin/pages/AdminUsers'
+import AdminPayments from '../features/payments/pages/AdminPayments'
 import AdminBookings from '../features/reservations/pages/AdminBookings'
 
 const AdminRoutes = [
@@ -47,6 +48,15 @@ const AdminRoutes = [
     element={(
       <ProtectedRoute roles={['admin']}>
         <AdminBookings />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="admin-payments"
+    path="/admin/payments"
+    element={(
+      <ProtectedRoute roles={['admin']} permissions={['payments.manage']}>
+        <AdminPayments />
       </ProtectedRoute>
     )}
   />,

@@ -1,6 +1,11 @@
 import { Navigate, Route } from 'react-router-dom'
 
 import ProtectedRoute from '../components/common/ProtectedRoute'
+import CheckoutPage from '../features/payments/pages/CheckoutPage'
+import PaymentCheckout from '../features/payments/pages/PaymentCheckout'
+import PaymentHistory from '../features/payments/pages/PaymentHistory'
+import PaymentReceipt from '../features/payments/pages/PaymentReceipt'
+import SavedCards from '../features/payments/pages/SavedCards'
 import ApplyRoles from '../features/users/pages/ApplyRoles'
 import MyBookings from '../features/reservations/pages/MyBookings'
 import Notifications from '../features/users/pages/Notifications'
@@ -26,6 +31,52 @@ const CustomerRoutes = [
     element={(
       <ProtectedRoute roles={['customer']}>
         <MyBookings />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="booking-payment"
+    path="/bookings/:bookingId/payment"
+    element={(
+      <ProtectedRoute roles={['customer']}>
+        <PaymentCheckout />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route key="payments-root" path="/payments" element={<Navigate to="/payments/history" replace />} />,
+  <Route
+    key="payment-checkout"
+    path="/payments/checkout/:bookingId"
+    element={(
+      <ProtectedRoute roles={['customer']}>
+        <CheckoutPage />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="payment-history"
+    path="/payments/history"
+    element={(
+      <ProtectedRoute roles={['customer']}>
+        <PaymentHistory />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="payment-cards"
+    path="/payments/cards"
+    element={(
+      <ProtectedRoute roles={['customer']}>
+        <SavedCards />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="payment-receipt"
+    path="/payments/:id/receipt"
+    element={(
+      <ProtectedRoute roles={['customer', 'admin', 'staff', 'driver']}>
+        <PaymentReceipt />
       </ProtectedRoute>
     )}
   />,
