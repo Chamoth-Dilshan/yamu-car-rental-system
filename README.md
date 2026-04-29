@@ -20,6 +20,25 @@ The project includes:
 - `client/` React + Vite frontend
 - `scripts/run-service.cjs` root helper to run shared build and lint commands
 
+## Project Structure
+
+The codebase is organized for the six assignment components:
+
+- User / Role / Profile Management
+- Reservation / Booking Management
+- Reviews, Complaints & Dispute Management
+- Payment & Transaction Management
+- Vehicle Maintenance & Inventory Management
+- Campaigns, Promotions & Dynamic Pricing Management
+
+Main module folders:
+
+- `server/src/modules` backend modules grouped by domain
+- `client/src/features` frontend features grouped by domain
+- `docs/` project structure and development guidance
+
+See `docs/PROJECT_STRUCTURE.md` for the full folder map and future development rules.
+
 ## Run
 
 ### 1. Server

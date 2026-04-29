@@ -1,48 +1,10 @@
-const express = require('express')
-const cors = require('cors')
-const path = require('path')
 require('dotenv').config()
 
-const connectDB = require('./config/db')
-const app = express()
-const { sendServerError } = require('./utils/errorResponses')
-
-app.use(cors())
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
-
-app.use('/api/auth', require('./routes/auth'))
-app.use('/api/users', require('./routes/users'))
-app.use('/api/admin', require('./routes/admin'))
-app.use('/api/vehicles', require('./routes/vehicles'))
-app.use('/api/driver-ads', require('./routes/driverAds'))
-app.use('/api/bookings', require('./routes/bookings'))
-
-app.get('/api/health', (req, res) => {
-  const readyStateLabels = {
-    0: 'disconnected',
-    1: 'connected',
-    2: 'connecting',
-    3: 'disconnecting'
-  }
-
-  res.json({
-    status: readyStateLabels[require('mongoose').connection.readyState] === 'connected' ? 'ok' : 'degraded',
-    message: 'Reservation, profile, and role management API is running',
-    database: readyStateLabels[require('mongoose').connection.readyState] || 'unknown'
-  })
-})
-
-app.use((error, req, res, next) => {
-  if (!error) {
-    return next()
-  }
-
-  return sendServerError(res, error, 'Server error')
-})
+const connectDB = require('./src/config/db')
+const app = require('./src/app')
 
 const PORT = process.env.PORT || 5001
+
 const startServer = async () => {
   try {
     await connectDB()
@@ -68,5 +30,3 @@ const startServer = async () => {
 }
 
 startServer()
-
-
