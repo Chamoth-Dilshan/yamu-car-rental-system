@@ -1,6 +1,6 @@
-const mongoose = require('mongoose')
 require('dotenv').config()
 
+const connectDB = require('../config/db')
 const User = require('../modules/users/user.model')
 const Vehicle = require('../modules/vehicles/vehicle.model')
 const DriverAd = require('../modules/drivers/driverAd.model')
@@ -42,13 +42,7 @@ const buildSeedNotification = (type, title, message, link, createdAt, isRead = f
 
 const seed = async () => {
   try {
-    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI
-
-    if (!mongoUri) {
-      throw new Error('Missing MongoDB connection string. Set MONGODB_URI or MONGO_URI in server/.env')
-    }
-
-    await mongoose.connect(mongoUri, { serverSelectionTimeoutMS: 8000 })
+    await connectDB()
     console.log('MongoDB Connected for seeding...')
 
     await Booking.deleteMany({})
