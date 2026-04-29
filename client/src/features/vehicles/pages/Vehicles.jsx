@@ -32,18 +32,47 @@ const DISTRICT_LOCATION_ALIASES = {
   Vavuniya: ['Vavuniya', 'Nedunkeni']
 }
 
+const DISTRICT_KEYWORDS = Object.entries(DISTRICT_LOCATION_ALIASES).flatMap(([district, aliases]) => (
+  [district, ...aliases].map((alias) => ({
+    district,
+    alias: alias.toLowerCase()
+  }))
+))
+
+const normalizeLocationSegment = (value = '') => value
+  .trim()
+  .toLowerCase()
+  .replace(/\bdistrict\b/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+
 const getDistrictFromLocation = (location = '') => {
-  const normalizedLocation = location.trim().toLowerCase()
+  const normalizedLocation = normalizeLocationSegment(location)
 
   if (!normalizedLocation) {
     return null
   }
 
-  const matchedDistrict = Object.entries(DISTRICT_LOCATION_ALIASES).find(([, aliases]) => (
-    aliases.some((alias) => alias.toLowerCase() === normalizedLocation)
+  const locationParts = location
+    .split(',')
+    .map((part) => normalizeLocationSegment(part))
+    .filter(Boolean)
+
+  const matchedFromParts = [...locationParts].reverse().find((part) => (
+    DISTRICT_KEYWORDS.some(({ alias }) => alias === part)
   ))
 
-  return matchedDistrict?.[0] || location
+  if (matchedFromParts) {
+    return DISTRICT_KEYWORDS.find(({ alias }) => alias === matchedFromParts)?.district || null
+  }
+
+  const matchedFromWholeValue = DISTRICT_KEYWORDS.find(({ alias }) => alias === normalizedLocation)
+
+  if (matchedFromWholeValue) {
+    return matchedFromWholeValue.district
+  }
+
+  return null
 }
 
 export default function Vehicles() {

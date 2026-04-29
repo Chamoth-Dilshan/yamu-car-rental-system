@@ -1,0 +1,62 @@
+$kind: http-request
+name: Update Vehicle
+method: PUT
+url: '{{baseUrl}}/api/vehicles/{{vehicleId}}'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+body:
+  type: formdata
+  content:
+    - key: name
+      type: text
+      value: ''
+    - key: brand
+      type: text
+      value: ''
+    - key: model
+      type: text
+      value: ''
+    - key: year
+      type: text
+      value: ''
+    - key: category
+      type: text
+      value: ''
+    - key: fuelType
+      type: text
+      value: ''
+    - key: transmission
+      type: text
+      value: ''
+    - key: seats
+      type: text
+      value: ''
+    - key: pricePerDay
+      type: text
+      value: ''
+    - key: status
+      type: text
+      value: ''
+    - key: location
+      type: text
+      value: ''
+    - key: engineCapacity
+      type: text
+      value: ''
+    - key: ownerContact
+      type: text
+      value: ''
+    - key: description
+      type: text
+      value: ''
+    - key: features
+      type: text
+      value: ''
+    - key: featured
+      type: text
+      value: ''
+    - key: images
+      type: file
+      src: ''

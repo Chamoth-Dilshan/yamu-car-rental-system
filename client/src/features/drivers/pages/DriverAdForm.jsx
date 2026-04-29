@@ -20,56 +20,71 @@ const emptyForm = {
   description: ''
 }
 
+const getDefaultForm = (user) => ({
+  ...emptyForm,
+  serviceLocation: user?.driverProfile?.serviceArea || '',
+  preferredContact: user?.phone ? 'Phone & Email' : ''
+})
+
+const mapAdToForm = (ad) => ({
+  title: ad.title || '',
+  tagline: ad.tagline || '',
+  serviceLocation: ad.serviceLocation || '',
+  languages: (ad.languages || []).join(', '),
+  experienceYears: ad.experienceYears || '',
+  dailyRate: ad.dailyRate || '',
+  maxGroupSize: ad.maxGroupSize || '',
+  availability: ad.availability || 'available',
+  visibility: ad.visibility || 'active',
+  preferredContact: ad.preferredContact || '',
+  specialties: (ad.specialties || []).join(', '),
+  description: ad.description || ''
+})
+
 export default function DriverAdForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user } = useAuth()
   const isEditMode = Boolean(id)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState(getDefaultForm(user))
   const [currentPhoto, setCurrentPhoto] = useState('')
   const [photoFile, setPhotoFile] = useState(null)
-  const [loading, setLoading] = useState(isEditMode)
+  const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
+  const [existingAd, setExistingAd] = useState(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!isEditMode) {
-      setForm((prev) => ({
-        ...prev,
-        serviceLocation: user?.driverProfile?.serviceArea || '',
-        preferredContact: user?.phone ? 'Phone & Email' : ''
-      }))
-      return
-    }
-
     setLoading(true)
     setError('')
+    setExistingAd(null)
 
     API.get('/driver-ads/mine/list')
       .then((res) => {
-        const ad = (res.data.ads || []).find((item) => item._id === id)
+        const myAds = res.data.ads || []
 
-        if (!ad) {
-          setError('Driver advertisement not found')
+        if (isEditMode) {
+          const ad = myAds.find((item) => item._id === id)
+
+          if (!ad) {
+            setError('Driver advertisement not found')
+            return
+          }
+
+          setForm(mapAdToForm(ad))
+          setCurrentPhoto(ad.photo || ad.driver?.profilePic || '')
           return
         }
 
-        setForm({
-          title: ad.title || '',
-          tagline: ad.tagline || '',
-          serviceLocation: ad.serviceLocation || '',
-          languages: (ad.languages || []).join(', '),
-          experienceYears: ad.experienceYears || '',
-          dailyRate: ad.dailyRate || '',
-          maxGroupSize: ad.maxGroupSize || '',
-          availability: ad.availability || 'available',
-          visibility: ad.visibility || 'active',
-          preferredContact: ad.preferredContact || '',
-          specialties: (ad.specialties || []).join(', '),
-          description: ad.description || ''
-        })
-        setCurrentPhoto(ad.photo || ad.driver?.profilePic || '')
+        if (myAds[0]) {
+          setExistingAd(myAds[0])
+          setCurrentPhoto(myAds[0].photo || myAds[0].driver?.profilePic || '')
+          return
+        }
+
+        setForm(getDefaultForm(user))
+        setCurrentPhoto('')
       })
       .catch((err) => setError(err.response?.data?.message || 'Failed to load advertisement'))
       .finally(() => setLoading(false))
@@ -112,8 +127,10 @@ export default function DriverAdForm() {
       <Sidebar />
       <main className="dashboard-content">
         <div className="form-header">
-          <h2>{isEditMode ? 'Edit Driver Advertisement' : 'Create Driver Advertisement'}</h2>
-          <p style={{ color: 'var(--text-light)' }}>Reuse the current project theme, but keep the structure needed for a public driver card and detail page.</p>
+          <h2>{isEditMode ? 'Edit Driver Ad' : 'Create Driver Ad'}</h2>
+          <p style={{ color: 'var(--text-light)' }}>
+            Drivers can keep one public advertisement. Create it once, then return here whenever you need to update it.
+          </p>
         </div>
 
         {message && <div className="alert alert-success">{message}</div>}
@@ -121,6 +138,42 @@ export default function DriverAdForm() {
 
         {loading ? (
           <div className="form-card reservation-empty">Loading advertisement...</div>
+        ) : !isEditMode && existingAd ? (
+          <div className="form-card driver-ad-locked-card">
+            <span className="badge badge-warning">Single ad limit</span>
+            <h3>You already have a driver ad</h3>
+            <p style={{ color: 'var(--text-light)' }}>
+              This account can only keep one public driver advertisement. Edit your current ad instead of creating a second one.
+            </p>
+
+            <div className="driver-ad-detail-grid">
+              <article className="driver-ad-detail-block">
+                <span>Current Ad</span>
+                <strong>{existingAd.title}</strong>
+              </article>
+              <article className="driver-ad-detail-block">
+                <span>Visibility</span>
+                <strong>{existingAd.visibility}</strong>
+              </article>
+              <article className="driver-ad-detail-block">
+                <span>Availability</span>
+                <strong>{existingAd.availability}</strong>
+              </article>
+              <article className="driver-ad-detail-block">
+                <span>Daily Rate</span>
+                <strong>LKR {Number(existingAd.dailyRate || 0).toLocaleString()}</strong>
+              </article>
+            </div>
+
+            <div className="pill-row">
+              <button className="btn btn-secondary" type="button" onClick={() => navigate(`/driver/ads/${existingAd._id}/edit`)}>
+                Edit My Ad
+              </button>
+              <button className="btn btn-outline" type="button" onClick={() => navigate('/driver/ads')}>
+                Back to My Ad
+              </button>
+            </div>
+          </div>
         ) : (
           <div className="form-card driver-ad-form-card">
             <form onSubmit={submitForm}>

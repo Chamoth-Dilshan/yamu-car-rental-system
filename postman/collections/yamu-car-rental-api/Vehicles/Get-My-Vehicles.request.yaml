@@ -1,0 +1,15 @@
+$kind: http-request
+name: Get My Vehicles
+method: GET
+url: '{{baseUrl}}/api/vehicles/mine/list'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+queryParams:
+  - key: search
+    value: ''
+    disabled: true
+  - key: status
+    value: ''
+    disabled: true

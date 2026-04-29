@@ -290,6 +290,9 @@ input:focus, select:focus, textarea:focus {
   letter-spacing: -0.08em;
   white-space: nowrap;
 }
+.navbar .brand-logo-word {
+  font-size: 1.85rem;
+}
 .nav-links { display: flex; align-items: center; gap: 2rem; }
 .nav-links a {
   color: var(--gray-300);
@@ -1504,7 +1507,7 @@ input:focus, select:focus, textarea:focus {
 }
 .admin-role-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  grid-template-columns: 1fr;
   gap: 1.25rem;
 }
 .admin-user-filters {
@@ -1530,98 +1533,37 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 18px 40px rgba(15,23,42,0.1);
   transform: translateY(-2px);
 }
-.admin-role-summary-card {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 1.1rem;
-  min-height: 100%;
-  padding: 1.5rem;
-  background:
-    radial-gradient(circle at top right, rgba(240,165,0,0.12), transparent 30%),
-    linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.98) 100%);
+.admin-user-summary-shell {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding: 1.4rem 1.5rem;
 }
-.admin-role-summary-card .admin-card-stat-row {
-  margin-bottom: 0;
-}
-.admin-role-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-}
-.admin-role-card-identity {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
+.admin-user-summary-shell .admin-user-summary-main {
   min-width: 0;
 }
-.admin-role-card-copy h3 {
-  margin-bottom: 0.35rem;
-}
-.admin-role-card-copy p {
-  margin: 0;
-  color: var(--text-light);
-}
-.admin-role-card-eyebrow {
-  display: inline-flex;
-  width: fit-content;
-  margin-bottom: 0.7rem;
-  padding: 0.35rem 0.7rem;
-  border-radius: 999px;
-  background: rgba(240,165,0,0.12);
-  color: #b45309;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.admin-role-card-primary {
-  min-width: 200px;
-  padding: 1rem 1.1rem;
-  border: 1px solid rgba(15,23,42,0.08);
-  border-radius: var(--radius);
-  background: rgba(15,23,42,0.03);
-}
-.admin-role-card-primary span,
-.admin-role-card-primary small {
-  display: block;
-  color: var(--text-light);
-}
-.admin-role-card-primary span {
-  font-size: 0.78rem;
-  margin-bottom: 0.35rem;
-}
-.admin-role-card-primary strong {
-  display: block;
-  color: var(--primary);
-  font-size: 1.15rem;
-}
-.admin-role-card-primary small {
-  margin-top: 0.35rem;
-  font-size: 0.84rem;
-}
-.admin-role-chip-row {
+.admin-user-summary-shell .admin-user-summary-copy {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-.admin-role-stat-row {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.admin-role-card-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   gap: 1rem;
-  padding-top: 0.4rem;
-  border-top: 1px solid rgba(15,23,42,0.08);
+  min-width: 0;
 }
-.admin-role-card-note {
-  margin: 0;
-  color: var(--text-light);
-  font-size: 0.92rem;
-  line-height: 1.55;
+.admin-user-summary-shell .admin-user-summary-copy h3,
+.admin-user-summary-shell .admin-user-summary-copy p,
+.admin-user-summary-shell .admin-user-summary-copy .admin-user-summary-tags {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+.admin-user-summary-shell .admin-user-summary-copy h3,
+.admin-user-summary-shell .admin-user-summary-copy p {
+  white-space: nowrap;
+}
+.admin-user-summary-shell .admin-user-summary-copy p {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-user-summary-shell .admin-user-card-actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
 }
 .admin-user-summary-main {
   display: flex;
@@ -2120,6 +2062,120 @@ input:focus, select:focus, textarea:focus {
 .driver-ad-form-card {
   max-width: 960px;
 }
+.driver-ad-single-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+.driver-ad-empty-state,
+.driver-ad-locked-card {
+  max-width: 840px;
+}
+.driver-ad-empty-state h3,
+.driver-ad-locked-card h3 {
+  font-size: 1.5rem;
+  color: var(--primary);
+  margin: 0.9rem 0 0.6rem;
+}
+.driver-ad-empty-state p,
+.driver-ad-locked-card p {
+  max-width: 620px;
+}
+.driver-ad-focus-card {
+  background:
+    radial-gradient(circle at top right, rgba(240,165,0,0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,0.99) 0%, rgba(248,250,252,0.98) 100%);
+}
+.driver-ad-focus-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+.driver-ad-focus-profile {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+  min-width: 0;
+}
+.driver-ad-focus-photo {
+  width: 116px;
+  height: 116px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 4px solid rgba(240,165,0,0.9);
+  box-shadow: 0 18px 40px rgba(15,23,42,0.12);
+  flex-shrink: 0;
+}
+.driver-ad-focus-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.driver-ad-focus-copy {
+  min-width: 0;
+}
+.driver-ad-focus-copy h3 {
+  font-size: 1.8rem;
+  color: var(--primary);
+  margin: 0.4rem 0;
+}
+.driver-ad-focus-copy p {
+  color: var(--text-light);
+  max-width: 620px;
+}
+.driver-ad-focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: flex-end;
+}
+.driver-ad-highlight-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+.driver-ad-highlight {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid rgba(15,23,42,0.08);
+  background: rgba(255,255,255,0.74);
+}
+.driver-ad-highlight span,
+.driver-ad-detail-block span {
+  display: block;
+  color: var(--text-light);
+  font-size: 0.8rem;
+  margin-bottom: 0.45rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.driver-ad-highlight strong,
+.driver-ad-detail-block strong {
+  display: block;
+  color: var(--primary);
+  font-size: 1.05rem;
+}
+.driver-ad-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+.driver-ad-detail-block {
+  padding: 1rem 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid rgba(15,23,42,0.08);
+  background: rgba(15,23,42,0.025);
+}
+.driver-ad-detail-block-wide {
+  margin-top: 1rem;
+}
+.driver-ad-detail-copy {
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
 .driver-ad-photo-panel {
   display: grid;
   grid-template-columns: 120px minmax(0, 1fr);
@@ -2185,18 +2241,6 @@ input:focus, select:focus, textarea:focus {
   .admin-user-summary-card {
     grid-template-columns: 1fr;
   }
-  .admin-role-card-top,
-  .admin-role-card-footer {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-  .admin-role-card-primary {
-    width: 100%;
-    min-width: 0;
-  }
-  .admin-role-stat-row {
-    grid-template-columns: 1fr;
-  }
   .vehicle-detail-grid,
   .vehicle-specs-grid,
   .driver-detail-grid {
@@ -2217,6 +2261,19 @@ input:focus, select:focus, textarea:focus {
   .booking-card,
   .driver-summary-card {
     position: static;
+  }
+  .driver-ad-focus-head,
+  .driver-ad-focus-profile,
+  .driver-ad-detail-grid {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .driver-ad-focus-actions {
+    justify-content: flex-start;
+  }
+  .driver-ad-highlight-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2298,6 +2355,31 @@ input:focus, select:focus, textarea:focus {
     flex-direction: column;
     align-items: stretch;
   }
+  .driver-ad-highlight-grid,
+  .driver-ad-detail-grid,
+  .driver-ad-photo-panel {
+    grid-template-columns: 1fr;
+  }
+  .driver-ad-focus-photo {
+    width: 104px;
+    height: 104px;
+  }
+  .admin-user-summary-shell {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: flex-start;
+  }
+  .admin-user-summary-shell .admin-user-summary-copy {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  .admin-user-summary-shell .admin-user-summary-copy h3,
+  .admin-user-summary-shell .admin-user-summary-copy p {
+    white-space: normal;
+  }
+  .admin-user-summary-shell .admin-user-card-actions {
+    flex-wrap: wrap;
+  }
   .admin-user-card-actions {
     justify-content: flex-start;
   }
@@ -2327,6 +2409,9 @@ input:focus, select:focus, textarea:focus {
   .brand-logo-word {
     font-size: 1.78rem;
     letter-spacing: -0.05em;
+  }
+  .navbar .brand-logo-word {
+    font-size: 1.5rem;
   }
   .footer-logo .brand-logo-mark {
     height: 1.9rem;

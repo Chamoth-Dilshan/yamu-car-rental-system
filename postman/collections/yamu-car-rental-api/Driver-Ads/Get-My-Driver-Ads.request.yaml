@@ -1,0 +1,18 @@
+$kind: http-request
+name: Get My Driver Ads
+method: GET
+url: '{{baseUrl}}/api/driver-ads/mine/list'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+queryParams:
+  - key: search
+    value: ''
+    disabled: true
+  - key: availability
+    value: ''
+    disabled: true
+  - key: visibility
+    value: ''
+    disabled: true

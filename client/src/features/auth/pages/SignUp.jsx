@@ -74,6 +74,7 @@ export default function SignUp() {
               value={form.username}
               onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
               placeholder="Choose a username"
+              required
             />
           </div>
           <div className="form-group">

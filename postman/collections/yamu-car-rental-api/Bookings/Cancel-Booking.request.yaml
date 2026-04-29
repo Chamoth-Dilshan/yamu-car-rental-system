@@ -1,0 +1,8 @@
+$kind: http-request
+name: Cancel Booking
+method: PUT
+url: '{{baseUrl}}/api/bookings/{{bookingId}}/cancel'
+order: 4000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'

@@ -129,7 +129,7 @@ export default function Layout({ children }) {
             {user && isCustomer && canManageProfile && <NavLink to={userProfilePath}>User Profile</NavLink>}
             {user && !isCustomer && !isAdmin && canManageProfile && <NavLink to={roleProfilePath}>{roleProfileNavLabel}</NavLink>}
             {user && isAdmin && canManageProfile && <NavLink to={roleProfilePath}>Admin Profile</NavLink>}
-            {isDriver && <NavLink to="/driver/ads">Driver Ads</NavLink>}
+            {isDriver && <NavLink to="/driver/ads">Driver Ad</NavLink>}
             {isStaff && <NavLink to="/staff/vehicles">Store Vehicles</NavLink>}
             {isAdmin && canViewUsers && <NavLink to="/admin/dashboard">Admin Dashboard</NavLink>}
             {isAdmin && <NavLink to="/admin/bookings">Bookings</NavLink>}
@@ -210,7 +210,7 @@ export default function Layout({ children }) {
                     {canManageProfile && isAdmin && <Link to={roleProfilePath}>Admin Profile</Link>}
                     {canManageProfile && <Link to="/notifications">Notifications</Link>}
                     {isCustomer && <Link to="/bookings">My Bookings</Link>}
-                    {isDriver && <Link to="/driver/ads">My Driver Ads</Link>}
+                    {isDriver && <Link to="/driver/ads">My Driver Ad</Link>}
                     {isDriver && <Link to="/driver/bookings">Booking Requests</Link>}
                     {isStaff && <Link to="/staff/vehicles">My Vehicles</Link>}
                     {isStaff && <Link to="/staff/bookings">Vehicle Requests</Link>}

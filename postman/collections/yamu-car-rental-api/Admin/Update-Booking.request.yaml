@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Booking
+method: PUT
+url: '{{baseUrl}}/api/admin/bookings/{{bookingId}}'
+order: 8000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "bookingStatus": "confirmed",
+      "paymentStatus": "paid"
+    }

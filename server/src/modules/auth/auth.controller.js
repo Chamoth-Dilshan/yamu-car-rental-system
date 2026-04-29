@@ -16,8 +16,8 @@ const register = async (req, res) => {
   try {
     const { fullName, email, password, username, phone, address, city } = req.body;
 
-    if (!fullName || !email || !password) {
-      return res.status(400).json({ message: 'Full name, email, and password are required' });
+    if (!fullName || !username || !email || !password) {
+      return res.status(400).json({ message: 'Full name, username, email, and password are required' });
     }
 
     const passwordError = validatePasswordStrength(password);
@@ -26,14 +26,23 @@ const register = async (req, res) => {
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
-    const normalizedUsername = String(username || normalizedEmail).trim().toLowerCase();
+    const normalizedUsername = String(username).trim().toLowerCase();
 
-    const existingUser = await User.findOne({
-      $or: [{ email: normalizedEmail }, { username: normalizedUsername }]
-    });
+    if (!normalizedUsername) {
+      return res.status(400).json({ message: 'Username is required' });
+    }
 
-    if (existingUser) {
-      return res.status(400).json({ message: 'A user already exists with that email or username' });
+    const [existingUsername, existingEmail] = await Promise.all([
+      User.findOne({ username: normalizedUsername }).select('_id'),
+      User.findOne({ email: normalizedEmail }).select('_id')
+    ]);
+
+    if (existingUsername) {
+      return res.status(400).json({ message: 'Username is already in use' });
+    }
+
+    if (existingEmail) {
+      return res.status(400).json({ message: 'Email is already in use' });
     }
 
     await User.create({
@@ -55,7 +64,15 @@ const register = async (req, res) => {
     });
   } catch (error) {
     if (error.code === 11000) {
-      return res.status(400).json({ message: 'A user already exists with that email or username' });
+      if (error.keyPattern?.username) {
+        return res.status(400).json({ message: 'Username is already in use' });
+      }
+
+      if (error.keyPattern?.email) {
+        return res.status(400).json({ message: 'Email is already in use' });
+      }
+
+      return res.status(400).json({ message: 'Email or username is already in use' });
     }
 
     sendServerError(res, error, 'Registration failed');
