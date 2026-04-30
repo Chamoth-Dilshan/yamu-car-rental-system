@@ -38,6 +38,7 @@ const menuItems = {
     { to: '/admin/pending-approvals', label: 'Pending Approvals', end: false },
     { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: false },
+    { to: '/admin/vehicles', label: 'Vehicles', end: false },
     { section: 'Account' },
     { to: '/profile/admin', label: 'Admin Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true }
@@ -67,6 +68,10 @@ export default function Sidebar() {
     if (item.to === '/admin/roles') {
       return hasPermission('users.view') && hasPermission('roles.assign')
     }
+
+    if (item.to === '/admin/vehicles') {
+  return true
+}
 
     return true
   })
