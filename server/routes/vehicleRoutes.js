@@ -8,7 +8,7 @@ const {
     getVehicleById,
     updateVehicle,
     deleteVehicle
-} = require('../controllers/vehicleController')
+} = require('../src/modules/vehicles/vehicle.controller')
 
 // Create vehicle
 router.post('/', createVehicle)

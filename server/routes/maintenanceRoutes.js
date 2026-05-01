@@ -7,7 +7,7 @@ const {
     getMaintenanceById,
     updateMaintenance,
     deleteMaintenance
-} = require('../controllers/maintenanceController');
+} = require('../src/modules/admin/maintenanceController');
 
 router.post('/', createMaintenance);
 router.get('/', getAllMaintenance);

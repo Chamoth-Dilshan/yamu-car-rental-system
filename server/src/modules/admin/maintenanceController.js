@@ -1,5 +1,5 @@
 //server/cpntrollers/maintenanceController.js
-const Maintenance = require('../models/maintenance');
+const Maintenance = require('../maintenance/maintenance.model');
 
 // @desc    Record new maintenance
 // @route   POST /api/maintenance

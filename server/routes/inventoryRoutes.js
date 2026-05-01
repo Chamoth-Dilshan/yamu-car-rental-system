@@ -7,7 +7,7 @@ const {
     getItemById,
     updateItem,
     deleteItem
-} = require('../controllers/inventoryController');
+} = require('../src/modules/admin/inventoryController');
 
 // Routes
 router.post('/', createItem);

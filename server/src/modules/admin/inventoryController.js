@@ -1,5 +1,5 @@
 //server/controllers/inventoryController.js
-const Inventory = require('../models/inventory');
+const Inventory = require('./inventory.model');
 
 // @desc    Add new inventory item
 // @route   POST /api/inventory
