@@ -4,14 +4,35 @@ import ProtectedRoute from '../components/common/ProtectedRoute'
 import AdminUsers from '../features/admin/pages/AdminUsers'
 import AdminPayments from '../features/payments/pages/AdminPayments'
 import AdminBookings from '../features/reservations/pages/AdminBookings'
+import AdminDisputes from '../features/reviews/pages/AdminDisputes'
+import AdminQualityDashboard from '../features/reviews/pages/AdminQualityDashboard'
+import AdminReviewApprovals from '../features/reviews/pages/AdminReviewApprovals'
 
 const AdminRoutes = [
   <Route
     key="admin-dashboard"
     path="/admin/dashboard"
     element={(
-      <ProtectedRoute roles={['admin']} permissions={['users.view']}>
-        <AdminUsers />
+      <ProtectedRoute roles={['admin']}>
+        <AdminQualityDashboard />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="admin-review-approvals"
+    path="/admin/reviews"
+    element={(
+      <ProtectedRoute roles={['admin']}>
+        <AdminReviewApprovals />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="admin-disputes"
+    path="/admin/disputes"
+    element={(
+      <ProtectedRoute roles={['admin']}>
+        <AdminDisputes />
       </ProtectedRoute>
     )}
   />,

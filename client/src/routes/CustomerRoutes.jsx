@@ -8,6 +8,9 @@ import PaymentReceipt from '../features/payments/pages/PaymentReceipt'
 import SavedCards from '../features/payments/pages/SavedCards'
 import ApplyRoles from '../features/users/pages/ApplyRoles'
 import MyBookings from '../features/reservations/pages/MyBookings'
+import ComplaintForm from '../features/reviews/pages/ComplaintForm'
+import CustomerDashboard from '../features/reviews/pages/CustomerDashboard'
+import ReviewForm from '../features/reviews/pages/ReviewForm'
 import Notifications from '../features/users/pages/Notifications'
 import Profile from '../features/users/pages/Profile'
 import RoleManagement from '../features/users/pages/RoleManagement'
@@ -23,6 +26,15 @@ function ProfileEntryRedirect() {
 }
 
 const CustomerRoutes = [
+  <Route
+    key="customer-dashboard"
+    path="/dashboard"
+    element={(
+      <ProtectedRoute roles={['customer']}>
+        <CustomerDashboard />
+      </ProtectedRoute>
+    )}
+  />,
   <Route key="account" path="/account" element={<ProfileEntryRedirect />} />,
   <Route key="profile-entry" path="/profile" element={<ProfileEntryRedirect />} />,
   <Route
@@ -40,6 +52,24 @@ const CustomerRoutes = [
     element={(
       <ProtectedRoute roles={['customer']}>
         <PaymentCheckout />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="booking-review"
+    path="/bookings/:bookingId/review"
+    element={(
+      <ProtectedRoute roles={['customer']}>
+        <ReviewForm />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="booking-complaint"
+    path="/bookings/:bookingId/complaint"
+    element={(
+      <ProtectedRoute roles={['customer']}>
+        <ComplaintForm />
       </ProtectedRoute>
     )}
   />,
