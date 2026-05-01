@@ -6,6 +6,7 @@ import { formatRoleLabel } from '../../utils/roles'
 const menuItems = {
   customer: [
     { section: 'Account' },
+    { to: '/dashboard', label: 'Dashboard', end: true },
     { to: '/profile/user', label: 'User Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
@@ -37,6 +38,8 @@ const menuItems = {
   admin: [
     { section: 'Admin Panel' },
     { to: '/admin/dashboard', label: 'Overview', end: true },
+    { to: '/admin/reviews', label: 'Review Approvals', end: true },
+    { to: '/admin/disputes', label: 'Dispute Management', end: true },
     { to: '/admin/pending-approvals', label: 'Pending Approvals', end: false },
     { to: '/admin/users', label: 'Users', end: false },
     { to: '/admin/roles', label: 'Role Access', end: false },
@@ -59,7 +62,11 @@ export default function Sidebar() {
       return hasPermission('profile.manage')
     }
 
-    if (item.to === '/admin/dashboard' || item.to === '/admin/users') {
+    if (item.to === '/admin/dashboard' || item.to === '/admin/reviews' || item.to === '/admin/disputes') {
+      return user?.activeRole === 'admin'
+    }
+
+    if (item.to === '/admin/users') {
       return hasPermission('users.view')
     }
 
