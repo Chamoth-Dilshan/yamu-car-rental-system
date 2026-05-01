@@ -383,14 +383,17 @@ export default function App() {
             </ProtectedRoute>
           )}
         />
-        <Route
+        {/* <Route
           path="/admin/vehicles"
           element={(
             <ProtectedRoute roles={['admin']} >
               <VehicleManagement />
             </ProtectedRoute>
           )}
-        />
+        /> */}
+
+        <Route path="/admin/vehicles" element={<VehicleManagement />} />
+
         <Route
           path="/admin/bookings"
           element={(

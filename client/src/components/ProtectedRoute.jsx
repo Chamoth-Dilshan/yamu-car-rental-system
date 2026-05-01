@@ -13,6 +13,10 @@ export default function ProtectedRoute({ children, roles, permissions, requireAl
     return <Navigate to="/signin" replace />;
   }
 
+  console.log("User role:", user.role);
+  console.log("Active role:", user.activeRole);
+  console.log("Allowed roles:", roles);
+
   const fallbackProfilePath = getProfilePathForRole(user.activeRole || user.role);
 
   if (roles && !roles.includes(user.activeRole || user.role)) {

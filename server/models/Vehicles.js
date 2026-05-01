@@ -1,10 +1,10 @@
-// server/models/vehicle.js
+// server/models/vehicles.js
 const mongoose = require('mongoose')
 
 const vehicleSchema = new mongoose.Schema({
 
     _id: { type: String, required: true},
-    owner: { type: String, required: true },
+    ownerName: { type: String, required: true },
     imgUrl: { type: String, required: true },
     phone: { type: String, required: true},
     brand: { type: String, required: true },

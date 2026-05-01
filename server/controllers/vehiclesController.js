@@ -1,5 +1,5 @@
 //server/controllers/vehicleController.js
-const Vehicle = require('../models/vehicle')
+const Vehicle = require('../models/vehicles')
 
 // @desc    Create a new vehicle
 // @route   POST /api/vehicles
