@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
-import { formatDateTime, getBadgeClass } from '../../../utils/formatters';
+import { formatDateTime } from '../../../utils/formatters';
 
 export default function Notifications() {
   const {
@@ -38,12 +38,7 @@ export default function Notifications() {
               {allNotifications.map((notification) => (
                 <div key={notification._id} className={`notification-card${notification.isRead ? '' : ' unread'}`}>
                   <div className="notification-card-copy">
-                    <div className="notification-title-row">
-                      <strong>{notification.title}</strong>
-                      {notification.type && (
-                        <span className={`badge ${getBadgeClass(notification.type)}`}>{notification.type}</span>
-                      )}
-                    </div>
+                    <strong>{notification.title}</strong>
                     <p>{notification.message}</p>
                     <small>{formatDateTime(notification.createdAt)}</small>
                   </div>

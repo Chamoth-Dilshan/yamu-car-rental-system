@@ -190,7 +190,6 @@ export default function MyBookings() {
                     const latestPayment = getLatestPayment(booking._id)
                     const isProcessing = latestPayment?.status === 'processing'
                     const paymentDisplayStatus = isProcessing ? 'processing' : booking.paymentStatus
-                    const canReviewBooking = ['completed', 'closed'].includes(booking.bookingStatus)
 
                     return (
                       <tr key={booking._id}>
@@ -246,14 +245,6 @@ export default function MyBookings() {
                                 Refunded
                               </button>
                             )}
-                            {canReviewBooking && (
-                              <Link className="btn btn-primary btn-sm" to={`/bookings/${booking._id}/review`}>
-                                Review
-                              </Link>
-                            )}
-                            <Link className="btn btn-outline btn-sm" to={`/bookings/${booking._id}/complaint`}>
-                              Complaint
-                            </Link>
                             {['pending', 'confirmed'].includes(booking.bookingStatus) && (
                               <button
                                 className="btn btn-danger btn-sm"

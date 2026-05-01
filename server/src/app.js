@@ -20,7 +20,6 @@ app.use('/api/driver-ads', require('./modules/drivers/driverAd.routes'))
 app.use('/api/bookings', require('./modules/reservations/booking.routes'))
 app.use('/api/payments', require('./modules/payments/payment.routes'))
 app.use('/api/reviews', require('./modules/reviews/review.routes'))
-app.use('/api/complaints', require('./modules/reviews/complaint.routes'))
 app.use('/api/maintenance', require('./modules/maintenance/maintenance.routes'))
 app.use('/api/promotions', require('./modules/promotions/promotion.routes'))
 

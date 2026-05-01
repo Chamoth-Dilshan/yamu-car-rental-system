@@ -50,12 +50,6 @@ export const formatList = (items = [], fallback = 'Not specified') => {
 
 const badgeMap = {
   pending: 'badge-warning',
-  approved: 'badge-success',
-  under_review: 'badge-info',
-  solved: 'badge-success',
-  low: 'badge-info',
-  medium: 'badge-warning',
-  high: 'badge-danger',
   processing: 'badge-warning',
   completed: 'badge-success',
   rejected: 'badge-danger',

@@ -26,10 +26,6 @@ const modulesToLoad = [
   '../src/modules/payments/payment.service',
   '../src/modules/payments/payment.validation',
   '../src/modules/admin/adminBooking.controller',
-  '../src/modules/reviews/review.model',
-  '../src/modules/reviews/complaint.model',
-  '../src/modules/reviews/review.controller',
-  '../src/modules/reviews/complaint.controller',
   '../src/modules/auth/auth.routes',
   '../src/modules/users/user.routes',
   '../src/modules/admin/admin.routes',
@@ -38,7 +34,6 @@ const modulesToLoad = [
   '../src/modules/reservations/booking.routes',
   '../src/modules/payments/payment.routes',
   '../src/modules/reviews/review.routes',
-  '../src/modules/reviews/complaint.routes',
   '../src/modules/maintenance/maintenance.routes',
   '../src/modules/promotions/promotion.routes'
 ];
