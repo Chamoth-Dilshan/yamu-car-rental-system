@@ -1,4 +1,4 @@
-//server/src/modules/maintenance/maintenance.model.js
+//server/models/maintenance.js
 const mongoose = require('mongoose')
 
 const maintenanceSchema = new mongoose.Schema({

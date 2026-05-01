@@ -1,8 +1,0 @@
-$kind: http-request
-name: Delete Booking
-method: DELETE
-url: '{{baseUrl}}/api/admin/bookings/{{bookingId}}'
-order: 9000
-headers:
-  - key: Authorization
-    value: 'Bearer {{token}}'

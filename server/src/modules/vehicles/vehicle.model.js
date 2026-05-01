@@ -1,28 +1,60 @@
+// server/models/vehicle.js
 const mongoose = require('mongoose')
 const { VEHICLE_STATUSES } = require('../../utils/reservationHelpers')
 
 const vehicleSchema = new mongoose.Schema({
-  owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  vehicleCode: { type: String, required: true, unique: true },
-  name: { type: String, required: true, trim: true },
-  brand: { type: String, required: true, trim: true },
-  model: { type: String, required: true, trim: true },
-  year: { type: Number, required: true },
-  category: { type: String, default: '' },
-  fuelType: { type: String, required: true, trim: true },
-  transmission: { type: String, required: true, trim: true },
-  seats: { type: Number, required: true, min: 1 },
-  location: { type: String, required: true, trim: true },
-  engineCapacity: { type: String, default: '' },
-  ownerContact: { type: String, default: '' },
-  description: { type: String, default: '' },
-  features: [{ type: String, trim: true }],
-  images: [{ type: String, trim: true }],
-  pricePerDay: { type: Number, required: true, min: 0 },
-  status: { type: String, enum: VEHICLE_STATUSES, default: 'available' },
-  featured: { type: Boolean, default: false }
-}, {
-  timestamps: true
-})
+
+    _id: { type: String, required: true},
+    owner: { type: String, required: true },
+    imgUrl: { type: String, required: true },
+    phone: { type: String, required: true},
+    brand: { type: String, required: true },
+    model: { type: String, required: true },
+    year: { type: Number, required: true },
+    fuel: { type: String, required: true, },
+    transmission: { type: String,  required: true },
+    seats: { type: Number, required: true, min: 1 },
+    distance: { type: Number, required: true, min: 0 },
+    pricePerDay: { type: Number, required: true, min: 0 },
+    availability: { type: String, default: true },
+    }, { timestamps: true })
 
 module.exports = mongoose.model('Vehicle', vehicleSchema)
+    
+    // _id: { type: String, required: true, unique: true },
+    // owner: { type: String, required: true },
+
+    // phone: { 
+    //     type: Number, 
+    //     required: true,
+    //     validate: {
+    //         validator: function(v) {
+    //             // Checks if the string is exactly 10 digits (0-9)
+    //             return /^\d{10}$/.test(v);
+    //         },
+    //         message: props => `${props.value} is not a valid 10-digit phone number!`
+    //     }
+    // },
+
+    // brand: { type: String, required: true },
+    // model: { type: String, required: true },
+    // year: { type: Number, required: true },
+
+    // fuel: { 
+    //     type: String, 
+    //     required: true,
+    //     enum: ['Petrol', 'Diesel', 'Electric', 'Hybrid']
+    // },
+
+    // transmission: { 
+    //     type: String, 
+    //     required: true,
+    //     enum: ['Manual', 'Automatic']
+    // },
+
+    // seats: { type: Number, required: true, min: 1 },
+    // distance: { type: Number, required: true, min: 0 },
+    // pricePerDay: { type: Number, required: true, min: 0 },
+    // availability: { type: Boolean, default: true },
+    // }, { timestamps: true })
+
