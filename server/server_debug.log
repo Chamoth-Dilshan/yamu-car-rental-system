@@ -1,0 +1,27 @@
+[EMAIL] 2026-05-01T20:59:46.676Z - Checking email credentials for Server Startup Diagnostic...
+[EMAIL] 2026-05-01T20:59:50.227Z - Low stock alert sent successfully for: Server Startup Diagnostic
+[2026-05-01T21:02:11.922Z] OPTIONS /api/inventory/69f50dfe9a1980265fa687a7
+[2026-05-01T21:02:11.935Z] PUT /api/inventory/69f50dfe9a1980265fa687a7
+[EMAIL] 2026-05-01T21:02:12.845Z - Checking email credentials for engine oils...
+[2026-05-01T21:02:12.871Z] GET /api/inventory
+[EMAIL] 2026-05-01T21:02:16.463Z - Low stock alert sent successfully for: engine oils
+[2026-05-01T21:03:10.921Z] OPTIONS /api/inventory/69f50dfe9a1980265fa687a7
+[2026-05-01T21:03:10.946Z] DELETE /api/inventory/69f50dfe9a1980265fa687a7
+[2026-05-01T21:03:11.081Z] GET /api/inventory
+[2026-05-01T21:03:14.297Z] OPTIONS /api/inventory/69f501959a1980265fa6875c
+[2026-05-01T21:03:14.310Z] DELETE /api/inventory/69f501959a1980265fa6875c
+[2026-05-01T21:03:14.439Z] GET /api/inventory
+[2026-05-01T21:03:18.064Z] OPTIONS /api/inventory/69f500fc9a1980265fa6874f
+[2026-05-01T21:03:18.074Z] DELETE /api/inventory/69f500fc9a1980265fa6874f
+[2026-05-01T21:03:18.212Z] GET /api/inventory
+[2026-05-01T21:03:23.974Z] OPTIONS /api/inventory/69f500219a1980265fa6873a
+[2026-05-01T21:03:23.986Z] DELETE /api/inventory/69f500219a1980265fa6873a
+[2026-05-01T21:03:24.119Z] GET /api/inventory
+[2026-05-01T21:04:45.383Z] OPTIONS /api/inventory
+[2026-05-01T21:04:45.386Z] POST /api/inventory
+[2026-05-01T21:04:45.555Z] GET /api/inventory
+[2026-05-01T21:05:05.193Z] OPTIONS /api/inventory
+[2026-05-01T21:05:05.197Z] POST /api/inventory
+[EMAIL] 2026-05-01T21:05:05.303Z - Checking email credentials for DB Verification Part...
+[2026-05-01T21:05:05.322Z] GET /api/inventory
+[EMAIL] 2026-05-01T21:05:08.905Z - Low stock alert sent successfully for: DB Verification Part

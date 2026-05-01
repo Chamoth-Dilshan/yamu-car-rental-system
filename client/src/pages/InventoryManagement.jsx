@@ -1,543 +1,382 @@
-// import React, { useState, useEffect } from 'react';
-// import { Search, Plus, Edit2, Trash2, X, Box } from 'lucide-react';
-// import API from '../services/api';
-
-// const InventoryManagement = () => {
-//   const [inventory, setInventory] = useState([]);
-//   const [loading, setLoading] = useState(true);
-//   const [error, setError] = useState(null);
-
-//   // UI States
-//   const [searchTerm, setSearchTerm] = useState('');
-//   const [isFormOpen, setIsFormOpen] = useState(false);
-//   const [editingId, setEditingId] = useState(null);
-
-//   // Form State
-//   const [formData, setFormData] = useState({
-//     itemname: '',
-//     quantity: '',
-//     price: '',
-//     description: ''
-//   });
-
-//   // Fetch inventory from database
-//   useEffect(() => {
-//     fetchInventory();
-//   }, []);
-
-//   const fetchInventory = async () => {
-//     try {
-//       setLoading(true);
-//       const response = await API.get('/inventory');
-//       setInventory(response.data);
-//       setError(null);
-//     } catch (err) {
-//       setError('Failed to fetch inventory');
-//       console.error(err);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   // Filter Logic
-//   const filteredInventory = inventory.filter(item =>
-//     item.itemname.toLowerCase().includes(searchTerm.toLowerCase())
-//   );
-
-//   // Form Handlers
-//   const handleInputChange = (e) => {
-//     const { name, value } = e.target;
-//     setFormData({ ...formData, [name]: value });
-//   };
-
-//   const openAddForm = () => {
-//     setEditingId(null);
-//     setFormData({ itemname: '', quantity: '', price: '', description: '' });
-//     setIsFormOpen(true);
-//   };
-
-//   const openEditForm = (item) => {
-//     setEditingId(item._id);
-//     setFormData({
-//       itemname: item.itemname,
-//       quantity: item.quantity,
-//       price: item.price,
-//       description: item.description || ''
-//     });
-//     setIsFormOpen(true);
-//   };
-
-//   const handleSubmit = async (e) => {
-//     e.preventDefault();
-//     try {
-//       const payload = {
-//         itemname: formData.itemname,
-//         quantity: parseInt(formData.quantity) || 0,
-//         price: parseFloat(formData.price) || 0,
-//         description: formData.description
-//       };
-
-//       if (editingId) {
-//         // Update existing item
-//         await API.put(`/inventory/${editingId}`, payload);
-//       } else {
-//         // Create new item
-//         await API.post('/inventory', payload);
-//       }
-
-//       // Refresh data from database
-//       await fetchInventory();
-//       setIsFormOpen(false);
-//     } catch (err) {
-//       setError('Failed to save inventory item');
-//       console.error(err);
-//     }
-//   };
-
-//   const deleteItem = async (id) => {
-//     if (window.confirm('Are you sure you want to remove this item?')) {
-//       try {
-//         await API.delete(`/inventory/${id}`);
-//         // Refresh data from database
-//         await fetchInventory();
-//       } catch (err) {
-//         setError('Failed to delete inventory item');
-//         console.error(err);
-//       }
-//     }
-//   };
-
-//   const formatCurrency = (amount) => {
-//     return "Rs. " + parseFloat(amount).toLocaleString('en-LK', {
-//       minimumFractionDigits: 2,
-//       maximumFractionDigits: 2
-//     });
-//   };
-
-//   return (
-//     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-
-//       <main className="container mx-auto py-8 px-4 flex flex-col lg:flex-row gap-8 items-start">
-        
-//         {/* Error Message */}
-//         {error && (
-//           <div className="w-full bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-//             {error}
-//           </div>
-//         )}
-
-//         {/* Table Section */}
-//         <section className="flex-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-//           <h1 className="text-2xl font-bold text-slate-800 mb-6">Inventory Items</h1>
-
-//           <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
-//             <div className="relative flex-1 w-full">
-//               <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-//                 <Search size={18} />
-//               </span>
-//               <input 
-//                 type="text" 
-//                 placeholder="Search inventory..." 
-//                 className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition"
-//                 value={searchTerm}
-//                 onChange={(e) => setSearchTerm(e.target.value)}
-//               />
-//             </div>
-//             <button 
-//               onClick={openAddForm}
-//               className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg transition shadow-md flex items-center justify-center gap-2 font-semibold"
-//               disabled={loading}
-//             >
-//               <Plus size={20} /> Add Item
-//             </button>
-//           </div>
-
-//           {loading ? (
-//             <div className="text-center py-8 text-slate-500">Loading inventory...</div>
-//           ) : (
-//             <div className="overflow-x-auto">
-//               <table className="w-full text-left border-collapse">
-//                 <thead>
-//                   <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold tracking-wider">
-//                     <th className="p-4 border-b">Item Name</th>
-//                     <th className="p-4 border-b text-center">Quantity</th>
-//                     <th className="p-4 border-b text-right">Price per Unit</th>
-//                     <th className="p-4 border-b text-center">Description</th>
-//                     <th className="p-4 border-b text-center">Operations</th>
-//                   </tr>
-//                 </thead>
-//                 <tbody className="divide-y divide-slate-100 text-sm">
-//                   {filteredInventory.length > 0 ? (
-//                     filteredInventory.map((item) => (
-//                       <tr key={item._id} className="hover:bg-blue-50 transition">
-//                         <td className="p-4 font-semibold text-blue-700">{item.itemname}</td>
-//                         <td className="p-4 text-center">
-//                           <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-bold">
-//                             {item.quantity}
-//                           </span>
-//                         </td>
-//                         <td className="p-4 text-right font-mono font-bold">{formatCurrency(item.price)}</td>
-//                         <td className="p-4 font-semibold text-center">{item.description}</td>
-//                         <td className="p-4 text-center">
-//                           <div className="flex justify-center gap-2">
-//                             <button onClick={() => openEditForm(item)} className="text-blue-600 hover:bg-blue-100 p-2 rounded-lg transition">
-//                               <Edit2 size={16} />
-//                             </button>
-//                             <button onClick={() => deleteItem(item._id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition">
-//                               <Trash2 size={16} />
-//                             </button>
-//                           </div>
-//                         </td>
-//                       </tr>
-//                     ))
-//                   ) : (
-//                     <tr>
-//                       <td colSpan="4" className="p-4 text-center text-slate-500">No inventory items found</td>
-//                     </tr>
-//                   )}
-//                 </tbody>
-//               </table>
-//             </div>
-//           )}
-//         </section>
-
-//         {/* Form Sidebar */}
-//         {isFormOpen && (
-//           <aside className="w-full lg:w-80 bg-white p-6 rounded-xl shadow-xl border-t-4 border-blue-600 animate-in fade-in slide-in-from-right-4 duration-300 h-fit lg:sticky lg:top-24">
-//             <div className="flex justify-between items-center mb-6 border-b pb-3">
-//               <h2 className="text-lg font-bold text-slate-800">
-//                 {editingId ? 'Update Item' : 'Add New Item'}
-//               </h2>
-//               <button onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-red-500 transition">
-//                 <X size={20} />
-//               </button>
-//             </div>
-            
-//             <form onSubmit={handleSubmit} className="space-y-4">
-//               <div>
-//                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Item Name</label>
-//                 <input 
-//                   type="text" 
-//                   name="itemname" 
-//                   required 
-//                   value={formData.itemname} 
-//                   onChange={handleInputChange} 
-//                   placeholder="e.g. Engine Oil"
-//                   className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition" 
-//                 />
-//               </div>
-
-//               <div>
-//                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
-//                 <input 
-//                   type="number" 
-//                   name="quantity" 
-//                   required 
-//                   value={formData.quantity} 
-//                   onChange={handleInputChange} 
-//                   placeholder="0"
-//                   className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition" 
-//                 />
-//               </div>
-
-//               <div>
-//                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Unit Price (LKR)</label>
-//                 <div className="relative">
-//                   <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 text-sm font-bold">Rs.</span>
-//                   <input 
-//                     type="number" 
-//                     name="price" 
-//                     required 
-//                     value={formData.price} 
-//                     onChange={handleInputChange} 
-//                     placeholder="0.00"
-//                     className="w-full pl-10 pr-2.5 py-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition font-mono" 
-//                   />
-//                 </div>
-//               </div>
-
-//               <div>
-//                 <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description (Optional)</label>
-//                 <textarea 
-//                   name="description" 
-//                   rows="2" 
-//                   value={formData.description} 
-//                   onChange={handleInputChange} 
-//                   placeholder="Add any notes about this item"
-//                   className="w-full p-2.5 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-400 outline-none transition"
-//                 ></textarea>
-//               </div>
-
-//               <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-lg shadow-lg transition mt-4 uppercase tracking-wider text-sm">
-//                 {editingId ? 'Update Item' : 'Add Item'}
-//               </button>
-//             </form>
-//           </aside>
-//         )}
-//       </main>
-//     </div>
-//   );
-// };
-
-// export default InventoryManagement;
-
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Edit2, Trash2, X } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Search, Plus, Edit2, Trash2, X, AlertTriangle, Package, Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
-// FIXED: Corrected the CSS import path
 import 'react-toastify/dist/ReactToastify.css';
 import API from '../services/api';
 
 const InventoryManagement = () => {
-  const [inventory, setInventory] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState(null);
+    // Core Data State
+    const [inventory, setInventory] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
 
-  const [formData, setFormData] = useState({
-    itemname: '',
-    quantity: '',
-    price: '',
-    description: ''
-  });
+    // Filter & Search State
+    const [searchTerm, setSearchTerm] = useState('');
 
-  // --- AUDIO LOGIC ---
-  // Store audio in a ref so it persists across renders
-  const alertAudio = useRef(new Audio('/sounds/Inventoty Alert.wav'));
+    // Form Popup/Sidebar State
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [editingId, setEditingId] = useState(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
-  useEffect(() => {
-    // Check if any item quantity is less than 10
-    const hasLowStock = inventory.some(item => Number(item.quantity) < 10);
-    let intervalId = null;
-
-    if (hasLowStock) {
-      const playAlert = () => {
-        alertAudio.current.currentTime = 0;
-        alertAudio.current.play().catch(err => {
-          // Browsers block audio until the user clicks something on the page
-          console.warn("Audio playback waiting for user interaction...");
-        });
-      };
-
-      // Play immediately
-      playAlert();
-
-      // Repeat every 5 seconds
-      intervalId = setInterval(playAlert, 6000);
-    }
-
-    // Cleanup: Clear interval when stock is fixed or component closes
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [inventory]);
-
-  // --- DATA ACTIONS ---
-  useEffect(() => {
-    fetchInventory();
-  }, []);
-
-  const fetchInventory = async () => {
-    try {
-      setLoading(true);
-      const response = await API.get('/inventory');
-      setInventory(response.data);
-      setError(null);
-    } catch (err) {
-      setError('Failed to fetch inventory');
-      toast.error('Failed to load inventory');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const filteredInventory = inventory.filter(item =>
-    item.itemname.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-  };
-
-  const openAddForm = () => {
-    setEditingId(null);
-    setFormData({ itemname: '', quantity: '', price: '', description: '' });
-    setIsFormOpen(true);
-  };
-
-  const openEditForm = (item) => {
-    setEditingId(item._id);
-    setFormData({
-      itemname: item.itemname,
-      quantity: item.quantity,
-      price: item.price,
-      description: item.description || ''
+    // Form Data State
+    const [formData, setFormData] = useState({
+        itemname: '',
+        quantity: '',
+        price: '',
+        description: ''
     });
-    setIsFormOpen(true);
-  };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = {
-        itemname: formData.itemname,
-        quantity: parseInt(formData.quantity) || 0,
-        price: parseFloat(formData.price) || 0,
-        description: formData.description
-      };
+    // --- AUDIO ALERT LOGIC ---
+    // Ref to manage low stock alerts and avoid annoying repetitions
+    const alertAudio = useRef(new Audio('/sounds/Inventoty Alert.wav'));
+    const lastAlertedItems = useRef(new Set());
 
-      if (editingId) {
-        await API.put(`/inventory/${editingId}`, payload);
-        toast.success('Inventory updated!');
-      } else {
-        await API.post('/inventory', payload);
-        toast.success('Item added!');
-      }
-
-      await fetchInventory();
-      setIsFormOpen(false);
-    } catch (err) {
-      toast.error('Operation failed');
-    }
-  };
-
-  const deleteItem = async (id) => {
-    if (window.confirm('Delete this item?')) {
-      try {
-        await API.delete(`/inventory/${id}`);
-        toast.success('Item removed');
-        await fetchInventory();
-      } catch (err) {
-        toast.error('Delete failed');
-      }
-    }
-  };
-
-  const formatCurrency = (amount) => {
-    return "Rs. " + parseFloat(amount).toLocaleString('en-LK', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      <main className="container mx-auto py-8 px-4 flex flex-col lg:flex-row gap-8 items-start">
+    useEffect(() => {
+        const lowStockItems = inventory.filter(item => Number(item.quantity) < 10);
         
-        {error && (
-          <div className="w-full bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            {error}
-          </div>
-        )}
-
-        <section className="flex-1 bg-white p-6 rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <h1 className="text-2xl font-bold text-slate-800 mb-6">Inventory Items</h1>
-
-          <div className="flex flex-col sm:flex-row items-center justify-between mb-6 gap-4">
-            <div className="relative flex-1 w-full">
-              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                <Search size={18} />
-              </span>
-              <input 
-                type="text" 
-                placeholder="Search inventory..." 
-                className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            <button 
-              onClick={openAddForm}
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg flex items-center justify-center gap-2 font-semibold transition shadow-md"
-              disabled={loading}
-            >
-              <Plus size={20} /> Add Item
-            </button>
-          </div>
-
-          {loading ? (
-            <div className="text-center py-8 text-slate-500">Loading...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50 text-slate-500 text-[10px] uppercase font-bold tracking-wider">
-                    <th className="p-4 border-b">Item Name</th>
-                    <th className="p-4 border-b text-center">Quantity</th>
-                    <th className="p-4 border-b text-right">Price per Unit</th>
-                    <th className="p-4 border-b text-center">Description</th>
-                    <th className="p-4 border-b text-center">Operations</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {filteredInventory.map((item) => (
-                    <tr key={item._id} className={`transition ${item.quantity < 10 ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-blue-50'}`}>
-                      <td className={`p-4 font-semibold ${item.quantity < 10 ? 'text-red-700' : 'text-blue-700'}`}>
-                        {item.itemname} {item.quantity < 10 && <span className="ml-2 text-[10px] bg-red-200 px-1 rounded">LOW</span>}
-                      </td>
-                      <td className="p-4 text-center">
-                        <span className={`${item.quantity < 10 ? 'bg-red-600 text-white' : 'bg-slate-100 text-slate-700'} px-3 py-1 rounded-full text-xs font-bold`}>
-                          {item.quantity}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right font-mono font-bold">{formatCurrency(item.price)}</td>
-                      <td className="p-4 text-center">{item.description}</td>
-                      <td className="p-4 text-center">
-                        <div className="flex justify-center gap-2">
-                          <button onClick={() => openEditForm(item)} className="text-blue-600 hover:bg-blue-100 p-2 rounded-lg">
-                            <Edit2 size={16} />
-                          </button>
-                          <button onClick={() => deleteItem(item._id)} className="text-red-500 hover:bg-red-50 p-2 rounded-lg">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        {isFormOpen && (
-          <aside className="w-full lg:w-80 bg-white p-6 rounded-xl shadow-xl border-t-4 border-blue-600 h-fit lg:sticky lg:top-24">
-            <div className="flex justify-between items-center mb-6 border-b pb-3">
-              <h2 className="text-lg font-bold">{editingId ? 'Update Item' : 'Add Item'}</h2>
-              <button onClick={() => setIsFormOpen(false)} className="text-slate-400 hover:text-red-500">
-                <X size={20} />
-              </button>
-            </div>
+        // Only trigger audio if there's a NEW low stock item identified
+        const newLowStockFound = lowStockItems.some(item => !lastAlertedItems.current.has(item._id));
+        
+        if (newLowStockFound) {
+            alertAudio.current.currentTime = 0;
+            alertAudio.current.play().catch(() => {
+                // Browser blocks audio until interaction
+                console.log("Audio waiting for user gesture...");
+            });
             
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Item Name</label>
-                <input type="text" name="itemname" required value={formData.itemname} onChange={handleInputChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Quantity</label>
-                <input type="number" name="quantity" required value={formData.quantity} onChange={handleInputChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Price (LKR)</label>
-                <input type="number" name="price" required value={formData.price} onChange={handleInputChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none" />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Description</label>
-                <textarea name="description" rows="2" value={formData.description} onChange={handleInputChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-400 outline-none"></textarea>
-              </div>
-              <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition">
-                {editingId ? 'Update' : 'Save'}
-              </button>
-            </form>
-          </aside>
-        )}
-      </main>
-    </div>
-  );
+            // Update the set of alerted items
+            const newSet = new Set(lowStockItems.map(i => i._id));
+            lastAlertedItems.current = newSet;
+        }
+    }, [inventory]);
+
+    // --- DATA FETCHING ---
+    useEffect(() => {
+        fetchInventory();
+    }, []);
+
+    const fetchInventory = async (showToast = false) => {
+        try {
+            setLoading(true);
+            const response = await API.get('/inventory');
+            setInventory(response.data);
+            setError(null);
+            if (showToast) toast.success('Inventory synced');
+        } catch (err) {
+            console.error(err);
+            setError('Unable to reach the server. Please check your connection.');
+            toast.error('Failed to load inventory');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // --- FILTER LOGIC ---
+    const filteredInventory = useMemo(() => {
+        return inventory.filter(item =>
+            item.itemname.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.description?.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [inventory, searchTerm]);
+
+    // --- FORM ACTIONS ---
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const openAddForm = () => {
+        setEditingId(null);
+        setFormData({ itemname: '', quantity: '', price: '', description: '' });
+        setIsFormOpen(true);
+    };
+
+    const openEditForm = (item) => {
+        setEditingId(item._id);
+        setFormData({
+            itemname: item.itemname,
+            quantity: item.quantity,
+            price: item.price,
+            description: item.description || ''
+        });
+        setIsFormOpen(true);
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setIsSubmitting(true);
+        try {
+            const payload = {
+                itemname: formData.itemname.trim(),
+                quantity: parseInt(formData.quantity) || 0,
+                price: parseFloat(formData.price) || 0,
+                description: formData.description.trim()
+            };
+
+            if (editingId) {
+                await API.put(`/inventory/${editingId}`, payload);
+                toast.success('Inventory item updated');
+            } else {
+                await API.post('/inventory', payload);
+                toast.success('New item added to inventory');
+            }
+
+            await fetchInventory();
+            setIsFormOpen(false);
+        } catch (err) {
+            toast.error(err.response?.data?.message || 'Operation failed');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const deleteItem = async (id) => {
+        if (window.confirm('Are you sure you want to remove this item? This action cannot be undone.')) {
+            try {
+                await API.delete(`/inventory/${id}`);
+                toast.success('Item removed successfully');
+                await fetchInventory();
+            } catch (err) {
+                toast.error('Delete operation failed');
+            }
+        }
+    };
+
+    // --- RENDER HELPERS ---
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-LK', {
+            style: 'currency',
+            currency: 'LKR',
+            minimumFractionDigits: 2
+        }).format(amount).replace('LKR', 'Rs.');
+    };
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 font-sans text-slate-900 pb-12">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+                
+                {/* Header Section */}
+                <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+                            <Package className="text-blue-600" size={32} />
+                            Inventory Management
+                        </h1>
+                        <p className="text-slate-500 mt-1">Track and manage your spare parts and consumables.</p>
+                    </div>
+                </header>
+
+                {error && (
+                    <div className="mb-6 flex items-center gap-3 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
+                        <AlertTriangle size={20} />
+                        <span className="font-medium text-sm">{error}</span>
+                    </div>
+                )}
+
+                <div className="flex flex-col lg:flex-row gap-8 items-start">
+                    
+                    {/* Main Content Area */}
+                    <section className="flex-1 w-full bg-white/70 backdrop-blur-md rounded-2xl shadow-xl shadow-slate-200/50 border border-white overflow-hidden transition-all">
+                        
+                        {/* Table Controls */}
+                        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4 bg-white/50">
+                            <div className="relative group flex-1 w-full max-w-md">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search by item name or description..." 
+                                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all placeholder:text-slate-400"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <button 
+                                onClick={openAddForm}
+                                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-6 py-2.5 rounded-xl flex items-center justify-center gap-2 font-bold transition-all shadow-lg shadow-blue-200 hover:shadow-blue-300"
+                                disabled={loading}
+                            >
+                                <Plus size={20} /> Add New Item
+                            </button>
+                        </div>
+
+                        {/* Table / Loading State */}
+                        <div className="relative">
+                            {loading && (
+                                <div className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                                    <div className="flex flex-col items-center gap-2">
+                                        <Loader2 className="animate-spin text-blue-600" size={32} />
+                                        <span className="text-sm font-medium text-slate-500">Syncing database...</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="overflow-x-auto min-h-[400px]">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-slate-50/80 text-slate-500 text-[11px] uppercase font-bold tracking-widest">
+                                            <th className="px-6 py-4 border-b border-slate-100">Item Details</th>
+                                            <th className="px-6 py-4 border-b border-slate-100 text-center">Stock Level</th>
+                                            <th className="px-6 py-4 border-b border-slate-100 text-right pr-12">Unit Price</th>
+                                            <th className="px-6 py-4 border-b border-slate-100 text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-50">
+                                        {filteredInventory.length > 0 ? (
+                                            filteredInventory.map((item) => (
+                                                <tr key={item._id} className={`group hover:bg-slate-50/80 transition-colors ${item.quantity < 10 ? 'bg-red-50/30' : ''}`}>
+                                                    <td className="px-6 py-5">
+                                                        <div className="font-bold text-slate-800 group-hover:text-blue-700 transition-colors">{item.itemname}</div>
+                                                        <div className="text-xs text-slate-400 mt-0.5 line-clamp-1">{item.description || 'No description provided'}</div>
+                                                    </td>
+                                                    <td className="px-6 py-5 text-center">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <span className={`px-3 py-1 rounded-full text-xs font-black ring-1 ${
+                                                                item.quantity < 10 
+                                                                ? 'bg-red-100 text-red-700 ring-red-200' 
+                                                                : 'bg-emerald-100 text-emerald-700 ring-emerald-200'
+                                                            }`}>
+                                                                {item.quantity} units
+                                                            </span>
+                                                            {item.quantity < 10 && (
+                                                                <span className="text-[9.5px] font-bold text-red-500 uppercase tracking-tighter flex items-center gap-1 animate-pulse">
+                                                                    <AlertTriangle size={10} /> Low Stock Alert
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-5 text-right pr-12">
+                                                        <span className="font-mono text-sm font-extrabold text-slate-700">{formatCurrency(item.price)}</span>
+                                                    </td>
+                                                    <td className="px-6 py-5">
+                                                        <div className="flex justify-center gap-1.5 translate-x-2 group-hover:translate-x-0 transition-transform opacity-0 group-hover:opacity-100">
+                                                            <button 
+                                                                onClick={() => openEditForm(item)} 
+                                                                className="text-slate-400 hover:text-blue-600 hover:bg-blue-50 p-2 rounded-xl transition-all"
+                                                                title="Edit Item"
+                                                            >
+                                                                <Edit2 size={16} />
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => deleteItem(item._id)} 
+                                                                className="text-slate-400 hover:text-red-500 hover:bg-red-50 p-2 rounded-xl transition-all"
+                                                                title="Delete Item"
+                                                            >
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))
+                                        ) : (
+                                            <tr>
+                                                <td colSpan="4" className="py-20 text-center">
+                                                    <div className="flex flex-col items-center gap-3 opacity-40">
+                                                        <Package size={48} />
+                                                        <p className="font-medium text-slate-500">
+                                                            {searchTerm ? `No matching items for "${searchTerm}"` : 'Your inventory is currently empty.'}
+                                                        </p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Form Sidebar / Modal */}
+                    {isFormOpen && (
+                        <aside className="w-full lg:w-96 bg-white rounded-2xl shadow-2xl p-8 border border-white/60 lg:sticky lg:top-24 animate-in fade-in zoom-in-95 slide-in-from-right-8 duration-300">
+                            <div className="flex justify-between items-center mb-8 pb-4 border-b border-slate-100">
+                                <div>
+                                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                                        {editingId ? 'Edit Item Details' : 'Add New Inventory'}
+                                    </h2>
+                                    <p className="text-xs text-slate-400 mt-1">{editingId ? 'Update existing stock records' : 'Enter details for the new batch'}</p>
+                                </div>
+                                <button 
+                                    onClick={() => setIsFormOpen(false)} 
+                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Item Name</label>
+                                    <input 
+                                        type="text" 
+                                        name="itemname" 
+                                        required 
+                                        value={formData.itemname} 
+                                        onChange={handleInputChange} 
+                                        placeholder="e.g. Engine Oil 5W-30"
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-medium" 
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Quantity</label>
+                                        <input 
+                                            type="number" 
+                                            name="quantity" 
+                                            required 
+                                            min="0"
+                                            value={formData.quantity} 
+                                            onChange={handleInputChange} 
+                                            placeholder="0"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-mono font-bold" 
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Price (LKR)</label>
+                                        <input 
+                                            type="number" 
+                                            name="price" 
+                                            required 
+                                            min="0"
+                                            step="0.01"
+                                            value={formData.price} 
+                                            onChange={handleInputChange} 
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all font-mono font-bold" 
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] font-black text-slate-500 uppercase tracking-widest pl-1">Description</label>
+                                    <textarea 
+                                        name="description" 
+                                        rows="3" 
+                                        value={formData.description} 
+                                        onChange={handleInputChange} 
+                                        placeholder="Add notes about brand, compatibility, or storage location..."
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all resize-none text-sm leading-relaxed"
+                                    ></textarea>
+                                </div>
+
+                                <button 
+                                    type="submit" 
+                                    disabled={isSubmitting}
+                                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white font-black py-4 rounded-xl shadow-lg shadow-blue-200 hover:shadow-blue-300 transition-all flex items-center justify-center gap-2 mt-4 active:scale-95"
+                                >
+                                    {isSubmitting ? (
+                                        <Loader2 className="animate-spin" size={20} />
+                                    ) : (
+                                        editingId ? 'Update Record' : 'Create Entry'
+                                    )}
+                                </button>
+                            </form>
+                        </aside>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default InventoryManagement;

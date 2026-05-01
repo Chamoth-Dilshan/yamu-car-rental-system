@@ -4,7 +4,10 @@ const mongoose = require('mongoose')
 const cors = require('cors')
 const dotenv = require('dotenv')
 
-dotenv.config()
+const fs = require('fs');
+const path = require('path');
+
+dotenv.config({ quiet: true })
 
 const app = express()
 const PORT = process.env.PORT || 5000

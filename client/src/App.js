@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import VehicleManagement from './pages/VehicleManagement';
 import MaintenanceManagement from './pages/MaintenanceManagement';
 import InventoryManagement from './pages/InventoryManagement';
+import VehicleDetails from './pages/VehicleDetails';
 
 // 1. Define Navigation BEFORE App so it's ready to be used
 const Navigation = () => {
@@ -67,6 +68,7 @@ const App = () => {
             <Route path="/vehicles" element={<VehicleManagement />} />
             <Route path="/maintenance" element={<MaintenanceManagement />} />
             <Route path="/inventory" element={<InventoryManagement />} />
+            <Route path="/vehicle-details/:id" element={<VehicleDetails />} />
           </Routes>
         </main>
       </div>

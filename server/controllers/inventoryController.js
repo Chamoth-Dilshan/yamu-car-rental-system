@@ -1,5 +1,6 @@
 //server/controllers/inventoryController.js
 const Inventory = require('../models/inventory');
+const { sendLowStockAlert } = require('../utils/emailService');
 
 // @desc    Add new inventory item
 // @route   POST /api/inventory
@@ -7,6 +8,12 @@ exports.createItem = async (req, res) => {
     try {
         const newItem = new Inventory(req.body);
         const savedItem = await newItem.save();
+        
+        // Trigger alert if quantity is low from the start
+        if (Number(savedItem.quantity) < 10) {
+            sendLowStockAlert(savedItem);
+        }
+
         res.status(201).json(savedItem);
     } catch (error) {
         res.status(400).json({ message: error.message });
@@ -46,6 +53,12 @@ exports.updateItem = async (req, res) => {
             { new: true, runValidators: true }
         );
         if (!updatedItem) return res.status(404).json({ message: 'Item not found' });
+
+        // Trigger alert if quantity falls below threshold after update
+        if (Number(updatedItem.quantity) < 10) {
+            sendLowStockAlert(updatedItem);
+        }
+
         res.status(200).json(updatedItem);
     } catch (error) {
         res.status(400).json({ message: error.message });
