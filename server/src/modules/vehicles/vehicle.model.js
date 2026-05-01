@@ -1,5 +1,9 @@
 // server/models/vehicle.js
 const mongoose = require('mongoose')
+<<<<<<< HEAD:server/models/Vehicle.js
+=======
+const { VEHICLE_STATUSES } = require('../../utils/reservationHelpers')
+>>>>>>> test:server/src/modules/vehicles/vehicle.model.js
 
 const vehicleSchema = new mongoose.Schema({
 

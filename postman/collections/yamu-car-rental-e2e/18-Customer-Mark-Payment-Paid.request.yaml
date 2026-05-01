@@ -1,0 +1,43 @@
+$kind: http-request
+name: '18 - Customer Pay Booking by Card'
+method: POST
+url: '{{baseUrl}}/api/payments/checkout/{{e2eBookingId}}'
+order: 18000
+headers:
+  - key: Authorization
+    value: 'Bearer {{customerToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "method": "card",
+      "amount": {{e2eBookingTotal}},
+      "card": {
+        "cardholderName": "Test Customer",
+        "cardNumber": "4111111111111111",
+        "expiryMonth": "12",
+        "expiryYear": "2030",
+        "cvv": "123"
+      }
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Customer can pay booking by card", () => {
+        pm.response.to.have.status(201);
+      });
+
+      pm.test("Payment record is paid", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("payment");
+        pm.expect(json.payment.status).to.equal("paid");
+        pm.environment.set("e2ePaymentId", json.payment._id);
+      });
+
+      pm.test("Transaction ID is generated", () => {
+        const json = pm.response.json();
+        pm.expect(json.payment.transactionId).to.be.a("string").and.not.empty;
+      });

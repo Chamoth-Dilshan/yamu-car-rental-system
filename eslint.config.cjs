@@ -5,7 +5,7 @@ const reactHooksPlugin = require('eslint-plugin-react-hooks');
 
 module.exports = [
   {
-    ignores: ['**/node_modules/**', 'client/dist/**', 'server/uploads/**']
+    ignores: ['**/node_modules/**', 'client/dist/**', 'server/uploads/**', 'server/src/uploads/**']
   },
   js.configs.recommended,
   {

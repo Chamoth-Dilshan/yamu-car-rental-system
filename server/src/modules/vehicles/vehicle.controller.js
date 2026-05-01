@@ -1,5 +1,13 @@
+<<<<<<< HEAD:server/controllers/vehicleController.js
 //server/controllers/vehicleController.js
 const Vehicle = require('../models/vehicle')
+=======
+const Vehicle = require('./vehicle.model')
+const Booking = require('../reservations/booking.model')
+const { sendServerError } = require('../../utils/errorResponses')
+const { canUseRole, getRoleAssignment } = require('../../utils/roleHelpers')
+const { serializeVehicle, VEHICLE_STATUSES, parseListField } = require('../../utils/reservationHelpers')
+>>>>>>> test:server/src/modules/vehicles/vehicle.controller.js
 
 // @desc    Create a new vehicle
 // @route   POST /api/vehicles
