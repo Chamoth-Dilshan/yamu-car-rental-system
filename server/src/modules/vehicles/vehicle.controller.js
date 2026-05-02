@@ -1,5 +1,6 @@
 const Vehicle = require('./vehicle.model')
 const Booking = require('../reservations/booking.model')
+const Review = require('../reviews/review.model')
 const { sendServerError } = require('../../utils/errorResponses')
 const { canUseRole, getRoleAssignment } = require('../../utils/roleHelpers')
 const { serializeVehicle, VEHICLE_STATUSES, parseListField } = require('../../utils/reservationHelpers')
@@ -33,6 +34,8 @@ const DISTRICT_LOCATION_ALIASES = {
 }
 
 const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const roundRating = (value) => Number((Number(value || 0)).toFixed(1))
 
 const vehicleSummaryPopulate = {
   path: 'owner',
@@ -163,6 +166,50 @@ const buildVehicleStats = (vehicles) => ({
   inactiveCount: vehicles.filter((vehicle) => vehicle.status === 'inactive').length
 })
 
+const buildVehicleReviewStatsMap = async (vehicles) => {
+  const vehicleIds = vehicles.map((vehicle) => vehicle._id).filter(Boolean)
+
+  if (!vehicleIds.length) {
+    return new Map()
+  }
+
+  const stats = await Review.aggregate([
+    {
+      $match: {
+        status: 'approved',
+        vehicle: { $in: vehicleIds },
+        vehicleRating: { $gte: 1, $lte: 5 }
+      }
+    },
+    {
+      $group: {
+        _id: '$vehicle',
+        ratingAverage: { $avg: '$vehicleRating' },
+        reviewCount: { $sum: 1 }
+      }
+    }
+  ])
+
+  return new Map(stats.map((item) => [String(item._id), {
+    ratingAverage: roundRating(item.ratingAverage),
+    reviewCount: item.reviewCount
+  }]))
+}
+
+const applyVehicleReviewStats = (vehicle, statsMap) => {
+  const stats = statsMap.get(String(vehicle._id))
+
+  if (!stats) {
+    return vehicle
+  }
+
+  const rawVehicle = vehicle?.toObject ? vehicle.toObject() : { ...vehicle }
+  return {
+    ...rawVehicle,
+    ...stats
+  }
+}
+
 const getVehicles = async (req, res) => {
   try {
     const { search = '', status, district, featured, limit } = req.query
@@ -203,8 +250,10 @@ const getVehicles = async (req, res) => {
 
     const vehicles = (await vehicleQuery).filter(hasBookableStoreOwner)
 
+    const reviewStatsMap = await buildVehicleReviewStatsMap(vehicles)
+
     res.json({
-      vehicles: vehicles.map(serializeVehicle)
+      vehicles: vehicles.map((vehicle) => serializeVehicle(applyVehicleReviewStats(vehicle, reviewStatsMap)))
     })
   } catch (error) {
     sendServerError(res, error, 'Failed to load vehicles')
@@ -219,7 +268,9 @@ const getVehicleById = async (req, res) => {
       return res.status(404).json({ message: 'Vehicle not found or no longer available for booking' })
     }
 
-    res.json(serializeVehicle(vehicle))
+    const reviewStatsMap = await buildVehicleReviewStatsMap([vehicle])
+
+    res.json(serializeVehicle(applyVehicleReviewStats(vehicle, reviewStatsMap)))
   } catch (error) {
     sendServerError(res, error, 'Failed to load vehicle details')
   }
@@ -250,8 +301,10 @@ const getMyVehicles = async (req, res) => {
       .populate(vehicleSummaryPopulate)
       .sort({ updatedAt: -1 })
 
+    const reviewStatsMap = await buildVehicleReviewStatsMap(vehicles)
+
     res.json({
-      vehicles: vehicles.map(serializeVehicle),
+      vehicles: vehicles.map((vehicle) => serializeVehicle(applyVehicleReviewStats(vehicle, reviewStatsMap))),
       stats: buildVehicleStats(vehicles)
     })
   } catch (error) {

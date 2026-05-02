@@ -20,7 +20,9 @@ const vehicleSchema = new mongoose.Schema({
   images: [{ type: String, trim: true }],
   pricePerDay: { type: Number, required: true, min: 0 },
   status: { type: String, enum: VEHICLE_STATUSES, default: 'available' },
-  featured: { type: Boolean, default: false }
+  featured: { type: Boolean, default: false },
+  ratingAverage: { type: Number, default: 0, min: 0, max: 5 },
+  reviewCount: { type: Number, default: 0, min: 0 }
 }, {
   timestamps: true
 })

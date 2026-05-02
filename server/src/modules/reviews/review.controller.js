@@ -1,5 +1,8 @@
+const mongoose = require('mongoose')
 const Review = require('./review.model')
 const Booking = require('../reservations/booking.model')
+const DriverAd = require('../drivers/driverAd.model')
+const Vehicle = require('../vehicles/vehicle.model')
 const { sendServerError } = require('../../utils/errorResponses')
 const { serializeBooking } = require('../../utils/reservationHelpers')
 const { addNotificationToAdmins } = require('../../utils/notificationHelpers')
@@ -52,6 +55,13 @@ const normalizeStatus = (value) => String(value || '').trim().toLowerCase()
 
 const getDriverFromBooking = (booking) => booking.driver || booking.driverAd?.driver || null
 
+const isValidObjectId = (value) => mongoose.Types.ObjectId.isValid(value)
+
+const canReviewBooking = (booking) => {
+  return ['completed', 'closed'].includes(booking.bookingStatus)
+    && booking.paymentStatus === 'paid'
+}
+
 const getDriverId = (review) => {
   const rawReview = toPlain(review)
   const driver = rawReview.driver
@@ -62,6 +72,12 @@ const getVehicleId = (review) => {
   const rawReview = toPlain(review)
   const vehicle = rawReview.vehicle
   return vehicle?._id || vehicle || null
+}
+
+const getDriverAdId = (review) => {
+  const rawReview = toPlain(review)
+  const driverAd = rawReview.driverAd
+  return driverAd?._id || driverAd || null
 }
 
 const serializeReview = (review) => {
@@ -90,6 +106,53 @@ const serializeReview = (review) => {
     updatedAt: rawReview.updatedAt
   }
 }
+
+const calculateApprovedRatingStats = async (match, ratingField) => {
+  const [stats] = await Review.aggregate([
+    {
+      $match: {
+        ...match,
+        status: 'approved',
+        [ratingField]: { $gte: 1, $lte: 5 }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        ratingAverage: { $avg: `$${ratingField}` },
+        reviewCount: { $sum: 1 }
+      }
+    }
+  ])
+
+  return {
+    ratingAverage: stats ? roundRating(stats.ratingAverage) : 0,
+    reviewCount: stats?.reviewCount || 0
+  }
+}
+
+const refreshVehicleRatingStats = async (vehicleId) => {
+  if (!vehicleId) {
+    return null
+  }
+
+  const stats = await calculateApprovedRatingStats({ vehicle: vehicleId }, 'vehicleRating')
+  return Vehicle.findByIdAndUpdate(vehicleId, stats, { new: true })
+}
+
+const refreshDriverAdRatingStats = async (driverAdId) => {
+  if (!driverAdId) {
+    return null
+  }
+
+  const stats = await calculateApprovedRatingStats({ driverAd: driverAdId }, 'driverRating')
+  return DriverAd.findByIdAndUpdate(driverAdId, stats, { new: true })
+}
+
+const refreshReviewTargetStats = async (review) => Promise.all([
+  refreshVehicleRatingStats(getVehicleId(review)),
+  refreshDriverAdRatingStats(getDriverAdId(review))
+])
 
 const addToRanking = (rankingMap, key, payload) => {
   if (!key) {
@@ -191,8 +254,8 @@ const buildReviewFromBooking = (booking, reqBody, customer) => {
   const driverRating = hasDriver ? getNumericRating(reqBody.driverRating) : null
   const feedback = String(reqBody.feedback || reqBody.overallFeedback || '').trim()
 
-  if (!['completed', 'closed'].includes(booking.bookingStatus)) {
-    return { error: 'Reviews can be submitted only after a booking is completed' }
+  if (!canReviewBooking(booking)) {
+    return { error: 'Reviews are available after the trip is completed and paid.' }
   }
 
   if (!hasDriver && !hasVehicle) {
@@ -272,6 +335,99 @@ const createReview = async (req, res) => {
   }
 }
 
+const getMyReviews = async (req, res) => {
+  try {
+    const reviews = await Review.find({ customer: req.user._id })
+      .populate(reviewPopulate)
+      .sort({ updatedAt: -1, createdAt: -1 })
+
+    res.json({
+      reviews: reviews.map(serializeReview)
+    })
+  } catch (error) {
+    sendServerError(res, error, 'Failed to load your reviews')
+  }
+}
+
+const updateMyReview = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid review id' })
+    }
+
+    const review = await Review.findOne({ _id: req.params.id, customer: req.user._id })
+
+    if (!review) {
+      return res.status(404).json({ message: 'Review not found' })
+    }
+
+    const hasVehicle = Boolean(review.vehicle)
+    const hasDriver = Boolean(review.driver || review.driverAd)
+    const vehicleRating = hasVehicle ? getNumericRating(req.body.vehicleRating) : null
+    const driverRating = hasDriver ? getNumericRating(req.body.driverRating) : null
+    const feedback = String(req.body.feedback || req.body.overallFeedback || '').trim()
+
+    if (hasVehicle && !vehicleRating) {
+      return res.status(400).json({ message: 'Vehicle rating must be between 1 and 5' })
+    }
+
+    if (hasDriver && !driverRating) {
+      return res.status(400).json({ message: 'Driver rating must be between 1 and 5' })
+    }
+
+    if (!feedback) {
+      return res.status(400).json({ message: 'Feedback is required' })
+    }
+
+    review.vehicleRating = vehicleRating
+    review.driverRating = driverRating
+    review.feedback = feedback
+    review.status = 'pending'
+    review.reviewedBy = null
+    review.reviewedAt = null
+    review.rejectionReason = ''
+    await review.save()
+    await refreshReviewTargetStats(review)
+
+    const populatedReview = await Review.findById(review._id).populate(reviewPopulate)
+
+    await addNotificationToAdmins({
+      type: 'review',
+      title: 'Edited review waiting for approval',
+      message: `${req.user.fullName} updated feedback for booking ${review.bookingNo}.`,
+      link: '/admin/reviews'
+    })
+
+    res.json({
+      message: 'Review updated and sent for admin approval',
+      review: serializeReview(populatedReview)
+    })
+  } catch (error) {
+    sendServerError(res, error, 'Failed to update review')
+  }
+}
+
+const deleteMyReview = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid review id' })
+    }
+
+    const review = await Review.findOne({ _id: req.params.id, customer: req.user._id })
+
+    if (!review) {
+      return res.status(404).json({ message: 'Review not found' })
+    }
+
+    await review.deleteOne()
+    await refreshReviewTargetStats(review)
+
+    res.json({ message: 'Review deleted' })
+  } catch (error) {
+    sendServerError(res, error, 'Failed to delete review')
+  }
+}
+
 const getCustomerDashboard = async (_req, res) => {
   try {
     const reviews = await Review.find({ status: 'approved' })
@@ -320,6 +476,7 @@ const updateReviewStatus = async (req, res) => {
     review.reviewedAt = new Date()
     review.rejectionReason = status === 'rejected' ? String(req.body.rejectionReason || '').trim() : ''
     await review.save()
+    await refreshReviewTargetStats(review)
 
     const populatedReview = await Review.findById(review._id).populate(reviewPopulate)
 
@@ -353,6 +510,64 @@ const getAdminAnalytics = async (_req, res) => {
   }
 }
 
+const buildTargetReviewSummary = (reviews, ratingField) => {
+  const ratings = reviews
+    .map((review) => getNumericRating(toPlain(review)[ratingField]))
+    .filter(Boolean)
+  const ratingSum = ratings.reduce((total, rating) => total + rating, 0)
+
+  return {
+    ratingAverage: ratings.length ? roundRating(ratingSum / ratings.length) : 0,
+    reviewCount: ratings.length
+  }
+}
+
+const getVehicleReviews = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.vehicleId)) {
+      return res.status(400).json({ message: 'Invalid vehicle id' })
+    }
+
+    const reviews = await Review.find({
+      status: 'approved',
+      vehicle: req.params.vehicleId,
+      vehicleRating: { $gte: 1, $lte: 5 }
+    })
+      .populate(reviewPopulate)
+      .sort({ createdAt: -1 })
+
+    res.json({
+      ...buildTargetReviewSummary(reviews, 'vehicleRating'),
+      reviews: reviews.map(serializeReview)
+    })
+  } catch (error) {
+    sendServerError(res, error, 'Failed to load vehicle reviews')
+  }
+}
+
+const getDriverAdReviews = async (req, res) => {
+  try {
+    if (!isValidObjectId(req.params.driverAdId)) {
+      return res.status(400).json({ message: 'Invalid driver advertisement id' })
+    }
+
+    const reviews = await Review.find({
+      status: 'approved',
+      driverAd: req.params.driverAdId,
+      driverRating: { $gte: 1, $lte: 5 }
+    })
+      .populate(reviewPopulate)
+      .sort({ createdAt: -1 })
+
+    res.json({
+      ...buildTargetReviewSummary(reviews, 'driverRating'),
+      reviews: reviews.map(serializeReview)
+    })
+  } catch (error) {
+    sendServerError(res, error, 'Failed to load driver reviews')
+  }
+}
+
 const getMyReviewContext = async (req, res) => {
   try {
     const booking = await Booking.findOne({ _id: req.params.bookingId, customer: req.user._id }).populate(bookingPopulate)
@@ -370,7 +585,7 @@ const getMyReviewContext = async (req, res) => {
       booking: serializeBooking(booking),
       existingReview: existingReview ? serializeReview(existingReview) : null,
       reviewEligibility: {
-        canReview: ['completed', 'closed'].includes(booking.bookingStatus) && !existingReview && (hasDriver || hasVehicle),
+        canReview: canReviewBooking(booking) && !existingReview && (hasDriver || hasVehicle),
         hasDriver,
         hasVehicle
       }
@@ -382,10 +597,15 @@ const getMyReviewContext = async (req, res) => {
 
 module.exports = {
   createReview,
+  getMyReviews,
+  updateMyReview,
+  deleteMyReview,
   getCustomerDashboard,
   getAdminReviews,
   updateReviewStatus,
   getAdminAnalytics,
+  getVehicleReviews,
+  getDriverAdReviews,
   getMyReviewContext,
   serializeReview,
   buildReviewSummary

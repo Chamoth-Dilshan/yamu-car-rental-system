@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { getProfilePathForRole } from '../../../utils/roles';
+import GoogleAuthButton from '../components/GoogleAuthButton';
 
 const REMEMBERED_SIGNIN_KEY = 'uprm_remembered_signin';
 
 export default function SignIn() {
-  const { login } = useAuth();
+  const { login, googleLogin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [form, setForm] = useState({ email: '', password: '' });
@@ -14,6 +15,7 @@ export default function SignIn() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState(location.state?.message || '');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -76,6 +78,22 @@ export default function SignIn() {
     }
   };
 
+  const handleGoogleCredential = async (credential) => {
+    setGoogleLoading(true);
+    setError('');
+    setMessage('');
+
+    try {
+      const nextUser = await googleLogin(credential);
+      localStorage.removeItem(REMEMBERED_SIGNIN_KEY);
+      navigate(getPostLoginRoute(nextUser));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Google sign in failed. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <div className="auth-page page-content">
       <div className="auth-card">
@@ -83,6 +101,14 @@ export default function SignIn() {
         <p className="subtitle">Sign in to manage your rentals, account details, and access.</p>
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-danger">{error}</div>}
+        <GoogleAuthButton
+          buttonText="Continue with Google"
+          disabled={loading || googleLoading}
+          googleText="continue_with"
+          onCredential={handleGoogleCredential}
+          onError={setError}
+        />
+        <div className="auth-separator"><span>or</span></div>
         <form onSubmit={handleSubmit} autoComplete="on">
           <div className="form-group">
             <label>Email or Username</label>
@@ -125,7 +151,7 @@ export default function SignIn() {
               <span>Remember me</span>
             </label>
           </div>
-          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading}>
+          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading || googleLoading}>
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>

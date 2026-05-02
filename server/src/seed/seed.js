@@ -840,7 +840,6 @@ const createVehicleBookingRecord = (index, customer, vehicle) => {
   const startDate = new Date(Date.UTC(2026, 2, 5 + index))
   const endDate = new Date(Date.UTC(2026, 2, 5 + index + billableDays - 1))
   const bookingStatus = pick(['pending', 'confirmed', 'completed', 'cancelled'], index)
-  const paymentStatus = bookingStatus === 'completed' ? 'paid' : pick(['pending', 'paid'], index, 1)
   const baseAmount = vehicle.pricePerDay * billableDays
 
   return {
@@ -866,7 +865,7 @@ const createVehicleBookingRecord = (index, customer, vehicle) => {
     baseAmount,
     serviceFee: 0,
     totalAmount: baseAmount,
-    paymentStatus,
+    paymentStatus: 'pending',
     bookingStatus
   }
 }
@@ -876,7 +875,6 @@ const createDriverBookingRecord = (index, customer, driver, ad) => {
   const startDate = new Date(Date.UTC(2026, 3, 10 + index))
   const endDate = new Date(Date.UTC(2026, 3, 10 + index + billableDays - 1))
   const bookingStatus = pick(['pending', 'confirmed', 'completed', 'cancelled'], index, 2)
-  const paymentStatus = bookingStatus === 'completed' ? 'paid' : pick(['pending', 'paid'], index)
   const baseAmount = ad.dailyRate * billableDays
 
   return {
@@ -903,7 +901,7 @@ const createDriverBookingRecord = (index, customer, driver, ad) => {
     baseAmount,
     serviceFee: 0,
     totalAmount: baseAmount,
-    paymentStatus,
+    paymentStatus: 'pending',
     bookingStatus
   }
 }

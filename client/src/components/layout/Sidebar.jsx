@@ -10,8 +10,9 @@ const menuItems = {
     { to: '/profile/user', label: 'User Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/bookings', label: 'My Bookings', end: true },
+    { to: '/reviews', label: 'My Reviews', end: true },
     { to: '/payments/history', label: 'Payments', end: true },
-    { to: '/payments/cards', label: 'Saved Cards', end: true },
+    { to: '/payments/cards', label: 'Payment Methods', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: false },
     { to: '/switch-roles', label: 'Switch Roles', end: true }
   ],

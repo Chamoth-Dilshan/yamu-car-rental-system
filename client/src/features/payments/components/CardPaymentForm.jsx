@@ -1,3 +1,5 @@
+import { formatCardNumber } from '../cardValidation'
+
 const months = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, '0'))
 const currentYear = new Date().getFullYear()
 const years = Array.from({ length: 16 }, (_, index) => String(currentYear + index))
@@ -16,7 +18,7 @@ export default function CardPaymentForm({
     let nextValue = value
 
     if (field === 'cardNumber') {
-      nextValue = value.replace(/\D/g, '').slice(0, 19)
+      nextValue = value.replace(/\D/g, '').slice(0, 16)
     }
 
     if (field === 'cvv') {
@@ -45,10 +47,12 @@ export default function CardPaymentForm({
       <div className="form-group">
         <label>Card Number</label>
         <input
-          value={card.cardNumber}
+          value={formatCardNumber(card.cardNumber)}
           onChange={(event) => updateField('cardNumber', event.target.value)}
           inputMode="numeric"
-          placeholder="4111111111111111"
+          autoComplete="cc-number"
+          maxLength="19"
+          placeholder="4111 1111 1111 1111"
         />
         {errors.cardNumber && <small className="field-error">{errors.cardNumber}</small>}
       </div>
@@ -80,7 +84,7 @@ export default function CardPaymentForm({
           placeholder="3 or 4 digits"
         />
         {errors.cvv && <small className="field-error">{errors.cvv}</small>}
-        <small className="form-help">CVV is validated for the mock payment flow and is never stored.</small>
+        <small className="form-help">CVV is validated only for this request and is never stored.</small>
       </div>
 
       {showSaveCard && (
@@ -91,7 +95,7 @@ export default function CardPaymentForm({
               checked={saveCard}
               onChange={(event) => setSaveCard(event.target.checked)}
             />
-            Save this card securely as masked card details
+            Save this card as a masked payment method
           </label>
           {saveCard && (
             <label>
@@ -100,7 +104,7 @@ export default function CardPaymentForm({
                 checked={defaultCard}
                 onChange={(event) => setDefaultCard(event.target.checked)}
               />
-              Make it the default card
+              Make this my default card
             </label>
           )}
         </div>

@@ -91,7 +91,7 @@ export default function ReviewForm() {
       <main className="dashboard-content">
         <div className="form-header">
           <h2>Rate Your Experience</h2>
-          <p style={{ color: 'var(--text-light)' }}>Submit a review after your booking is completed.</p>
+          <p style={{ color: 'var(--text-light)' }}>Submit a review after your booking is completed and paid.</p>
         </div>
 
         {error && <div className="alert alert-danger">{error}</div>}
@@ -117,7 +117,7 @@ export default function ReviewForm() {
             ) : !eligibility.canReview ? (
               <div className="quality-state-panel">
                 <h3>Review Not Available Yet</h3>
-                <p>Reviews can be submitted after the booking is completed.</p>
+                <p>Reviews are available after the trip is completed and paid.</p>
                 <Link className="btn btn-outline" to="/bookings">Back to Bookings</Link>
               </div>
             ) : (

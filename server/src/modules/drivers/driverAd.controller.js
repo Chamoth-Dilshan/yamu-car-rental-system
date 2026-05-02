@@ -1,9 +1,12 @@
 const Booking = require('../reservations/booking.model')
 const DriverAd = require('./driverAd.model')
+const Review = require('../reviews/review.model')
 const { sendServerError } = require('../../utils/errorResponses')
 const { serializeDriverAd, DRIVER_AD_AVAILABILITY, DRIVER_AD_VISIBILITY, parseListField } = require('../../utils/reservationHelpers')
 
 const driverSummaryFields = 'fullName email phone city profilePic'
+
+const roundRating = (value) => Number((Number(value || 0)).toFixed(1))
 
 const getDriverAdPayload = (body, file, existingAd, user) => {
   const title = String(body.title || existingAd?.title || '').trim()
@@ -61,6 +64,50 @@ const buildStats = (ads) => ({
   pausedAds: ads.filter((ad) => ad.visibility === 'paused').length
 })
 
+const buildDriverAdReviewStatsMap = async (ads) => {
+  const adIds = ads.map((ad) => ad._id).filter(Boolean)
+
+  if (!adIds.length) {
+    return new Map()
+  }
+
+  const stats = await Review.aggregate([
+    {
+      $match: {
+        status: 'approved',
+        driverAd: { $in: adIds },
+        driverRating: { $gte: 1, $lte: 5 }
+      }
+    },
+    {
+      $group: {
+        _id: '$driverAd',
+        ratingAverage: { $avg: '$driverRating' },
+        reviewCount: { $sum: 1 }
+      }
+    }
+  ])
+
+  return new Map(stats.map((item) => [String(item._id), {
+    ratingAverage: roundRating(item.ratingAverage),
+    reviewCount: item.reviewCount
+  }]))
+}
+
+const applyDriverAdReviewStats = (ad, statsMap) => {
+  const stats = statsMap.get(String(ad._id))
+
+  if (!stats) {
+    return ad
+  }
+
+  const rawAd = ad?.toObject ? ad.toObject() : { ...ad }
+  return {
+    ...rawAd,
+    ...stats
+  }
+}
+
 const getDriverAds = async (req, res) => {
   try {
     const { search = '', location, availability } = req.query
@@ -89,8 +136,10 @@ const getDriverAds = async (req, res) => {
       .populate('driver', driverSummaryFields)
       .sort({ availability: 1, createdAt: -1 })
 
+    const reviewStatsMap = await buildDriverAdReviewStatsMap(ads)
+
     res.json({
-      ads: ads.map(serializeDriverAd)
+      ads: ads.map((ad) => serializeDriverAd(applyDriverAdReviewStats(ad, reviewStatsMap)))
     })
   } catch (error) {
     sendServerError(res, error, 'Failed to load driver advertisements')
@@ -105,7 +154,9 @@ const getDriverAdById = async (req, res) => {
       return res.status(404).json({ message: 'Driver advertisement not found' })
     }
 
-    res.json(serializeDriverAd(ad))
+    const reviewStatsMap = await buildDriverAdReviewStatsMap([ad])
+
+    res.json(serializeDriverAd(applyDriverAdReviewStats(ad, reviewStatsMap)))
   } catch (error) {
     sendServerError(res, error, 'Failed to load driver advertisement')
   }
@@ -138,8 +189,10 @@ const getMyDriverAds = async (req, res) => {
       .populate('driver', driverSummaryFields)
       .sort({ updatedAt: -1 })
 
+    const reviewStatsMap = await buildDriverAdReviewStatsMap(ads)
+
     res.json({
-      ads: ads.map(serializeDriverAd),
+      ads: ads.map((ad) => serializeDriverAd(applyDriverAdReviewStats(ad, reviewStatsMap))),
       stats: buildStats(ads)
     })
   } catch (error) {

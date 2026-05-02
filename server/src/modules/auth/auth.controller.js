@@ -2,6 +2,12 @@ const User = require('../users/user.model');
 const { generateToken } = require('../../middleware/auth.middleware');
 const { sendServerError } = require('../../utils/errorResponses');
 const { logAuditEvent } = require('../../utils/auditHelpers');
+const { verifyGoogleIdToken } = require('./googleAuth.service');
+const {
+  generatePlaceholderPassword,
+  generateUniqueUsername,
+  getInactiveAccountMessage
+} = require('./auth.service');
 const {
   buildRoleAssignment,
   canUseRole,
@@ -11,6 +17,48 @@ const {
   syncUserRoles
 } = require('../../utils/roleHelpers');
 const { validatePasswordStrength } = require('../../utils/profileHelpers');
+
+const buildActiveCustomerRole = () => buildRoleAssignment('customer', {
+  roleStatus: 'active',
+  verificationStatus: 'verified',
+  isPrimary: true
+});
+
+const hasProfileImage = (value) => Boolean(value && value !== 'avatar.png');
+
+const applyGoogleProfileImage = (user, picture) => {
+  if (!picture) {
+    return;
+  }
+
+  if (!user.avatar) {
+    user.avatar = picture;
+  }
+
+  if (!hasProfileImage(user.profilePic)) {
+    user.profilePic = picture;
+  }
+};
+
+const sendInactiveAccountResponse = (res, accountStatus) => res.status(403).json({
+  message: getInactiveAccountMessage(accountStatus)
+});
+
+const respondWithAuthSession = async (res, user) => {
+  syncUserRoles(user);
+
+  if (!getUsableRoleAssignments(user).length) {
+    return res.status(403).json({ message: 'No active role is available for this account' });
+  }
+
+  user.lastLoginAt = new Date();
+  await user.save({ validateModifiedOnly: true });
+
+  return res.json({
+    ...serializeUser(user),
+    token: generateToken(user._id)
+  });
+};
 
 const register = async (req, res) => {
   try {
@@ -54,13 +102,13 @@ const register = async (req, res) => {
       address: address || '',
       city: city || '',
       role: 'customer',
-      accountStatus: 'pending',
-      verificationStatus: 'pending',
-      roles: [buildRoleAssignment('customer', { isPrimary: true })]
+      accountStatus: 'active',
+      verificationStatus: 'verified',
+      roles: [buildActiveCustomerRole()]
     });
 
     res.status(201).json({
-      message: 'Registration submitted. Wait for admin approval before signing in.'
+      message: 'Registration successful. You can now sign in.'
     });
   } catch (error) {
     if (error.code === 11000) {
@@ -93,28 +141,103 @@ const login = async (req, res) => {
     }
 
     if (user.accountStatus !== 'active') {
-      return res.status(403).json({
-        message: user.accountStatus === 'pending'
-          ? 'Your account is pending admin approval'
-          : 'Your account is not active'
+      return sendInactiveAccountResponse(res, user.accountStatus);
+    }
+
+    return respondWithAuthSession(res, user);
+  } catch (error) {
+    sendServerError(res, error, 'Login failed');
+  }
+};
+
+const googleLogin = async (req, res) => {
+  try {
+    const credential = String(req.body.credential || req.body.idToken || '').trim();
+
+    if (!credential) {
+      return res.status(400).json({ message: 'Google credential is required.' });
+    }
+
+    let googleAccount;
+
+    try {
+      googleAccount = await verifyGoogleIdToken(credential);
+    } catch (error) {
+      return res.status(error.statusCode || 401).json({
+        message: error.message || 'Invalid Google credential.'
       });
     }
 
-    syncUserRoles(user);
-
-    if (!getUsableRoleAssignments(user).length) {
-      return res.status(403).json({ message: 'No active role is available for this account' });
+    if (!googleAccount.email) {
+      return res.status(400).json({ message: 'Google account email is required.' });
     }
 
-    user.lastLoginAt = new Date();
-    await user.save();
+    const userByGoogleId = await User.findOne({ googleId: googleAccount.googleId });
 
-    res.json({
-      ...serializeUser(user),
-      token: generateToken(user._id)
+    if (userByGoogleId) {
+      if (userByGoogleId.accountStatus !== 'active') {
+        return sendInactiveAccountResponse(res, userByGoogleId.accountStatus);
+      }
+
+      return respondWithAuthSession(res, userByGoogleId);
+    }
+
+    const existingUser = await User.findOne({ email: googleAccount.email });
+
+    if (existingUser) {
+      if (existingUser.accountStatus !== 'active') {
+        return sendInactiveAccountResponse(res, existingUser.accountStatus);
+      }
+
+      if (existingUser.googleId && existingUser.googleId !== googleAccount.googleId) {
+        return res.status(409).json({ message: 'This email is already linked to a different Google account.' });
+      }
+
+      if (!existingUser.googleId) {
+        existingUser.googleId = googleAccount.googleId;
+      }
+
+      if (!existingUser.authProvider) {
+        existingUser.authProvider = existingUser.password ? 'local' : 'google';
+      } else if (!existingUser.password) {
+        existingUser.authProvider = 'google';
+      }
+
+      existingUser.emailVerified = true;
+      applyGoogleProfileImage(existingUser, googleAccount.picture);
+
+      return respondWithAuthSession(res, existingUser);
+    }
+
+    const fullName = googleAccount.fullName || googleAccount.email.split('@')[0] || 'Google User';
+    const username = await generateUniqueUsername({
+      email: googleAccount.email,
+      fullName
     });
+
+    const newUser = await User.create({
+      username,
+      fullName,
+      email: googleAccount.email,
+      password: generatePlaceholderPassword(),
+      role: 'customer',
+      accountStatus: 'active',
+      verificationStatus: 'verified',
+      authProvider: 'google',
+      googleId: googleAccount.googleId,
+      emailVerified: true,
+      profilePic: googleAccount.picture || 'avatar.png',
+      avatar: googleAccount.picture || '',
+      roles: [buildActiveCustomerRole()]
+    });
+
+    return respondWithAuthSession(res, newUser);
   } catch (error) {
-    sendServerError(res, error, 'Login failed');
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'Google account could not be linked to a unique user.' });
+    }
+
+    return sendServerError(res, error, 'Google login failed');
   }
 };
 
@@ -178,4 +301,4 @@ const switchRole = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getMe, switchRole };
+module.exports = { register, login, googleLogin, getMe, switchRole };

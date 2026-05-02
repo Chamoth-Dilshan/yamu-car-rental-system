@@ -1,7 +1,7 @@
 const crypto = require('crypto')
 const mongoose = require('mongoose')
 const Payment = require('./payment.model')
-const PaymentMethod = require('./paymentMethod.model')
+const UserPaymentCard = require('./userPaymentCard.model')
 const Booking = require('../reservations/booking.model')
 const User = require('../users/user.model')
 const Vehicle = require('../vehicles/vehicle.model')
@@ -9,7 +9,7 @@ const {
   PAYMENT_CURRENCY,
   PAYMENT_NO_PREFIX,
   TRANSACTION_ID_PREFIX,
-  MOCK_TOKEN_PREFIX,
+  CARD_TOKEN_PREFIX,
   PROCESSING_PAYMENT_METHODS,
   RECEIPT_BRAND,
   isImmediatePaymentMethod,
@@ -78,12 +78,12 @@ const generateTransactionId = () => generateUniqueValue({
   field: 'transactionId'
 })
 
-const generateMockToken = async () => {
+const generateCardToken = async () => {
   let token = ''
 
   do {
-    token = `${MOCK_TOKEN_PREFIX}_${crypto.randomBytes(16).toString('hex')}`
-  } while (await PaymentMethod.exists({ token }))
+    token = `${CARD_TOKEN_PREFIX}_${crypto.randomBytes(16).toString('hex')}`
+  } while (await UserPaymentCard.exists({ token }))
 
   return token
 }
@@ -177,7 +177,7 @@ const serializePayment = (payment) => {
 }
 
 const expireCustomerCards = async (customerId) => {
-  const activeCards = await PaymentMethod.find({
+  const activeCards = await UserPaymentCard.find({
     customer: customerId,
     status: 'active'
   })
@@ -194,7 +194,7 @@ const expireCustomerCards = async (customerId) => {
 }
 
 const ensureDefaultCard = async (customerId) => {
-  const defaultCard = await PaymentMethod.findOne({
+  const defaultCard = await UserPaymentCard.findOne({
     customer: customerId,
     status: 'active',
     isDefault: true
@@ -204,7 +204,7 @@ const ensureDefaultCard = async (customerId) => {
     return
   }
 
-  const latestActiveCard = await PaymentMethod.findOne({
+  const latestActiveCard = await UserPaymentCard.findOne({
     customer: customerId,
     status: 'active'
   }).sort({ updatedAt: -1, createdAt: -1 })
@@ -222,20 +222,20 @@ const createPaymentMethodFromCard = async ({
 }) => {
   await expireCustomerCards(customerId)
 
-  const activeCardCount = await PaymentMethod.countDocuments({
+  const activeCardCount = await UserPaymentCard.countDocuments({
     customer: customerId,
     status: 'active'
   })
   const shouldBeDefault = Boolean(isDefault) || activeCardCount === 0
 
   if (shouldBeDefault) {
-    await PaymentMethod.updateMany(
+    await UserPaymentCard.updateMany(
       { customer: customerId, status: 'active' },
       { $set: { isDefault: false } }
     )
   }
 
-  const paymentMethod = await PaymentMethod.create({
+  const paymentMethod = await UserPaymentCard.create({
     customer: customerId,
     type: 'card',
     cardholderName: card.cardholderName,
@@ -244,7 +244,7 @@ const createPaymentMethodFromCard = async ({
     maskedNumber: card.maskedNumber,
     expiryMonth: card.expiryMonth,
     expiryYear: card.expiryYear,
-    token: await generateMockToken(),
+    token: await generateCardToken(),
     isDefault: shouldBeDefault,
     status: 'active'
   })
@@ -256,7 +256,7 @@ const listPaymentMethods = async (customerId) => {
   await expireCustomerCards(customerId)
   await ensureDefaultCard(customerId)
 
-  return PaymentMethod.find({
+  return UserPaymentCard.find({
     customer: customerId,
     status: { $ne: 'removed' }
   }).sort({ isDefault: -1, updatedAt: -1, createdAt: -1 })
@@ -273,7 +273,7 @@ const createPaymentMethod = async ({ customerId, validatedCard }) => (
 const setDefaultPaymentMethod = async ({ customerId, paymentMethodId }) => {
   await expireCustomerCards(customerId)
 
-  const paymentMethod = await PaymentMethod.findOne({
+  const paymentMethod = await UserPaymentCard.findOne({
     _id: paymentMethodId,
     customer: customerId,
     status: 'active'
@@ -290,7 +290,7 @@ const setDefaultPaymentMethod = async ({ customerId, paymentMethodId }) => {
     return { error: 'Expired cards cannot be used as default' }
   }
 
-  await PaymentMethod.updateMany(
+  await UserPaymentCard.updateMany(
     { customer: customerId, status: 'active' },
     { $set: { isDefault: false } }
   )
@@ -302,7 +302,7 @@ const setDefaultPaymentMethod = async ({ customerId, paymentMethodId }) => {
 }
 
 const removePaymentMethod = async ({ customerId, paymentMethodId }) => {
-  const paymentMethod = await PaymentMethod.findOne({
+  const paymentMethod = await UserPaymentCard.findOne({
     _id: paymentMethodId,
     customer: customerId,
     status: { $ne: 'removed' }
@@ -352,16 +352,23 @@ const validateBookingForPayment = async ({ booking, amount }) => {
     return { error: 'Closed bookings cannot be paid.' }
   }
 
+  const activePayment = await getActivePaymentForBooking(booking._id)
+
   if (booking.paymentStatus === 'paid') {
-    return { error: 'This booking is already paid.' }
+    if (activePayment?.status === 'paid') {
+      return { error: 'This booking is already paid.' }
+    }
+
+    booking.paymentStatus = 'pending'
+    await booking.save()
   }
 
   if (booking.paymentStatus === 'refunded') {
     return { error: 'Refunded bookings cannot be paid again' }
   }
 
-  if (booking.bookingStatus !== 'confirmed') {
-    return { error: 'Payment is available only after the provider accepts your reservation.' }
+  if (booking.bookingStatus !== 'completed') {
+    return { error: 'Payment is available only after the trip is completed.' }
   }
 
   const expectedAmount = normalizeAmount(booking.totalAmount)
@@ -374,7 +381,6 @@ const validateBookingForPayment = async ({ booking, amount }) => {
     return { error: 'Payment amount must match booking total amount' }
   }
 
-  const activePayment = await getActivePaymentForBooking(booking._id)
   if (activePayment) {
     return { error: `A ${activePayment.status} payment already exists for this booking` }
   }
@@ -421,7 +427,7 @@ const createCheckoutPayment = async ({ booking, customer, validatedPayment }) =>
   if (validatedPayment.method === 'saved_card') {
     await expireCustomerCards(customer._id)
 
-    paymentMethod = await PaymentMethod.findOne({
+    paymentMethod = await UserPaymentCard.findOne({
       _id: validatedPayment.paymentMethodId,
       customer: customer._id,
       status: 'active'
@@ -563,7 +569,9 @@ const listPayments = async ({
     query.status = status
   }
 
-  if (method && method !== 'all') {
+  if (method === 'card_payment') {
+    query.method = { $in: ['card', 'saved_card'] }
+  } else if (method && method !== 'all') {
     query.method = method
   }
 
@@ -615,6 +623,10 @@ const verifyPayment = async ({ paymentId, admin, payload }) => {
 
   if (['cancelled', 'closed'].includes(booking.bookingStatus)) {
     return { error: 'Cancelled or closed bookings cannot be marked paid' }
+  }
+
+  if (booking.bookingStatus !== 'completed') {
+    return { error: 'Payments can be verified only after the trip is completed' }
   }
 
   payment.status = 'paid'
@@ -786,7 +798,7 @@ module.exports = {
   bookingPopulate,
   generatePaymentNo,
   generateTransactionId,
-  generateMockToken,
+  generateCardToken,
   serializePayment,
   serializePaymentMethod,
   listPaymentMethods,

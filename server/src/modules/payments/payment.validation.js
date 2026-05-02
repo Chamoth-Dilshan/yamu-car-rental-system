@@ -20,34 +20,6 @@ const normalizeAmount = (value) => {
   return Math.round(amount * 100) / 100
 }
 
-const isLuhnValid = (cardNumber = '') => {
-  const digits = normalizeDigits(cardNumber)
-
-  if (!/^\d{13,19}$/.test(digits)) {
-    return false
-  }
-
-  let sum = 0
-  let shouldDouble = false
-
-  for (let index = digits.length - 1; index >= 0; index -= 1) {
-    let digit = Number(digits[index])
-
-    if (shouldDouble) {
-      digit *= 2
-
-      if (digit > 9) {
-        digit -= 9
-      }
-    }
-
-    sum += digit
-    shouldDouble = !shouldDouble
-  }
-
-  return sum % 10 === 0
-}
-
 const detectCardBrand = (cardNumber = '') => {
   const digits = normalizeDigits(cardNumber)
 
@@ -63,7 +35,12 @@ const detectCardBrand = (cardNumber = '') => {
     return 'Amex'
   }
 
-  return 'unknown'
+  return 'Card'
+}
+
+const isSixteenDigitCardNumber = (cardNumber = '') => {
+  const digits = normalizeDigits(cardNumber)
+  return /^\d{16}$/.test(digits)
 }
 
 const isFutureExpiry = (month, year) => {
@@ -105,8 +82,8 @@ const validateCardInput = (card = {}) => {
     return { error: 'Card number is required' }
   }
 
-  if (!isLuhnValid(cardNumber)) {
-    return { error: 'Card number is invalid' }
+  if (!isSixteenDigitCardNumber(cardNumber)) {
+    return { error: 'Card number must be 16 digits' }
   }
 
   if (!isFutureExpiry(expiryMonth, expiryYear)) {
@@ -297,8 +274,8 @@ module.exports = {
   trimValue,
   normalizeAmount,
   normalizeDigits,
-  isLuhnValid,
   detectCardBrand,
+  isSixteenDigitCardNumber,
   isFutureExpiry,
   maskCardNumber,
   validateCardInput,

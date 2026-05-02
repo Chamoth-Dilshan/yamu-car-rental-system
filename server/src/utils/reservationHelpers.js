@@ -123,6 +123,8 @@ const serializeVehicle = (vehicle) => {
     pricePerDay: rawVehicle.pricePerDay,
     status: rawVehicle.status,
     featured: Boolean(rawVehicle.featured),
+    ratingAverage: rawVehicle.ratingAverage || 0,
+    reviewCount: rawVehicle.reviewCount || 0,
     createdAt: rawVehicle.createdAt,
     updatedAt: rawVehicle.updatedAt
   }

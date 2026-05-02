@@ -40,7 +40,7 @@ export default function SavedCardSelector({
           placeholder="3 or 4 digits"
         />
         {errors.cvv && <small className="field-error">{errors.cvv}</small>}
-        <small className="form-help">CVV is checked for the simulated transaction and is never stored.</small>
+        <small className="form-help">CVV is validated only for this request and is never stored.</small>
       </div>
     </div>
   )

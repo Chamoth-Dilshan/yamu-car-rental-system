@@ -2,9 +2,21 @@ import API from '../../api/axios'
 
 export const getCustomerQualityDashboard = () => API.get('/reviews/dashboard')
 
+export const getPublicQualityDashboard = () => API.get('/reviews/summary')
+
 export const getReviewContext = (bookingId) => API.get(`/reviews/bookings/${bookingId}/context`)
 
 export const submitReview = (payload) => API.post('/reviews', payload)
+
+export const getMyReviews = () => API.get('/reviews/mine')
+
+export const updateMyReview = (reviewId, payload) => API.put(`/reviews/${reviewId}`, payload)
+
+export const deleteMyReview = (reviewId) => API.delete(`/reviews/${reviewId}`)
+
+export const getVehicleReviews = (vehicleId) => API.get(`/reviews/vehicles/${vehicleId}`)
+
+export const getDriverAdReviews = (driverAdId) => API.get(`/reviews/driver-ads/${driverAdId}`)
 
 export const getAdminReviews = () => API.get('/reviews/admin')
 

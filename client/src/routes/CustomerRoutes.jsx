@@ -10,6 +10,7 @@ import ApplyRoles from '../features/users/pages/ApplyRoles'
 import MyBookings from '../features/reservations/pages/MyBookings'
 import ComplaintForm from '../features/reviews/pages/ComplaintForm'
 import CustomerDashboard from '../features/reviews/pages/CustomerDashboard'
+import MyReviews from '../features/reviews/pages/MyReviews'
 import ReviewForm from '../features/reviews/pages/ReviewForm'
 import Notifications from '../features/users/pages/Notifications'
 import Profile from '../features/users/pages/Profile'
@@ -61,6 +62,15 @@ const CustomerRoutes = [
     element={(
       <ProtectedRoute roles={['customer']}>
         <ReviewForm />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="my-reviews"
+    path="/reviews"
+    element={(
+      <ProtectedRoute roles={['customer']}>
+        <MyReviews />
       </ProtectedRoute>
     )}
   />,

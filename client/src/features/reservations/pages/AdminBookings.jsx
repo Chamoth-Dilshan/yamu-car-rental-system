@@ -209,7 +209,15 @@ export default function AdminBookings() {
                               {busyAction === `complete-${booking._id}` ? 'Saving...' : 'Complete'}
                             </button>
                           )}
-                          {['completed', 'cancelled'].includes(booking.bookingStatus) && (
+                          {booking.bookingStatus === 'completed' && booking.paymentStatus !== 'paid' && (
+                            <button className="btn btn-outline btn-sm" type="button" disabled>
+                              Awaiting Payment
+                            </button>
+                          )}
+                          {(
+                            booking.bookingStatus === 'cancelled'
+                            || (booking.bookingStatus === 'completed' && booking.paymentStatus === 'paid')
+                          ) && (
                             <button
                               className="btn btn-outline btn-sm"
                               type="button"
