@@ -9,7 +9,6 @@ import CashPaymentBox from '../components/CashPaymentBox'
 import { isFutureExpiry, isSecurityCodeValid, isSixteenDigitCardNumber } from '../cardValidation'
 import PaymentSummary from '../components/PaymentSummary'
 import SavedCardSelector from '../components/SavedCardSelector'
-import AvailablePromotions from '../components/AvailablePromotions'
 import { checkoutPayment, getCustomerPayments, getPaymentMethods } from '../paymentApi'
 
 const emptyCard = {
@@ -98,55 +97,6 @@ export default function CheckoutPage() {
   const [busy, setBusy] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
-  const [promoCode, setPromoCode] = useState('')
-  const [priceDetails, setPriceDetails] = useState(null)
-  const [isSimulating, setIsSimulating] = useState(false)
-  const [promoError, setPromoError] = useState('')
-
-  useEffect(() => {
-    if (!booking) return;
-
-    let active = true;
-    setIsSimulating(true);
-    setPromoError('');
-
-    API.post('/pricing/simulate', {
-      bookingDetails: {
-        basePrice: booking.totalAmount, // passing total as base to easily discount the final value
-        duration: 1,
-        startDate: booking.startDate,
-        endDate: booking.endDate,
-        vehicleCategory: booking.vehicle?.category || 'any',
-        bookingType: booking.bookingType,
-        isFirstBooking: false
-      },
-      promoCode
-    })
-      .then(res => {
-        if (!active) return;
-        setPriceDetails(res.data);
-        
-        if (promoCode) {
-          const promoErrorItem = res.data.breakdown?.find(item => item.type === 'error');
-          if (promoErrorItem) {
-            setPromoError(promoErrorItem.name);
-          }
-        }
-      })
-      .catch(err => {
-        if (!active) return;
-        console.error('Simulation failed', err);
-        setPromoError('Failed to calculate pricing or apply promo.');
-      })
-      .finally(() => {
-        if (active) setIsSimulating(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [booking, promoCode]);
-
   useEffect(() => {
     let active = true
     setLoading(true)
@@ -187,7 +137,7 @@ export default function CheckoutPage() {
     () => savedCards.filter((item) => item.status === 'active'),
     [savedCards]
   )
-  const amount = priceDetails ? priceDetails.finalPrice : Number(booking?.totalAmount || 0)
+  const amount = Number(booking?.totalAmount || 0)
   const isProcessing = latestPayment?.status === 'processing'
   const checkoutBlockMessage = (() => {
     if (!booking) {
@@ -456,20 +406,7 @@ export default function CheckoutPage() {
           </section>
 
           <div className="payment-side-panel">
-            <AvailablePromotions 
-              booking={booking} 
-              onApplyPromo={setPromoCode} 
-              appliedPromo={promoCode} 
-              isSimulating={isSimulating}
-            />
-            {promoError && <div className="alert alert-danger" style={{ marginBottom: '15px' }}>{promoError}</div>}
-            
-            <PaymentSummary 
-              booking={booking} 
-              amount={amount} 
-              status={isProcessing ? 'processing' : booking.paymentStatus} 
-              priceDetails={priceDetails}
-            />
+            <PaymentSummary booking={booking} amount={amount} status={isProcessing ? 'processing' : booking.paymentStatus} />
 
             <div className="payment-submit-row">
               <button className="btn btn-primary btn-block" type="submit" disabled={busy || !canSubmit}>

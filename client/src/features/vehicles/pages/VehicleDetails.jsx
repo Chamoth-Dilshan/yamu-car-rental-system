@@ -6,6 +6,7 @@ import { buildUploadUrl } from '../../../api/config'
 import { useAuth } from '../../../context/AuthContext'
 import { formatCurrency, formatDate, getBadgeClass } from '../../../utils/formatters'
 import { getVehicleReviews } from '../../reviews/reviewApi'
+import AvailablePromotions from '../../payments/components/AvailablePromotions'
 
 const emptyReviewSummary = {
   ratingAverage: 0,
@@ -61,6 +62,11 @@ export default function VehicleDetails() {
   const [loading, setLoading] = useState(true)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  
+  const [promoCode, setPromoCode] = useState('')
+  const [priceDetails, setPriceDetails] = useState(null)
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [promoError, setPromoError] = useState('')
 
   useEffect(() => {
     setLoading(true)
@@ -101,6 +107,61 @@ export default function VehicleDetails() {
   const ratingAverage = reviewSummary.reviewCount ? reviewSummary.ratingAverage : (vehicle?.ratingAverage || 0)
   const reviewCount = reviewSummary.reviewCount || vehicle?.reviewCount || 0
 
+  useEffect(() => {
+    if (totalAmount <= 0) {
+      setPriceDetails(null);
+      return;
+    }
+
+    let active = true;
+    setIsSimulating(true);
+    setPromoError('');
+
+    API.post('/pricing/simulate', {
+      bookingDetails: {
+        basePrice: totalAmount, // pass the computed total as the base for the engine to discount from
+        duration: 1, 
+        startDate: bookingForm.startDate,
+        endDate: bookingForm.endDate,
+        vehicleCategory: vehicle?.category || 'any',
+        bookingType: 'vehicle',
+        isFirstBooking: false
+      },
+      promoCode
+    })
+      .then(res => {
+        if (!active) return;
+        setPriceDetails(res.data);
+        
+        if (promoCode) {
+          const promoErrorItem = res.data.breakdown?.find(item => item.type === 'error');
+          if (promoErrorItem) {
+            setPromoError(promoErrorItem.name);
+          }
+        }
+      })
+      .catch(err => {
+        if (!active) return;
+        console.error('Simulation failed', err);
+        setPromoError('Failed to calculate pricing or apply promo.');
+      })
+      .finally(() => {
+        if (active) setIsSimulating(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [totalAmount, promoCode, bookingForm.startDate, bookingForm.endDate, vehicle]);
+
+  const bookingMock = {
+    totalAmount: totalAmount,
+    bookingType: 'vehicle',
+    vehicle: { category: vehicle?.category || 'any' }
+  };
+  
+  const finalAmount = priceDetails ? priceDetails.finalPrice : totalAmount;
+
   const submitBooking = async (event) => {
     event.preventDefault()
     setMessage('')
@@ -131,6 +192,7 @@ export default function VehicleDetails() {
     try {
       await API.post('/bookings/vehicle', {
         vehicleId: vehicle._id,
+        promoCode,
         ...bookingForm
       })
       await refreshNotifications().catch(() => {})
@@ -247,9 +309,32 @@ export default function VehicleDetails() {
                     placeholder="Add any trip notes or requirements"
                   />
                 </div>
+
+                {billableDays > 0 && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <AvailablePromotions 
+                      booking={bookingMock} 
+                      onApplyPromo={setPromoCode} 
+                      appliedPromo={promoCode} 
+                      isSimulating={isSimulating}
+                    />
+                    {promoError && <div className="alert alert-danger" style={{ marginTop: '10px' }}>{promoError}</div>}
+                    
+                    {priceDetails && priceDetails.breakdown && priceDetails.breakdown.map((item, index) => {
+                      if (item.type === 'error' || item.impact === 0) return null;
+                      return (
+                        <div key={index} style={{ display: 'flex', justifyContent: 'space-between', color: item.impact < 0 ? 'var(--success-color)' : 'inherit', margin: '10px 0', fontSize: '0.9rem' }}>
+                          <span>{item.name}</span>
+                          <strong>{item.impact < 0 ? '-' : '+'}{formatCurrency(Math.abs(item.impact))}</strong>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div className="booking-total">
                   <span>Total</span>
-                  <strong>{billableDays > 0 ? formatCurrency(totalAmount) : 'Select dates'}</strong>
+                  <strong>{billableDays > 0 ? formatCurrency(finalAmount) : 'Select dates'}</strong>
                 </div>
                 <button className="btn btn-primary btn-block" type="submit" disabled={busy || vehicle.status !== 'available' || isOwnVehicleListing || storeUnavailable}>
                   {busy ? 'Booking...' : 'Reserve Vehicle'}

@@ -128,7 +128,7 @@ const getMyBookings = async (req, res) => {
 
 const createVehicleBooking = async (req, res) => {
   try {
-    const { vehicleId, pickupLocation = '', destination = '', notes = '', startDate, endDate } = req.body
+    const { vehicleId, pickupLocation = '', destination = '', notes = '', startDate, endDate, promoCode } = req.body
     const dateRange = validateDateRange(startDate, endDate)
 
     if (dateRange.error) {
@@ -162,6 +162,28 @@ const createVehicleBooking = async (req, res) => {
       return res.status(400).json({ message: 'The selected vehicle already has an active reservation in that date range' })
     }
 
+    const baseAmount = vehicle.pricePerDay * dateRange.billableDays
+    let finalTotalAmount = baseAmount
+
+    if (promoCode) {
+      const PricingEngine = require('../../../services/pricingEngine')
+      const bookingDetails = {
+        basePrice: baseAmount,
+        duration: 1,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        vehicleCategory: vehicle.category || 'any',
+        bookingType: 'vehicle',
+        isFirstBooking: false
+      }
+      try {
+        const result = await PricingEngine.calculatePrice(bookingDetails, promoCode)
+        finalTotalAmount = result.finalPrice
+      } catch (err) {
+        console.error('Pricing engine failed during booking creation:', err)
+      }
+    }
+
     const booking = await Booking.create({
       bookingNo: await generateBookingNo('BOOK'),
       bookingType: 'vehicle',
@@ -176,9 +198,9 @@ const createVehicleBooking = async (req, res) => {
       endDate: dateRange.endDate,
       dailyRate: vehicle.pricePerDay,
       billableDays: dateRange.billableDays,
-      baseAmount: vehicle.pricePerDay * dateRange.billableDays,
+      baseAmount: baseAmount,
       serviceFee: 0,
-      totalAmount: vehicle.pricePerDay * dateRange.billableDays
+      totalAmount: finalTotalAmount
     })
 
     const createdBooking = await Booking.findById(booking._id).populate(bookingPopulate)
