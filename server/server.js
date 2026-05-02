@@ -11,19 +11,13 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
-<<<<<<< HEAD
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/users', require('./routes/users'));
-app.use('/api/admin', require('./routes/admin'));
-app.use('/api/pricing', require('./routes/pricing'));
-=======
 app.use('/api/auth', require('./routes/auth'))
 app.use('/api/users', require('./routes/users'))
 app.use('/api/admin', require('./routes/admin'))
+app.use('/api/pricing', require('./routes/pricing'))
 app.use('/api/vehicles', require('./routes/vehicles'))
 app.use('/api/driver-ads', require('./routes/driverAds'))
 app.use('/api/bookings', require('./routes/bookings'))
->>>>>>> 5e8b29af6d9c8f6ce80172e7cd8132363b7f2c04
 
 app.get('/api/health', (req, res) => {
   const readyStateLabels = {

@@ -1,22 +1,3 @@
-<<<<<<< HEAD
-import { Route, Routes } from 'react-router-dom';
-import Layout from './components/Layout';
-import ProtectedRoute from './components/ProtectedRoute';
-import Home from './pages/Home';
-import AdminSignIn from './pages/AdminSignIn';
-import AdminUsers from './pages/AdminUsers';
-import ApplyRoles from './pages/ApplyRoles';
-import AccountOverview from './pages/AccountOverview';
-import SignIn from './pages/SignIn';
-import SignUp from './pages/SignUp';
-import Profile from './pages/Profile';
-import RoleManagement from './pages/RoleManagement';
-import PricingOverview from './pages/admin-pricing/PricingOverview';
-import CampaignsAdmin from './pages/admin-pricing/CampaignsAdmin';
-import PromotionsAdmin from './pages/admin-pricing/PromotionsAdmin';
-import PricingRulesAdmin from './pages/admin-pricing/PricingRulesAdmin';
-import PricingSimulator from './pages/admin-pricing/PricingSimulator';
-=======
 import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -42,6 +23,11 @@ import StaffVehicleForm from './pages/StaffVehicleForm'
 import StaffVehicleBookings from './pages/StaffVehicleBookings'
 import { useAuth } from './context/AuthContext'
 import { getProfilePathForRole } from './utils/roles'
+import PricingOverview from './pages/admin-pricing/PricingOverview'
+import CampaignsAdmin from './pages/admin-pricing/CampaignsAdmin'
+import PromotionsAdmin from './pages/admin-pricing/PromotionsAdmin'
+import PricingRulesAdmin from './pages/admin-pricing/PricingRulesAdmin'
+import PricingSimulator from './pages/admin-pricing/PricingSimulator'
 
 function ProfileEntryRedirect() {
   const { user } = useAuth()
@@ -50,7 +36,6 @@ function ProfileEntryRedirect() {
 
   return <Navigate to={target} replace />
 }
->>>>>>> 5e8b29af6d9c8f6ce80172e7cd8132363b7f2c04
 
 export default function App() {
   return (
@@ -107,7 +92,6 @@ export default function App() {
           )}
         />
         <Route
-<<<<<<< HEAD
           path="/admin/pricing-overview"
           element={<ProtectedRoute roles={['admin']}><PricingOverview /></ProtectedRoute>}
         />
@@ -128,10 +112,7 @@ export default function App() {
           element={<ProtectedRoute roles={['admin']}><PricingSimulator /></ProtectedRoute>}
         />
         <Route
-          path="/admin/*"
-=======
           path="/driver/ads"
->>>>>>> 5e8b29af6d9c8f6ce80172e7cd8132363b7f2c04
           element={(
             <ProtectedRoute roles={['driver']}>
               <DriverAdList />

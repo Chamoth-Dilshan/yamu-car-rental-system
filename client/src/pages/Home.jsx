@@ -3,48 +3,7 @@ import { Link } from 'react-router-dom';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
-<<<<<<< HEAD
-const featuredCars = [
-  {
-    name: 'City Compact',
-    tag: 'Best for daily errands',
-    price: 'LKR 28/day',
-    description: 'Fuel-efficient and easy to park for quick runs around town.'
-  },
-  {
-    name: 'Family SUV',
-    tag: 'Most popular choice',
-    price: 'LKR 52/day',
-    description: 'Spacious interior, strong AC, and room for luggage on longer drives.'
-  },
-  {
-    name: 'Executive Sedan',
-    tag: 'Business and airport trips',
-    price: 'LKR 46/day',
-    description: 'Comfort-focused travel with a polished look for meetings and pickups.'
-  }
-];
 
-const bookingSteps = [
-  {
-    num: '1',
-    title: 'Create your account',
-    desc: 'Register once so you can manage bookings, profile details, and rental preferences.'
-  },
-  {
-    num: '2',
-    title: 'Choose your car',
-    desc: 'Pick a practical compact, a roomy SUV, or a sedan that fits your trip.'
-  },
-  {
-    num: '3',
-    title: 'Drive with confidence',
-    desc: 'Confirm your ride, collect the vehicle, and head out with clear rental support.'
-  }
-];
-
-=======
->>>>>>> 5e8b29af6d9c8f6ce80172e7cd8132363b7f2c04
 export default function Home() {
   const { user } = useAuth();
   const [inventoryStats, setInventoryStats] = useState({

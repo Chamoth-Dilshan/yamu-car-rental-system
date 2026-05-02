@@ -35,24 +35,18 @@ const menuItems = {
   admin: [
     { section: 'Admin Panel' },
     { to: '/admin/dashboard', label: 'Overview', end: true },
-<<<<<<< HEAD
-    { to: '/admin/pending-approvals', label: 'Pending Approvals', end: true },
-    { to: '/admin/users', label: 'Users', end: true },
-    { to: '/admin/roles', label: 'Role Access', end: true },
+    { to: '/admin/pending-approvals', label: 'Pending Approvals', end: false },
+    { to: '/admin/users', label: 'Users', end: false },
+    { to: '/admin/roles', label: 'Role Access', end: false },
     { section: 'Pricing & Promos' },
     { to: '/admin/pricing-overview', label: 'Overview', end: true },
     { to: '/admin/campaigns', label: 'Campaigns', end: true },
     { to: '/admin/promotions', label: 'Promotions', end: true },
     { to: '/admin/pricing-rules', label: 'Pricing Rules', end: true },
-    { to: '/admin/pricing-simulator', label: 'Simulator', end: true }
-=======
-    { to: '/admin/pending-approvals', label: 'Pending Approvals', end: false },
-    { to: '/admin/users', label: 'Users', end: false },
-    { to: '/admin/roles', label: 'Role Access', end: false },
+    { to: '/admin/pricing-simulator', label: 'Simulator', end: true },
     { section: 'Account' },
     { to: '/profile/admin', label: 'Admin Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true }
->>>>>>> 5e8b29af6d9c8f6ce80172e7cd8132363b7f2c04
   ]
 }
 

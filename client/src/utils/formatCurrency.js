@@ -5,8 +5,10 @@
  * @returns {String} formatted string e.g. "LKR 1,500.00"
  */
 export const formatCurrency = (amount) => {
-  const number = Number(amount) || 0;
-  return `LKR ${number.toLocaleString('en-US', {
+  const parsedAmount = Number(amount);
+  const number = isNaN(parsedAmount) ? 0 : parsedAmount;
+  
+  return `LKR ${number.toLocaleString('en-LK', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;

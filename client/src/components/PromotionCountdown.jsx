@@ -12,6 +12,12 @@ export default function PromotionCountdown({ endDate }) {
     
     // Set expiry to the end of the specified day (23:59:59) for accuracy if it's just a date string
     const targetObj = new Date(endDate);
+    
+    if (isNaN(targetObj.getTime())) {
+      setTimeLeft('Invalid date');
+      return;
+    }
+
     if (targetObj.getHours() === 0 && targetObj.getMinutes() === 0) {
       targetObj.setHours(23, 59, 59, 999);
     }
@@ -33,12 +39,12 @@ export default function PromotionCountdown({ endDate }) {
       const m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const s = Math.floor((diff % (1000 * 60)) / 1000);
       
-      if (d === 0 && h === 0 && m === 0) {
-        setTimeLeft(`${s}s`);
-      } else if (d === 0) {
-        setTimeLeft(`${h}h ${m}m ${s}s`);
+      const pad = (num) => num.toString().padStart(2, '0');
+
+      if (d === 0) {
+        setTimeLeft(`${pad(h)}h ${pad(m)}m ${pad(s)}s`);
       } else {
-        setTimeLeft(`${d}d ${h}h ${m}m ${s}s`);
+        setTimeLeft(`${d}d ${pad(h)}h ${pad(m)}m ${pad(s)}s`);
       }
     };
 
