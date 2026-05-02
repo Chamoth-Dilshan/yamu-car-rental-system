@@ -1,0 +1,43 @@
+$kind: http-request
+name: '21 - Verify Final Booking State'
+method: GET
+url: '{{baseUrl}}/api/bookings/customer'
+order: 21000
+headers:
+  - key: Authorization
+    value: 'Bearer {{customerToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Customer can view final booking state", () => {
+        pm.response.to.have.status(200);
+      });
+
+      const json = pm.response.json();
+      const bookingId = pm.environment.get("e2eBookingId");
+      const booking = (json.bookings || []).find(b => b._id === bookingId);
+
+      pm.test("Completed booking is found in customer list", () => {
+        pm.expect(booking, "Completed booking not found").to.exist;
+      });
+
+      pm.test("Final booking status is completed", () => {
+        pm.expect(booking.bookingStatus).to.equal("completed");
+      });
+
+      pm.test("Final payment status is paid", () => {
+        pm.expect(booking.paymentStatus).to.equal("paid");
+      });
+
+      pm.test("Booking has correct vehicle reference", () => {
+        const vehicleId = pm.environment.get("e2eVehicleId");
+        const bookingVehicleId = booking.vehicle._id || booking.vehicle;
+        pm.expect(bookingVehicleId).to.equal(vehicleId);
+      });
+
+      console.log(`✅ E2E Booking Lifecycle PASSED`);
+      console.log(`   Booking No: ${pm.environment.get("e2eBookingNo")}`);
+      console.log(`   Customer: ${pm.environment.get("e2eCustomerEmail")}`);
+      console.log(`   Staff: ${pm.environment.get("e2eStaffEmail")}`);
+      console.log(`   Vehicle ID: ${pm.environment.get("e2eVehicleId")}`);

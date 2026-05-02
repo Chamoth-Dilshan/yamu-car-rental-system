@@ -196,6 +196,15 @@ export function AuthProvider({ children }) {
     return userData
   }
 
+  const googleLogin = async (credential) => {
+    const res = await API.post('/auth/google', { credential })
+    const { token, ...userData } = res.data
+    localStorage.setItem('uprm_token', token)
+    setUser(userData)
+    await refreshNotifications().catch(() => {})
+    return userData
+  }
+
   const register = async (payload) => {
     const res = await API.post('/auth/register', payload)
 
@@ -245,6 +254,7 @@ export function AuthProvider({ children }) {
         notifications,
         unreadNotificationCount,
         login,
+        googleLogin,
         register,
         logout,
         switchRole,

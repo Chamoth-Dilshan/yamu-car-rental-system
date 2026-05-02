@@ -1,0 +1,8 @@
+$kind: http-request
+name: Delete Driver Ad
+method: DELETE
+url: '{{baseUrl}}/api/driver-ads/{{driverAdId}}'
+order: 6000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'

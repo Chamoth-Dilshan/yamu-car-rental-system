@@ -1,0 +1,36 @@
+$kind: http-request
+name: '10 - Staff Login'
+method: POST
+url: '{{baseUrl}}/api/auth/login'
+order: 10000
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "email": "{{e2eStaffEmail}}",
+      "password": "{{e2eStaffPassword}}"
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Staff login succeeds", () => {
+        pm.response.to.have.status(200);
+      });
+
+      pm.test("Staff login returns token", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("token");
+        pm.expect(json.token).to.be.a("string").and.not.empty;
+      });
+
+      const json = pm.response.json();
+      if (json.token) {
+        pm.environment.set("staffToken", json.token);
+      }
+      if (json.user && json.user._id) {
+        pm.environment.set("e2eStaffUserId", json.user._id);
+      }
