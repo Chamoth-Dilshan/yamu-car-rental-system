@@ -348,10 +348,6 @@ export default function CheckoutPage() {
             </div>
 
             <div className="payment-method-grid">
-              <button type="button" className={`payment-method-card${method === 'card' ? ' active' : ''}`} onClick={() => setMethod('card')}>
-                <strong>New Card</strong>
-                <span>Pay by card and get an instant receipt</span>
-              </button>
               <button
                 type="button"
                 className={`payment-method-card${method === 'saved_card' ? ' active' : ''}`}
@@ -409,13 +405,15 @@ export default function CheckoutPage() {
             )}
           </section>
 
-          <PaymentSummary booking={booking} amount={amount} status={isProcessing ? 'processing' : booking.paymentStatus} />
+          <div className="payment-side-panel">
+            <PaymentSummary booking={booking} amount={amount} status={isProcessing ? 'processing' : booking.paymentStatus} />
 
-          <div className="payment-submit-row">
-            <button className="btn btn-primary btn-block" type="submit" disabled={busy || !canSubmit}>
-              {busy ? 'Processing...' : method === 'cash' || method === 'bank_transfer' ? 'Submit for Verification' : 'Pay Now'}
-            </button>
-            <Link className="btn btn-outline btn-block" to="/bookings">Back to Bookings</Link>
+            <div className="payment-submit-row">
+              <button className="btn btn-primary btn-block" type="submit" disabled={busy || !canSubmit}>
+                {busy ? 'Processing...' : method === 'cash' || method === 'bank_transfer' ? 'Submit for Verification' : 'Pay Now'}
+              </button>
+              <Link className="btn btn-outline btn-block" to="/bookings">Back to Bookings</Link>
+            </div>
           </div>
         </form>
         )}

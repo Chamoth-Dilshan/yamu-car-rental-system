@@ -1,10 +1,33 @@
 import { useEffect, useState } from 'react'
+import {
+  FaArrowLeft,
+  FaCalendarCheck,
+  FaCarSide,
+  FaCreditCard,
+  FaFileInvoiceDollar,
+  FaHashtag,
+  FaLock,
+  FaReceipt,
+  FaUserCircle
+} from 'react-icons/fa'
 import { Link, useLocation, useParams } from 'react-router-dom'
 import Sidebar from '../../../components/layout/Sidebar'
 import { useAuth } from '../../../context/AuthContext'
 import { formatCurrency, formatDateTime } from '../../../utils/formatters'
 import PaymentStatusBadge from '../components/PaymentStatusBadge'
 import { getPaymentReceipt } from '../paymentApi'
+
+const getDisplayValue = (value, fallback = 'Not available') => value || fallback
+
+const formatReceiptLabel = (value) => {
+  if (!value) {
+    return 'Not available'
+  }
+
+  return String(value)
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
 
 export default function PaymentReceipt() {
   const { id } = useParams()
@@ -30,14 +53,44 @@ export default function PaymentReceipt() {
   }, [id])
 
   const historyPath = user?.activeRole === 'admin' ? '/admin/payments' : '/payments/history'
+  const receiptDetails = receipt ? [
+    { label: 'Customer', value: receipt.customerName, icon: FaUserCircle },
+    { label: 'Booking Type', value: formatReceiptLabel(receipt.bookingType), icon: FaCalendarCheck },
+    { label: 'Service', value: receipt.serviceName, icon: FaCarSide },
+    { label: 'Payment Method', value: receipt.paymentMethod, icon: FaCreditCard },
+    {
+      label: 'Paid Date',
+      value: receipt.paidDate ? formatDateTime(receipt.paidDate) : 'Pending verification',
+      icon: FaCalendarCheck
+    },
+    { label: 'Receipt Generated', value: formatDateTime(receipt.receiptGeneratedAt), icon: FaReceipt },
+    payment?.refund?.refundedAt && {
+      label: 'Refunded',
+      value: formatDateTime(payment.refund.refundedAt),
+      icon: FaFileInvoiceDollar
+    }
+  ].filter(Boolean) : []
+
+  const receiptHighlights = receipt ? [
+    { label: 'Payment Number', value: receipt.paymentNo, icon: FaReceipt },
+    { label: 'Transaction ID', value: receipt.transactionId, icon: FaHashtag },
+    { label: 'Booking Number', value: receipt.bookingNo, icon: FaCalendarCheck }
+  ] : []
 
   return (
     <div className="dashboard-layout page-content">
       <Sidebar />
       <main className="dashboard-content">
-        <div className="form-header">
-          <h2>Payment Receipt</h2>
-          <p style={{ color: 'var(--text-light)' }}>Official receipt for payment tracking.</p>
+        <div className="payment-page-header receipt-page-header">
+          <div className="form-header">
+            <h2>Payment Receipt</h2>
+            <p style={{ color: 'var(--text-light)' }}>Official receipt for payment tracking.</p>
+          </div>
+          <div className="payment-page-actions">
+            <Link className="btn btn-outline btn-sm" to={historyPath}>
+              <FaArrowLeft /> Payments
+            </Link>
+          </div>
         </div>
 
         {message && (
@@ -52,34 +105,53 @@ export default function PaymentReceipt() {
           <section className="form-card reservation-empty">Loading receipt...</section>
         ) : receipt && payment ? (
           <section className="form-card receipt-card">
-            <div className="receipt-header">
-              <div>
+            <div className="receipt-hero">
+              <div className="receipt-hero-copy">
                 <span className="receipt-brand">{receipt.brand?.shortName || 'YAMU'}</span>
                 <h3>{receipt.brand?.name || 'YAMU Car Rental Management System'}</h3>
-                <p>{receipt.brand?.note}</p>
+                <p>{receipt.brand?.note || 'Official receipt for payment tracking.'}</p>
               </div>
-              <PaymentStatusBadge status={receipt.paymentStatus} />
+
+              <div className="receipt-status-panel">
+                <span>Payment Status</span>
+                <PaymentStatusBadge status={receipt.paymentStatus} />
+                <strong>{formatCurrency(receipt.amount)}</strong>
+                <small>{receipt.currency}</small>
+              </div>
             </div>
 
-            <div className="receipt-total">
-              <span>Amount</span>
-              <strong>{formatCurrency(receipt.amount)}</strong>
-              <small>{receipt.currency}</small>
+            <div className="receipt-summary-row">
+              {receiptHighlights.map((item) => {
+                const Icon = item.icon
+
+                return (
+                  <div key={item.label} className="receipt-summary-item">
+                    <span><Icon /> {item.label}</span>
+                    <strong>{getDisplayValue(item.value)}</strong>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="receipt-section-heading">
+              <h4>Booking and payment details</h4>
+              <p>Everything needed to match this payment with your booking.</p>
             </div>
 
             <div className="receipt-grid">
-              <div><span>Payment Number</span><strong>{receipt.paymentNo}</strong></div>
-              <div><span>Transaction ID</span><strong>{receipt.transactionId}</strong></div>
-              <div><span>Booking Number</span><strong>{receipt.bookingNo}</strong></div>
-              <div><span>Customer</span><strong>{receipt.customerName}</strong></div>
-              <div><span>Booking Type</span><strong>{receipt.bookingType}</strong></div>
-              <div><span>Service</span><strong>{receipt.serviceName}</strong></div>
-              <div><span>Payment Method</span><strong>{receipt.paymentMethod}</strong></div>
-              <div><span>Paid Date</span><strong>{receipt.paidDate ? formatDateTime(receipt.paidDate) : 'Pending verification'}</strong></div>
-              <div><span>Receipt Generated</span><strong>{formatDateTime(receipt.receiptGeneratedAt)}</strong></div>
-              {payment.refund?.refundedAt && (
-                <div><span>Refunded</span><strong>{formatDateTime(payment.refund.refundedAt)}</strong></div>
-              )}
+              {receiptDetails.map((item) => {
+                const Icon = item.icon
+
+                return (
+                  <div key={item.label} className="receipt-detail-card">
+                    <span className="receipt-detail-icon"><Icon /></span>
+                    <div>
+                      <span>{item.label}</span>
+                      <strong>{getDisplayValue(item.value)}</strong>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
 
             {payment.refund?.reason && (
@@ -89,12 +161,22 @@ export default function PaymentReceipt() {
             )}
 
             <div className="receipt-note">
-              Full card numbers and CVV are not stored. Only masked card details, expiry date, and a local card token are retained.
+              <span className="receipt-note-icon"><FaLock /></span>
+              <div>
+                <strong>Protected card details</strong>
+                <p>Full card numbers and CVV are not stored. Only masked card details, expiry date, and a local card token are retained.</p>
+              </div>
             </div>
 
-            <div className="table-actions">
-              <Link className="btn btn-outline" to={historyPath}>Back to Payments</Link>
-              {user?.activeRole !== 'admin' && <Link className="btn btn-secondary" to="/bookings">My Bookings</Link>}
+            <div className="table-actions receipt-actions">
+              <Link className="btn btn-outline" to={historyPath}>
+                <FaArrowLeft /> Back to Payments
+              </Link>
+              {user?.activeRole !== 'admin' && (
+                <Link className="btn btn-secondary" to="/bookings">
+                  <FaCalendarCheck /> My Bookings
+                </Link>
+              )}
             </div>
           </section>
         ) : (

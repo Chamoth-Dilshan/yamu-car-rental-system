@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import API from '../../../api/axios'
 import Sidebar from '../../../components/layout/Sidebar'
 import { useAuth } from '../../../context/AuthContext'
 import { getCustomerPayments } from '../../payments/paymentApi'
+import API, { getCustomerBookings } from '../bookingApi'
 import { formatCurrency, formatDateRange, getBadgeClass } from '../../../utils/formatters'
 
 export default function MyBookings() {
@@ -11,7 +11,6 @@ export default function MyBookings() {
   const { refreshNotifications } = useAuth()
   const [bookings, setBookings] = useState([])
   const [payments, setPayments] = useState([])
-  const [stats, setStats] = useState(null)
   const [reloadKey, setReloadKey] = useState(0)
   const [filters, setFilters] = useState({
     search: '',
@@ -28,12 +27,11 @@ export default function MyBookings() {
     setError('')
 
     Promise.all([
-      API.get('/bookings/customer', { params: filters }),
+      getCustomerBookings(filters),
       getCustomerPayments()
     ])
       .then(([bookingRes, paymentRes]) => {
         setBookings(bookingRes.data.bookings || [])
-        setStats(bookingRes.data.stats)
         setPayments(paymentRes.data.payments || [])
       })
       .catch((err) => setError(err.response?.data?.message || 'Failed to load bookings'))
@@ -56,13 +54,6 @@ export default function MyBookings() {
       setBusyAction('')
     }
   }
-
-  const summaryCards = [
-    { label: 'Total Bookings', value: stats?.totalBookings || 0 },
-    { label: 'Pending', value: stats?.pendingCount || 0 },
-    { label: 'Confirmed', value: stats?.confirmedCount || 0 },
-    { label: 'Completed', value: stats?.completedCount || 0 }
-  ]
 
   const getLatestPayment = (bookingId) => (
     payments.find((payment) => String(payment.booking?._id || payment.booking) === String(bookingId))
@@ -132,17 +123,6 @@ export default function MyBookings() {
 
         {message && <div className="alert alert-success">{message}</div>}
         {error && <div className="alert alert-danger">{error}</div>}
-
-        <div className="stats-grid">
-          {summaryCards.map((item) => (
-            <div key={item.label} className="stat-card">
-              <div className="stat-info">
-                <h3>{item.value}</h3>
-                <p>{item.label}</p>
-              </div>
-            </div>
-          ))}
-        </div>
 
         <section className="form-card">
           <div className="card-header">

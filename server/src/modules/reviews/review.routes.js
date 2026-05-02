@@ -25,6 +25,7 @@ router.get('/health', (req, res) => {
 })
 
 router.post('/', protect, authorize('customer'), createReview)
+router.get('/summary', getCustomerDashboard)
 router.get('/dashboard', protect, authorize('customer'), getCustomerDashboard)
 router.get('/mine', protect, authorize('customer'), getMyReviews)
 router.get('/bookings/:bookingId/context', protect, authorize('customer'), getMyReviewContext)

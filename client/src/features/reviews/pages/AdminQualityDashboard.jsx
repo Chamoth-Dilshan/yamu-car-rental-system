@@ -1,18 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { FaCarSide, FaCheckCircle, FaClipboardCheck, FaStar, FaSyncAlt, FaUserTie } from 'react-icons/fa'
 import Sidebar from '../../../components/layout/Sidebar'
-import { formatDate } from '../../../utils/formatters'
 import { getAdminReviewAnalytics, getComplaintStats } from '../reviewApi'
 
 const emptyAnalytics = {
   averageDriverRating: 0,
   averageVehicleRating: 0,
   totalReviews: 0,
-  pendingReviews: 0,
   topDrivers: [],
-  topVehicles: [],
-  newestReviews: []
+  topVehicles: []
 }
 
 function RatingPill({ value }) {
@@ -122,34 +118,6 @@ export default function AdminQualityDashboard() {
               <AdminRanking title="Top Rated Drivers" icon={<FaUserTie />} items={analytics.topDrivers || []} />
               <AdminRanking title="Top Rated Vehicles" icon={<FaCarSide />} items={analytics.topVehicles || []} />
             </div>
-
-            <section className="form-card">
-              <div className="card-header">
-                <div>
-                  <h3>Newest Approved Reviews</h3>
-                  <p style={{ color: 'var(--text-light)' }}>Recent public feedback shown on customer dashboards.</p>
-                </div>
-                <Link className="btn btn-outline btn-sm" to="/admin/reviews">
-                  {analytics.pendingReviews || 0} pending approvals
-                </Link>
-              </div>
-
-              {(analytics.newestReviews || []).length > 0 ? (
-                <div className="quality-stack">
-                  {analytics.newestReviews.map((review) => (
-                    <div key={review._id} className="quality-mini-row">
-                      <div>
-                        <strong>{review.passengerName}</strong>
-                        <span>{review.vehicleName || review.driverName || review.bookingNo} | {formatDate(review.createdAt)}</span>
-                      </div>
-                      <RatingPill value={review.vehicleRating || review.driverRating} />
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="reservation-empty">No approved reviews yet.</div>
-              )}
-            </section>
           </>
         )}
       </main>

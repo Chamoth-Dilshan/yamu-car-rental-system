@@ -2,6 +2,8 @@ import API from '../../api/axios'
 
 export const getCustomerQualityDashboard = () => API.get('/reviews/dashboard')
 
+export const getPublicQualityDashboard = () => API.get('/reviews/summary')
+
 export const getReviewContext = (bookingId) => API.get(`/reviews/bookings/${bookingId}/context`)
 
 export const submitReview = (payload) => API.post('/reviews', payload)
