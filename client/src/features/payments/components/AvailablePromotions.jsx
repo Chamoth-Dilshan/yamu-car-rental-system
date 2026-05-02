@@ -1,0 +1,144 @@
+import React, { useEffect, useState } from 'react';
+import API from '../../../api/axios';
+import { formatCurrency } from '../../../utils/formatters';
+
+export default function AvailablePromotions({ booking, onApplyPromo, appliedPromo, isSimulating }) {
+  const [promotions, setPromotions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [promoInput, setPromoInput] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+
+    API.get('/pricing/promotions/available')
+      .then((res) => {
+        if (!active) return;
+        setPromotions(res.data || []);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error('Failed to load promotions', err);
+        // Do not block UI if promotions fail to load
+        setError('Failed to load available promotions.');
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleApply = (code) => {
+    onApplyPromo(code);
+    setPromoInput(code); // synchronize input
+  };
+
+  const handleManualApply = (e) => {
+    e.preventDefault();
+    if (promoInput.trim()) {
+      onApplyPromo(promoInput.trim());
+    }
+  };
+
+  const clearPromo = () => {
+    setPromoInput('');
+    onApplyPromo('');
+  };
+
+  // Filter promotions that technically apply to this booking
+  const applicablePromotions = promotions.filter(promo => {
+    if (promo.minBookingAmount && booking.totalAmount < promo.minBookingAmount) return false;
+    if (promo.bookingType && promo.bookingType !== 'any' && promo.bookingType !== booking.bookingType) return false;
+    if (promo.vehicleCategory && promo.vehicleCategory !== 'any' && booking.vehicle?.category && promo.vehicleCategory !== booking.vehicle.category) return false;
+    return true;
+  });
+
+  return (
+    <section className="form-card payment-promotions-card" style={{ marginTop: '20px' }}>
+      <div className="card-header">
+        <h3>Promotions & Discounts</h3>
+        <p style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>Apply a promo code to get a discount on your booking.</p>
+      </div>
+
+      <form onSubmit={handleManualApply} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+        <input
+          type="text"
+          className="form-control"
+          placeholder="Enter promo code"
+          value={promoInput}
+          onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+          disabled={isSimulating}
+          style={{ textTransform: 'uppercase' }}
+        />
+        <button type="submit" className="btn btn-primary" disabled={isSimulating || !promoInput.trim()}>
+          {isSimulating ? 'Applying...' : 'Apply'}
+        </button>
+        {appliedPromo && (
+          <button type="button" className="btn btn-outline" onClick={clearPromo} disabled={isSimulating}>
+            Clear
+          </button>
+        )}
+      </form>
+
+      {loading ? (
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Checking for available promotions...</p>
+      ) : error ? (
+        <p style={{ fontSize: '0.9rem', color: 'var(--error-color)' }}>{error}</p>
+      ) : applicablePromotions.length === 0 ? (
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>No active promotions available for this booking.</p>
+      ) : (
+        <div className="promotions-list" style={{ display: 'grid', gap: '15px', gridTemplateColumns: '1fr' }}>
+          {applicablePromotions.map((promo) => {
+            const isApplied = appliedPromo === promo.code;
+            return (
+              <div 
+                key={promo._id} 
+                style={{
+                  border: `1px solid ${isApplied ? 'var(--primary-color)' : 'var(--border-color)'}`,
+                  borderRadius: '8px',
+                  padding: '15px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  background: isApplied ? 'var(--bg-light)' : 'transparent'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <strong style={{ fontSize: '1.1rem' }}>{promo.title}</strong>
+                    <span style={{ 
+                      background: 'var(--bg-light)', 
+                      padding: '2px 8px', 
+                      borderRadius: '4px', 
+                      fontSize: '0.8rem', 
+                      fontWeight: '600',
+                      letterSpacing: '1px'
+                    }}>
+                      {promo.code}
+                    </span>
+                  </div>
+                  <p style={{ margin: '5px 0 0 0', fontSize: '0.9rem', color: 'var(--text-light)' }}>
+                    {promo.discountType === 'percentage' 
+                      ? `${promo.discountValue}% OFF` 
+                      : `${formatCurrency(promo.discountValue)} OFF`}
+                  </p>
+                </div>
+                <button 
+                  className={`btn ${isApplied ? 'btn-outline' : 'btn-secondary'} btn-sm`} 
+                  onClick={() => isApplied ? clearPromo() : handleApply(promo.code)}
+                  disabled={isSimulating}
+                >
+                  {isApplied ? 'Applied' : 'Apply'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}

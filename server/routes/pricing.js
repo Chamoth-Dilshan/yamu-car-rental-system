@@ -13,6 +13,8 @@ router.route('/campaigns/:id')
   .delete(protect, authorize('admin'), pricingController.deleteCampaign);
 
 // --- Promotions ---
+router.get('/promotions/available', protect, pricingController.getAvailablePromotions);
+
 router.route('/promotions')
   .post(protect, authorize('admin'), pricingController.createPromotion)
   .get(protect, authorize('admin'), pricingController.getPromotions);

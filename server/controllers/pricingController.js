@@ -61,6 +61,20 @@ exports.getPromotions = async (req, res) => {
   }
 };
 
+exports.getAvailablePromotions = async (req, res) => {
+  try {
+    const currentDate = new Date();
+    const promotions = await Promotion.find({
+      status: 'active',
+      startDate: { $lte: currentDate },
+      endDate: { $gte: currentDate }
+    }).select('-__v');
+    res.json(promotions);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 exports.updatePromotion = async (req, res) => {
   try {
     const promotion = await Promotion.findByIdAndUpdate(req.params.id, req.body, { new: true });
