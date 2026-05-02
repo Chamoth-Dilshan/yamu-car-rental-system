@@ -1271,7 +1271,7 @@ input:focus, select:focus, textarea:focus {
 }
 .home-quality-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 }
 .home-quality-card,
@@ -1282,7 +1282,7 @@ input:focus, select:focus, textarea:focus {
   box-shadow: var(--shadow);
 }
 .home-quality-card {
-  min-height: 174px;
+  min-height: 142px;
   padding: 1.2rem;
   color: var(--primary);
 }
@@ -1310,11 +1310,6 @@ input:focus, select:focus, textarea:focus {
   color: var(--primary);
   font-size: 1.75rem;
   line-height: 1.15;
-}
-.home-quality-card p {
-  margin-top: 0.65rem;
-  color: var(--text-light);
-  font-size: 0.9rem;
 }
 .home-review-highlight {
   padding: 1.25rem;
@@ -1353,6 +1348,127 @@ input:focus, select:focus, textarea:focus {
   display: block;
   margin-top: 0.7rem;
   color: rgba(255,255,255,0.62);
+}
+.home-top-rated-section {
+  padding: 0 0 4.75rem;
+  background: #f6f8fc;
+}
+.home-top-rated-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.35rem;
+}
+.home-top-rated-header h2 {
+  margin-top: 0.8rem;
+  color: var(--primary);
+  font-size: 2rem;
+  line-height: 1.16;
+}
+.home-top-rated-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+.home-top-panel {
+  padding: 1.35rem;
+  border: 1px solid rgba(15,23,42,0.08);
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  box-shadow: var(--shadow);
+}
+.home-top-panel-header {
+  margin-bottom: 1rem;
+}
+.home-top-panel-header h3 {
+  color: var(--primary);
+  font-size: 1.25rem;
+}
+.home-top-panel-header p {
+  margin-top: 0.35rem;
+  color: var(--text-light);
+  font-size: 0.92rem;
+}
+.home-top-list {
+  display: grid;
+  gap: 0.8rem;
+}
+.home-top-item {
+  display: grid;
+  grid-template-columns: 34px 52px minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: center;
+  padding: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(15,23,42,0.02);
+}
+.home-top-rank {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(240,165,0,0.16);
+  color: var(--accent-hover);
+  font-weight: 800;
+}
+.home-top-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: rgba(15,23,42,0.06);
+}
+.home-top-copy {
+  min-width: 0;
+}
+.home-top-copy strong,
+.home-top-copy span {
+  display: block;
+}
+.home-top-copy strong {
+  overflow: hidden;
+  color: var(--primary);
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-top-copy span {
+  margin-top: 0.2rem;
+  overflow: hidden;
+  color: var(--text-light);
+  font-size: 0.86rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-top-rating {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+  flex-wrap: wrap;
+}
+.home-top-rating small {
+  color: var(--text-light);
+  font-size: 0.78rem;
+}
+.home-top-stars {
+  display: inline-flex;
+  gap: 0.15rem;
+  color: var(--accent);
+  font-size: 0.82rem;
+}
+.home-top-stars .muted {
+  color: rgba(15,23,42,0.18);
+}
+.home-top-empty {
+  padding: 1.2rem;
+  border: 1px dashed rgba(15,23,42,0.16);
+  border-radius: var(--radius-sm);
+  color: var(--text-light);
+  text-align: center;
 }
 .alert {
   padding: 1rem 1.25rem;
@@ -3560,6 +3676,9 @@ input:focus, select:focus, textarea:focus {
   .home-quality-shell {
     grid-template-columns: 1fr;
   }
+  .home-top-rated-grid {
+    grid-template-columns: 1fr;
+  }
   .home-quality-copy {
     max-width: none;
     padding-top: 0;
@@ -3628,6 +3747,20 @@ input:focus, select:focus, textarea:focus {
   }
   .home-quality-section {
     padding: 3.4rem 0 3.75rem;
+  }
+  .home-top-rated-section {
+    padding-bottom: 3.75rem;
+  }
+  .home-top-rated-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .home-top-item {
+    grid-template-columns: 30px 48px minmax(0, 1fr);
+  }
+  .home-top-item .btn {
+    grid-column: 3;
+    justify-self: flex-start;
   }
   .home-hero {
     padding: 1.85rem 0 2.75rem;

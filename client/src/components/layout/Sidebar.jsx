@@ -30,6 +30,8 @@ const menuItems = {
     { section: 'Store Workspace' },
     { to: '/staff/vehicles', label: 'My Vehicles', end: true },
     { to: '/staff/bookings', label: 'Vehicle Requests', end: true },
+    { to: '/staff/maintenance', label: 'Maintenance Records', end: true },
+    { to: '/staff/inventory', label: 'Inventory Items', end: true },
     { section: 'Account' },
     { to: '/profile/store', label: 'Store Profile', end: true },
     { to: '/notifications', label: 'Notifications', end: true },

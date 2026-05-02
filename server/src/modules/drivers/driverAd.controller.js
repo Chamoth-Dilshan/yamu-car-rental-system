@@ -1,10 +1,12 @@
 const Booking = require('../reservations/booking.model')
 const DriverAd = require('./driverAd.model')
 const Review = require('../reviews/review.model')
+const User = require('../users/user.model')
 const { sendServerError } = require('../../utils/errorResponses')
 const { serializeDriverAd, DRIVER_AD_AVAILABILITY, DRIVER_AD_VISIBILITY, parseListField } = require('../../utils/reservationHelpers')
 
 const driverSummaryFields = 'fullName email phone city profilePic'
+const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 const roundRating = (value) => Number((Number(value || 0)).toFixed(1))
 
@@ -111,24 +113,36 @@ const applyDriverAdReviewStats = (ad, statsMap) => {
 const getDriverAds = async (req, res) => {
   try {
     const { search = '', location, availability } = req.query
+    const normalizedSearch = String(search || '').trim()
+    const normalizedLocation = String(location || '').trim()
     const query = { visibility: 'active' }
 
     if (availability && availability !== 'all') {
       query.availability = availability
     }
 
-    if (location && location !== 'all') {
-      query.serviceLocation = new RegExp(location, 'i')
+    if (normalizedLocation && normalizedLocation !== 'all') {
+      query.serviceLocation = new RegExp(escapeRegex(normalizedLocation), 'i')
     }
 
-    if (search) {
-      const regex = new RegExp(search, 'i')
+    if (normalizedSearch) {
+      const regex = new RegExp(escapeRegex(normalizedSearch), 'i')
+      const matchingDriverIds = await User.find({
+        $or: [
+          { fullName: regex },
+          { username: regex },
+          { email: regex },
+          { city: regex }
+        ]
+      }).distinct('_id')
+
       query.$or = [
         { title: regex },
         { tagline: regex },
         { serviceLocation: regex },
         { languages: regex },
-        { specialties: regex }
+        { specialties: regex },
+        { driver: { $in: matchingDriverIds } }
       ]
     }
 
@@ -165,6 +179,7 @@ const getDriverAdById = async (req, res) => {
 const getMyDriverAds = async (req, res) => {
   try {
     const { search = '', availability, visibility } = req.query
+    const normalizedSearch = String(search || '').trim()
     const query = { driver: req.user._id }
 
     if (availability && availability !== 'all') {
@@ -175,13 +190,14 @@ const getMyDriverAds = async (req, res) => {
       query.visibility = visibility
     }
 
-    if (search) {
-      const regex = new RegExp(search, 'i')
+    if (normalizedSearch) {
+      const regex = new RegExp(escapeRegex(normalizedSearch), 'i')
       query.$or = [
         { title: regex },
         { tagline: regex },
         { serviceLocation: regex },
-        { languages: regex }
+        { languages: regex },
+        { specialties: regex }
       ]
     }
 
