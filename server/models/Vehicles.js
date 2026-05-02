@@ -18,7 +18,7 @@ const vehicleSchema = new mongoose.Schema({
     availability: { type: String, default: true },
     }, { timestamps: true })
 
-module.exports = mongoose.model('Vehicle', vehicleSchema)
+module.exports = mongoose.model('Vehicle', vehicleSchema, 'vehicle')
     
     // _id: { type: String, required: true, unique: true },
     // owner: { type: String, required: true },
