@@ -38,16 +38,21 @@ class PricingEngine {
    * @returns {Object} { originalPrice, finalPrice, breakdown: [] }
    */
   static async calculatePrice(bookingDetails, promoCode = null) {
-    const { basePrice, duration } = bookingDetails;
+    const { basePrice, duration, vehicleCategory, bookingType } = bookingDetails;
     let currentPrice = basePrice * (duration || 1);
     const originalPrice = currentPrice;
-    const breakdown = [];
+    const pricingAdjustments = [];
+
+    const now = new Date();
+    // 24 hour buffer to account for users in local timezones creating promos without a time component
+    const timezoneBufferFuture = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const timezoneBufferPast = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     // 1. Fetch active pricing rules and sort by priority (descending)
     const activeRules = await PricingRule.find({ 
       status: 'active',
       $or: [
-        { startDate: { $lte: new Date() }, endDate: { $gte: new Date() } },
+        { startDate: { $lte: timezoneBufferFuture }, endDate: { $gte: timezoneBufferPast } },
         { startDate: null, endDate: null }
       ]
     }).sort({ priority: -1 });
@@ -64,64 +69,85 @@ class PricingEngine {
 
         if (rule.adjustmentDirection === 'decrease') {
           currentPrice -= adjustment;
-          breakdown.push({ type: 'rule', name: rule.name, impact: -adjustment });
+          pricingAdjustments.push({ type: 'rule', name: rule.name, impact: -adjustment });
         } else {
           currentPrice += adjustment;
-          breakdown.push({ type: 'rule', name: rule.name, impact: adjustment });
+          pricingAdjustments.push({ type: 'rule', name: rule.name, impact: adjustment });
         }
       }
     }
 
-    // 2. Fetch active applicable promotions (automatic ones without code)
+    const subtotalAfterPricingRules = Math.max(0, currentPrice);
+
+    // 2. Fetch available promotions
+    const query = {
+      status: 'active',
+      startDate: { $lte: timezoneBufferFuture },
+      endDate: { $gte: timezoneBufferPast }
+    };
+    if (bookingType) query.bookingType = { $in: ['any', bookingType] };
+    if (vehicleCategory) query.vehicleCategory = { $in: ['any', vehicleCategory] };
+    
+    // We can fetch all active promos matching criteria, then filter minBookingAmount locally
+    const rawPromotions = await Promotion.find(query).select('-__v').sort({ priority: -1 });
+    const availablePromotions = rawPromotions.filter(p => !p.minBookingAmount || subtotalAfterPricingRules >= p.minBookingAmount);
+
+    let promoDiscount = 0;
+    let appliedPromotion = null;
+
+    // 3. Apply optional Promo Code promotions (automatic ones without code)
     // For simplicity in this mock, we assume automatic promotions are those without a code
     // Or we just evaluate the provided promo code.
     
     // 3. Apply Promo Code if provided
     if (promoCode) {
-      const promotion = await Promotion.findOne({
-        code: promoCode,
+      const promotion = await Promotion.findOne({ 
+        code: promoCode, 
         status: 'active',
-        startDate: { $lte: new Date() },
-        endDate: { $gte: new Date() }
+        startDate: { $lte: timezoneBufferFuture },
+        endDate: { $gte: timezoneBufferPast }
       });
 
       if (promotion) {
-        // Evaluate promotion logic
-        let isValid = true;
-        
-        if (promotion.minBookingAmount && currentPrice < promotion.minBookingAmount) isValid = false;
-        if (promotion.vehicleCategory !== 'any' && promotion.vehicleCategory !== bookingDetails.vehicleCategory) isValid = false;
-        if (promotion.bookingType !== 'any' && promotion.bookingType !== bookingDetails.bookingType) isValid = false;
-        if (promotion.firstTimeUserOnly && !bookingDetails.isFirstBooking) isValid = false;
-        if (promotion.usageCount >= promotion.totalUsageLimit) isValid = false;
+        // Eligibility check
+        let isEligible = true;
+        if (promotion.minBookingAmount && subtotalAfterPricingRules < promotion.minBookingAmount) isEligible = false;
+        if (promotion.vehicleCategory !== 'any' && promotion.vehicleCategory !== bookingDetails.vehicleCategory) isEligible = false;
+        if (promotion.bookingType !== 'any' && promotion.bookingType !== bookingDetails.bookingType) isEligible = false;
+        if (promotion.firstTimeUserOnly && !bookingDetails.isFirstBooking) isEligible = false;
 
-        if (isValid) {
-          let discount = 0;
+        if (isEligible) {
+          appliedPromotion = promotion.toObject ? promotion.toObject() : promotion;
+          
           if (promotion.discountType === 'percentage') {
-            discount = currentPrice * (promotion.discountValue / 100);
+            promoDiscount = currentPrice * (promotion.discountValue / 100);
           } else {
-            discount = promotion.discountValue;
+            promoDiscount = promotion.discountValue;
           }
 
           // Ensure we don't go below 0
-          if (currentPrice - discount < 0) {
-            discount = currentPrice;
+          if (currentPrice - promoDiscount < 0) {
+            promoDiscount = currentPrice;
           }
 
-          currentPrice -= discount;
-          breakdown.push({ type: 'promotion', name: promotion.title, impact: -discount });
+          currentPrice -= promoDiscount;
+          pricingAdjustments.push({ type: 'promotion', name: promotion.title, impact: -promoDiscount });
         } else {
-          breakdown.push({ type: 'error', name: 'Promo Code Invalid/Ineligible', impact: 0 });
+          pricingAdjustments.push({ type: 'error', name: 'Promo Code Invalid/Ineligible', impact: 0 });
         }
       } else {
-        breakdown.push({ type: 'error', name: 'Promo Code Not Found', impact: 0 });
+        pricingAdjustments.push({ type: 'error', name: 'Promo Code Not Found', impact: 0 });
       }
     }
 
     return {
-      originalPrice,
-      finalPrice: Math.max(0, currentPrice),
-      breakdown
+      basePrice: originalPrice,
+      pricingAdjustments,
+      subtotalAfterPricingRules,
+      availablePromotions,
+      appliedPromotion,
+      promoDiscount,
+      finalPrice: Math.max(0, currentPrice)
     };
   }
 }

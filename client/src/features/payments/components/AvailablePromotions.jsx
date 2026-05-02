@@ -1,40 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import API from '../../../api/axios';
+import React, { useState } from 'react';
 import { formatCurrency } from '../../../utils/formatters';
 
-export default function AvailablePromotions({ booking, onApplyPromo, appliedPromo, isSimulating }) {
-  const fallbackPromos = [
-    { _id: 'mock1', title: '10% Off First Booking', code: 'WELCOME10', discountType: 'percentage', discountValue: 10, minBookingAmount: 0, bookingType: 'any', vehicleCategory: 'any' },
-    { _id: 'mock2', title: '5000 LKR Off Luxury Cars', code: 'LUXURY5K', discountType: 'fixed', discountValue: 5000, minBookingAmount: 10000, bookingType: 'vehicle', vehicleCategory: 'Luxury' }
-  ];
-
-  const [promotions, setPromotions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+export default function AvailablePromotions({ promotions = [], onApplyPromo, appliedPromo, isSimulating }) {
   const [promoInput, setPromoInput] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-
-    API.get('/pricing/promotions/available')
-      .then((res) => {
-        if (!active) return;
-        setPromotions(res.data && res.data.length > 0 ? res.data : fallbackPromos);
-      })
-      .catch((err) => {
-        if (!active) return;
-        console.error('Failed to load promotions', err);
-        setPromotions(fallbackPromos);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const handleApply = (code) => {
     onApplyPromo(code);
@@ -52,14 +20,6 @@ export default function AvailablePromotions({ booking, onApplyPromo, appliedProm
     setPromoInput('');
     onApplyPromo('');
   };
-
-  // Filter promotions that technically apply to this booking
-  const applicablePromotions = promotions.filter(promo => {
-    if (promo.minBookingAmount && (booking?.totalAmount || 0) < promo.minBookingAmount) return false;
-    if (promo.bookingType && promo.bookingType !== 'any' && promo.bookingType !== booking?.bookingType) return false;
-    if (promo.vehicleCategory && promo.vehicleCategory !== 'any' && promo.vehicleCategory !== booking?.vehicle?.category) return false;
-    return true;
-  });
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
@@ -101,15 +61,11 @@ export default function AvailablePromotions({ booking, onApplyPromo, appliedProm
         )}
       </div>
 
-      {loading ? (
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Checking for available promotions...</p>
-      ) : error ? (
-        <p style={{ fontSize: '0.9rem', color: 'var(--error-color)' }}>{error}</p>
-      ) : applicablePromotions.length === 0 ? (
+      {promotions.length === 0 ? (
         <p style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>No active promotions available for this booking.</p>
       ) : (
         <div className="promotions-list" style={{ display: 'grid', gap: '15px', gridTemplateColumns: '1fr' }}>
-          {applicablePromotions.map((promo) => {
+          {promotions.map((promo) => {
             const isApplied = appliedPromo === promo.code;
             return (
               <div 

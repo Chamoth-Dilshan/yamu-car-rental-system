@@ -63,12 +63,23 @@ exports.getPromotions = async (req, res) => {
 
 exports.getAvailablePromotions = async (req, res) => {
   try {
+    const { amount, bookingType, vehicleCategory } = req.query;
     const currentDate = new Date();
-    const promotions = await Promotion.find({
+    
+    const query = {
       status: 'active',
       startDate: { $lte: currentDate },
       endDate: { $gte: currentDate }
-    }).select('-__v');
+    };
+
+    if (amount) query.minBookingAmount = { $lte: Number(amount) };
+    if (bookingType) query.bookingType = { $in: ['any', bookingType] };
+    if (vehicleCategory) query.vehicleCategory = { $in: ['any', vehicleCategory] };
+
+    const promotions = await Promotion.find(query)
+      .select('-__v')
+      .sort({ priority: -1 });
+      
     res.json(promotions);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -139,8 +150,8 @@ exports.simulatePrice = async (req, res) => {
     // Call the engine
     const result = await PricingEngine.calculatePrice(bookingDetails, promoCode);
     
-    res.json(result);
+    res.json({ success: true, data: result });
   } catch (error) {
-    res.status(500).json({ message: 'Pricing simulation failed', error: error.message });
+    res.status(500).json({ success: false, message: 'Pricing simulation failed', error: error.message });
   }
 };

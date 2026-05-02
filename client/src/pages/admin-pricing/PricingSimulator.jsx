@@ -41,7 +41,7 @@ export default function PricingSimulator() {
       const res = await api.post('/pricing/simulate', payload, {
         headers: { Authorization: `Bearer ${user.token}` }
       });
-      setResult(res.data);
+      setResult(res.data?.data || res.data);
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.message || 'Simulation logic failed. Check input bounds.');
@@ -141,26 +141,44 @@ export default function PricingSimulator() {
                     <h4>Raw Subtotal</h4>
                     <p>Base price × Duration</p>
                   </div>
-                  <strong style={{ fontSize: '1.25rem' }}>{formatCurrency(result.originalPrice)}</strong>
+                  <strong style={{ fontSize: '1.25rem' }}>{formatCurrency(result.basePrice || 0)}</strong>
                 </div>
 
                 <div style={{ borderTop: '1px dashed var(--border)', borderBottom: '1px dashed var(--border)', padding: '1rem 0', margin: '0 1.25rem' }}>
-                  <h4 style={{ fontSize: '0.9rem', color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '1rem' }}>Applied Rule Stack</h4>
-                  {result.breakdown.length === 0 ? (
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '1rem' }}>Pricing Rule Adjustments</h4>
+                  {(!result.pricingAdjustments || result.pricingAdjustments.length === 0) ? (
                     <div className="admin-empty-state" style={{ padding: '0', textAlign: 'left' }}>No pricing rules or valid promotions attached.</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {result.breakdown.map((item, i) => (
+                      {result.pricingAdjustments.map((item, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '0.95rem' }}>
                             <span className={`badge badge-${item.type === 'error' ? 'danger' : (item.impact < 0 ? 'success' : 'warning')}`} style={{ marginRight: '0.5rem' }}>
-                              {item.type === 'error' ? 'ERR' : (item.impact < 0 ? 'DISCOUNT' : 'SURGE')}
+                              {item.type === 'error' ? 'ERR' : (item.type === 'promotion' ? 'PROMO' : (item.impact < 0 ? 'DISCOUNT' : 'SURGE'))}
                             </span>
                             {item.name}
                           </span>
                           <strong style={{ color: item.type === 'error' ? 'var(--danger)' : (item.impact < 0 ? 'var(--success)' : 'var(--warning)') }}>
                             {item.type === 'error' ? '' : (item.impact > 0 ? '+' : '-')}{formatCurrency(Math.abs(item.impact))}
                           </strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ borderBottom: '1px dashed var(--border)', padding: '1rem 0', margin: '0 1.25rem' }}>
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--text-light)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '1rem' }}>Available Promotions</h4>
+                  {(!result.availablePromotions || result.availablePromotions.length === 0) ? (
+                    <div className="admin-empty-state" style={{ padding: '0', textAlign: 'left', fontSize: '0.85rem' }}>No promotions apply to this mock booking.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      {result.availablePromotions.map((p, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', background: 'var(--bg-light)', padding: '0.5rem', borderRadius: '4px' }}>
+                          <span style={{ fontSize: '0.9rem' }}>{p.title} <strong>({p.code})</strong></span>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--success)' }}>
+                            {p.discountType === 'percentage' ? `${p.discountValue}% OFF` : `${formatCurrency(p.discountValue)} OFF`}
+                          </span>
                         </div>
                       ))}
                     </div>

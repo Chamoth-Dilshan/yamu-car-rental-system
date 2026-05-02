@@ -119,8 +119,8 @@ export default function VehicleDetails() {
 
     API.post('/pricing/simulate', {
       bookingDetails: {
-        basePrice: totalAmount, // pass the computed total as the base for the engine to discount from
-        duration: 1, 
+        basePrice: vehicle?.pricePerDay || 0,
+        duration: billableDays, 
         startDate: bookingForm.startDate,
         endDate: bookingForm.endDate,
         vehicleCategory: vehicle?.category || 'any',
@@ -131,10 +131,11 @@ export default function VehicleDetails() {
     })
       .then(res => {
         if (!active) return;
-        setPriceDetails(res.data);
+        const result = res.data?.data || res.data;
+        setPriceDetails(result);
         
         if (promoCode) {
-          const promoErrorItem = res.data.breakdown?.find(item => item.type === 'error');
+          const promoErrorItem = result.pricingAdjustments?.find(item => item.type === 'error');
           if (promoErrorItem) {
             setPromoError(promoErrorItem.name);
           }
@@ -152,14 +153,9 @@ export default function VehicleDetails() {
     return () => {
       active = false;
     };
-  }, [totalAmount, promoCode, bookingForm.startDate, bookingForm.endDate, vehicle]);
+  }, [billableDays, promoCode, bookingForm.startDate, bookingForm.endDate, vehicle]);
 
-  const bookingMock = {
-    totalAmount: totalAmount,
-    bookingType: 'vehicle',
-    vehicle: { category: vehicle?.category || 'any' }
-  };
-  
+
   const finalAmount = priceDetails ? priceDetails.finalPrice : totalAmount;
 
   const submitBooking = async (event) => {
@@ -313,14 +309,14 @@ export default function VehicleDetails() {
                 {billableDays > 0 && (
                   <div style={{ marginBottom: '15px' }}>
                     <AvailablePromotions 
-                      booking={bookingMock} 
+                      promotions={priceDetails?.availablePromotions || []}
                       onApplyPromo={setPromoCode} 
                       appliedPromo={promoCode} 
                       isSimulating={isSimulating}
                     />
                     {promoError && <div className="alert alert-danger" style={{ marginTop: '10px' }}>{promoError}</div>}
                     
-                    {priceDetails && priceDetails.breakdown && priceDetails.breakdown.map((item, index) => {
+                    {priceDetails && priceDetails.pricingAdjustments && priceDetails.pricingAdjustments.map((item, index) => {
                       if (item.type === 'error' || item.impact === 0) return null;
                       return (
                         <div key={index} style={{ display: 'flex', justifyContent: 'space-between', color: item.impact < 0 ? 'var(--success-color)' : 'inherit', margin: '10px 0', fontSize: '0.9rem' }}>
