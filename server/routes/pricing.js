@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const pricingController = require('../controllers/pricingController');
-const { protect, authorize } = require('../middleware/auth');
+const { protect, authorize } = require('../src/middleware/auth.middleware');
 
 // --- Campaigns ---
 router.route('/campaigns')
