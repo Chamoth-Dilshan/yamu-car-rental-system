@@ -11,7 +11,7 @@ const reviewPopulate = [
   { path: 'customer', select: 'fullName email profilePic' },
   { path: 'driver', select: 'fullName email profilePic' },
   { path: 'vehicle', select: 'name brand model category images owner' },
-  { path: 'driverAd', select: 'title driver' },
+  { path: 'driverAd', select: 'title driver photo serviceLocation' },
   { path: 'reviewedBy', select: 'fullName email' }
 ]
 
@@ -164,8 +164,17 @@ const addToRanking = (rankingMap, key, payload) => {
     name: payload.name || 'Unknown',
     subtitle: payload.subtitle || '',
     image: payload.image || '',
+    link: payload.link || '',
     ratingSum: 0,
     reviewCount: 0
+  }
+
+  if (!existing.image && payload.image) {
+    existing.image = payload.image
+  }
+
+  if (!existing.link && payload.link) {
+    existing.link = payload.link
   }
 
   existing.ratingSum += payload.rating
@@ -187,16 +196,20 @@ const buildReviewSummary = (reviews) => {
     const rawReview = toPlain(review)
     const driverRating = getNumericRating(rawReview.driverRating)
     const vehicleRating = getNumericRating(rawReview.vehicleRating)
+    const driverAdId = getDriverAdId(rawReview)
+    const driverId = getDriverId(rawReview)
+    const vehicleId = getVehicleId(rawReview)
 
     if (driverRating) {
       driverRatingSum += driverRating
       driverRatingCount += 1
       distribution[Math.round(driverRating)].driver += 1
 
-      addToRanking(driverMap, getDriverId(rawReview), {
+      addToRanking(driverMap, driverAdId || driverId, {
         name: rawReview.driver?.fullName || rawReview.driverName || 'Driver',
-        subtitle: rawReview.driver?.city || rawReview.driverAd?.title || 'Driver',
-        image: rawReview.driver?.profilePic || '',
+        subtitle: rawReview.driverAd?.title || rawReview.driverAd?.serviceLocation || 'Driver',
+        image: rawReview.driverAd?.photo || rawReview.driver?.profilePic || '',
+        link: driverAdId ? `/drivers/${driverAdId}` : '/drivers',
         rating: driverRating
       })
     }
@@ -206,10 +219,11 @@ const buildReviewSummary = (reviews) => {
       vehicleRatingCount += 1
       distribution[Math.round(vehicleRating)].vehicle += 1
 
-      addToRanking(vehicleMap, getVehicleId(rawReview), {
+      addToRanking(vehicleMap, vehicleId, {
         name: rawReview.vehicle?.name || rawReview.vehicleName || 'Vehicle',
         subtitle: rawReview.vehicle?.category || rawReview.vehicle?.brand || 'Vehicle',
         image: rawReview.vehicle?.images?.[0] || '',
+        link: vehicleId ? `/cars/${vehicleId}` : '/cars',
         rating: vehicleRating
       })
     }
@@ -221,6 +235,7 @@ const buildReviewSummary = (reviews) => {
       name: item.name,
       subtitle: item.subtitle,
       image: item.image,
+      link: item.link,
       ratingAverage: item.ratingAverage || 0,
       reviewCount: item.reviewCount
     }))

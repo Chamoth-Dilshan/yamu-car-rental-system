@@ -1,5 +1,6 @@
 const Booking = require('./booking.model')
 const DriverAd = require('../drivers/driverAd.model')
+const Maintenance = require('../maintenance/maintenance.model')
 const Payment = require('../payments/payment.model')
 const Vehicle = require('../vehicles/vehicle.model')
 const { sendServerError } = require('../../utils/errorResponses')
@@ -139,6 +140,15 @@ const createVehicleBooking = async (req, res) => {
 
     if (!vehicle || vehicle.status !== 'available') {
       return res.status(404).json({ message: 'Selected vehicle is not available for booking' })
+    }
+
+    const activeMaintenance = await Maintenance.exists({
+      vehicle: vehicle._id,
+      status: { $in: Maintenance.ACTIVE_MAINTENANCE_STATUSES }
+    })
+
+    if (activeMaintenance) {
+      return res.status(400).json({ message: 'Selected vehicle is currently under maintenance' })
     }
 
     if (!vehicle.owner) {

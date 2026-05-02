@@ -1,5 +1,6 @@
 const Vehicle = require('./vehicle.model')
 const Booking = require('../reservations/booking.model')
+const Maintenance = require('../maintenance/maintenance.model')
 const Review = require('../reviews/review.model')
 const { sendServerError } = require('../../utils/errorResponses')
 const { canUseRole, getRoleAssignment } = require('../../utils/roleHelpers')
@@ -348,6 +349,15 @@ const updateVehicle = async (req, res) => {
 
     if (error) {
       return res.status(400).json({ message: error })
+    }
+
+    const activeMaintenance = await Maintenance.exists({
+      vehicle: vehicle._id,
+      status: { $in: Maintenance.ACTIVE_MAINTENANCE_STATUSES }
+    })
+
+    if (activeMaintenance) {
+      payload.status = 'maintenance'
     }
 
     Object.assign(vehicle, payload)

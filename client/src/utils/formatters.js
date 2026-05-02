@@ -57,6 +57,8 @@ const badgeMap = {
   medium: 'badge-warning',
   high: 'badge-danger',
   processing: 'badge-warning',
+  scheduled: 'badge-warning',
+  in_progress: 'badge-warning',
   completed: 'badge-success',
   rejected: 'badge-danger',
   failed: 'badge-danger',
