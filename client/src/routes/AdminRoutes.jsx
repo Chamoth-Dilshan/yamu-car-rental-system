@@ -8,6 +8,12 @@ import AdminDisputes from '../features/reviews/pages/AdminDisputes'
 import AdminQualityDashboard from '../features/reviews/pages/AdminQualityDashboard'
 import AdminReviewApprovals from '../features/reviews/pages/AdminReviewApprovals'
 
+import PricingOverview from '../pages/admin-pricing/PricingOverview'
+import CampaignsAdmin from '../pages/admin-pricing/CampaignsAdmin'
+import PromotionsAdmin from '../pages/admin-pricing/PromotionsAdmin'
+import PricingRulesAdmin from '../pages/admin-pricing/PricingRulesAdmin'
+import PricingSimulator from '../pages/admin-pricing/PricingSimulator'
+
 const AdminRoutes = [
   <Route
     key="admin-dashboard"
@@ -78,6 +84,51 @@ const AdminRoutes = [
     element={(
       <ProtectedRoute roles={['admin']} permissions={['payments.manage']}>
         <AdminPayments />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="admin-pricing-overview"
+    path="/admin/pricing-overview"
+    element={(
+      <ProtectedRoute roles={['admin']}>
+        <PricingOverview />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="admin-campaigns"
+    path="/admin/campaigns"
+    element={(
+      <ProtectedRoute roles={['admin']}>
+        <CampaignsAdmin />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="admin-promotions"
+    path="/admin/promotions"
+    element={(
+      <ProtectedRoute roles={['admin']}>
+        <PromotionsAdmin />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="admin-pricing-rules"
+    path="/admin/pricing-rules"
+    element={(
+      <ProtectedRoute roles={['admin']}>
+        <PricingRulesAdmin />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="admin-pricing-simulator"
+    path="/admin/pricing-simulator"
+    element={(
+      <ProtectedRoute roles={['admin']}>
+        <PricingSimulator />
       </ProtectedRoute>
     )}
   />,

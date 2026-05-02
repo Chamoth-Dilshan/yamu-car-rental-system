@@ -23,6 +23,7 @@ app.use('/api/reviews', require('./modules/reviews/review.routes'))
 app.use('/api/complaints', require('./modules/reviews/complaint.routes'))
 app.use('/api/maintenance', require('./modules/maintenance/maintenance.routes'))
 app.use('/api/promotions', require('./modules/promotions/promotion.routes'))
+app.use('/api/pricing', require('../routes/pricing'))
 
 app.get('/api/health', (req, res) => {
   const readyStateLabels = {
