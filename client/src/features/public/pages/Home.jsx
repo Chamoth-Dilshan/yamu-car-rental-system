@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { FaCarSide, FaClipboardCheck, FaStar, FaUserTie } from 'react-icons/fa';
+import { FaCarSide, FaStar, FaUserTie } from 'react-icons/fa';
 import API from '../../../api/axios';
 import { useAuth } from '../../../context/AuthContext';
+import { getMediaImage } from '../../../utils/media';
 import { getPublicQualityDashboard } from '../../reviews/reviewApi';
 
 const emptyQualityStats = {
@@ -10,8 +11,9 @@ const emptyQualityStats = {
   averageVehicleRating: 0,
   driverRatingCount: 0,
   vehicleRatingCount: 0,
-  totalApprovedReviews: 0,
-  newestReviews: []
+  newestReviews: [],
+  topDrivers: [],
+  topVehicles: []
 };
 
 const formatRating = (value) => `${Number(value || 0).toFixed(1)}/5`;
@@ -27,6 +29,61 @@ const getReviewRating = (review) => {
 
   return ratings.reduce((total, rating) => total + rating, 0) / ratings.length;
 };
+
+function RatingStars({ rating = 0 }) {
+  const roundedRating = Math.round(Number(rating || 0));
+
+  return (
+    <span className="home-top-stars" aria-label={`${formatRating(rating)} rating`}>
+      {[1, 2, 3, 4, 5].map((value) => (
+        <FaStar key={value} className={value <= roundedRating ? '' : 'muted'} />
+      ))}
+    </span>
+  );
+}
+
+function TopRatedPanel({ title, helper, items, emptyText, fallbackPath }) {
+  return (
+    <section className="home-top-panel">
+      <div className="home-top-panel-header">
+        <div>
+          <h3>{title}</h3>
+          <p>{helper}</p>
+        </div>
+      </div>
+
+      {items.length > 0 ? (
+        <div className="home-top-list">
+          {items.map((item, index) => {
+            const detailPath = item.link || fallbackPath;
+
+            return (
+              <article key={item._id || item.name} className="home-top-item">
+                <div className="home-top-rank">{index + 1}</div>
+                <img
+                  className="home-top-thumb"
+                  src={getMediaImage(item.image, item.name)}
+                  alt={item.name}
+                />
+                <div className="home-top-copy">
+                  <strong>{item.name}</strong>
+                  <span>{item.subtitle}</span>
+                  <div className="home-top-rating">
+                    <RatingStars rating={item.ratingAverage} />
+                    <small>{formatRating(item.ratingAverage)} | {item.reviewCount} rating{item.reviewCount === 1 ? '' : 's'}</small>
+                  </div>
+                </div>
+                <Link className="btn btn-outline btn-sm" to={detailPath}>View</Link>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="home-top-empty">{emptyText}</div>
+      )}
+    </section>
+  );
+}
 
 export default function Home() {
   const { user } = useAuth();
@@ -122,24 +179,18 @@ export default function Home() {
   const newestReviews = qualityStats.newestReviews || [];
   const featuredReview = newestReviews[0] || null;
   const featuredReviewRating = getReviewRating(featuredReview);
+  const topDrivers = (qualityStats.topDrivers || []).slice(0, 5);
+  const topVehicles = (qualityStats.topVehicles || []).slice(0, 5);
   const qualityCards = [
     {
       label: 'Avg Driver Rating',
       value: qualityLoading ? '...' : formatRating(qualityStats.averageDriverRating),
-      description: `${qualityStats.driverRatingCount || 0} approved driver ratings`,
       icon: <FaUserTie />
     },
     {
       label: 'Avg Vehicle Rating',
       value: qualityLoading ? '...' : formatRating(qualityStats.averageVehicleRating),
-      description: `${qualityStats.vehicleRatingCount || 0} approved vehicle ratings`,
       icon: <FaCarSide />
-    },
-    {
-      label: 'Approved Reviews',
-      value: qualityLoading ? '...' : qualityStats.totalApprovedReviews || 0,
-      description: 'Published customer reviews',
-      icon: <FaClipboardCheck />
     }
   ];
 
@@ -239,7 +290,6 @@ export default function Home() {
                     <div className="home-quality-card-icon">{item.icon}</div>
                     <span>{item.label}</span>
                     <strong>{item.value}</strong>
-                    <p>{qualityLoading ? 'Loading approved review data' : item.description}</p>
                   </article>
                 ))}
               </div>
@@ -271,6 +321,32 @@ export default function Home() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="home-top-rated-section">
+        <div className="container">
+          <div className="home-top-rated-header">
+            <span className="home-eyebrow home-eyebrow-dark">Top Rated</span>
+            <h2>Top 5 rated drivers and vehicles</h2>
+          </div>
+
+          <div className="home-top-rated-grid">
+            <TopRatedPanel
+              title="Top Rated Drivers"
+              helper="Highest average driver ratings from approved reviews."
+              items={topDrivers}
+              emptyText={qualityLoading ? 'Loading top rated drivers...' : 'No approved driver ratings yet.'}
+              fallbackPath="/drivers"
+            />
+            <TopRatedPanel
+              title="Top Rated Vehicles"
+              helper="Highest average vehicle ratings from approved reviews."
+              items={topVehicles}
+              emptyText={qualityLoading ? 'Loading top rated vehicles...' : 'No approved vehicle ratings yet.'}
+              fallbackPath="/cars"
+            />
           </div>
         </div>
       </section>

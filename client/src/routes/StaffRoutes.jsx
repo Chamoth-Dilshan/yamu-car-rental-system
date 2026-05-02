@@ -1,6 +1,8 @@
 import { Route } from 'react-router-dom'
 
 import ProtectedRoute from '../components/common/ProtectedRoute'
+import InventoryManagement from '../features/maintenance/pages/InventoryManagement'
+import MaintenanceManagement from '../features/maintenance/pages/MaintenanceManagement'
 import StaffVehicleBookings from '../features/reservations/pages/StaffVehicleBookings'
 import StaffVehicleForm from '../features/vehicles/pages/StaffVehicleForm'
 import StaffVehicleList from '../features/vehicles/pages/StaffVehicleList'
@@ -39,6 +41,24 @@ const StaffRoutes = [
     element={(
       <ProtectedRoute roles={['staff']}>
         <StaffVehicleBookings />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="staff-maintenance"
+    path="/staff/maintenance"
+    element={(
+      <ProtectedRoute roles={['staff']}>
+        <MaintenanceManagement />
+      </ProtectedRoute>
+    )}
+  />,
+  <Route
+    key="staff-inventory"
+    path="/staff/inventory"
+    element={(
+      <ProtectedRoute roles={['staff']}>
+        <InventoryManagement />
       </ProtectedRoute>
     )}
   />
