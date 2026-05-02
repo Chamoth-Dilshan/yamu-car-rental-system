@@ -61,6 +61,13 @@ export default function AvailablePromotions({ booking, onApplyPromo, appliedProm
     return true;
   });
 
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // Prevent parent form submission
+      handleManualApply(e);
+    }
+  };
+
   return (
     <section className="form-card payment-promotions-card" style={{ marginTop: '20px' }}>
       <div className="card-header">
@@ -68,17 +75,23 @@ export default function AvailablePromotions({ booking, onApplyPromo, appliedProm
         <p style={{ color: 'var(--text-light)', fontSize: '0.85rem' }}>Apply a promo code to get a discount on your booking.</p>
       </div>
 
-      <form onSubmit={handleManualApply} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
         <input
           type="text"
           className="form-control"
           placeholder="Enter promo code"
           value={promoInput}
           onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+          onKeyDown={handleKeyDown}
           disabled={isSimulating}
           style={{ textTransform: 'uppercase' }}
         />
-        <button type="submit" className="btn btn-primary" disabled={isSimulating || !promoInput.trim()}>
+        <button 
+          type="button" 
+          className="btn btn-primary" 
+          disabled={isSimulating || !promoInput.trim()}
+          onClick={handleManualApply}
+        >
           {isSimulating ? 'Applying...' : 'Apply'}
         </button>
         {appliedPromo && (
@@ -86,7 +99,7 @@ export default function AvailablePromotions({ booking, onApplyPromo, appliedProm
             Clear
           </button>
         )}
-      </form>
+      </div>
 
       {loading ? (
         <p style={{ fontSize: '0.9rem', color: 'var(--text-light)' }}>Checking for available promotions...</p>
@@ -132,6 +145,7 @@ export default function AvailablePromotions({ booking, onApplyPromo, appliedProm
                   </p>
                 </div>
                 <button 
+                  type="button"
                   className={`btn ${isApplied ? 'btn-outline' : 'btn-secondary'} btn-sm`} 
                   onClick={() => isApplied ? clearPromo() : handleApply(promo.code)}
                   disabled={isSimulating}
