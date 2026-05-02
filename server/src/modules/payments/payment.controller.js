@@ -32,7 +32,7 @@ const getMyPaymentMethods = async (req, res) => {
     const methods = await listPaymentMethods(req.user._id)
     return res.json({ methods: methods.map(serializePaymentMethod) })
   } catch (error) {
-    return sendServerError(res, error, 'Failed to load saved cards')
+    return sendServerError(res, error, 'Failed to load payment methods')
   }
 }
 
@@ -50,7 +50,7 @@ const createMyPaymentMethod = async (req, res) => {
     })
 
     return res.status(201).json({
-      message: 'Saved card added',
+      message: 'Card added',
       method: serializePaymentMethod(method)
     })
   } catch (error) {

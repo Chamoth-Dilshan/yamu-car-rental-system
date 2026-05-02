@@ -1,4 +1,5 @@
 const Booking = require('../reservations/booking.model')
+const Payment = require('../payments/payment.model')
 const { sendServerError } = require('../../utils/errorResponses')
 const { addNotificationToUser } = require('../../utils/notificationHelpers')
 const {
@@ -28,6 +29,22 @@ const buildStats = (bookings) => ({
   closedCount: bookings.filter((booking) => booking.bookingStatus === 'closed').length
 })
 
+const reconcileStoredPaymentStatus = async (booking) => {
+  if (!booking || !['paid', 'refunded'].includes(booking.paymentStatus)) {
+    return
+  }
+
+  const paymentExists = await Payment.exists({
+    booking: booking._id,
+    status: booking.paymentStatus
+  })
+
+  if (!paymentExists) {
+    booking.paymentStatus = 'pending'
+    await booking.save()
+  }
+}
+
 const getAdminBookings = async (req, res) => {
   try {
     const { status, paymentStatus, search = '' } = req.query
@@ -56,6 +73,8 @@ const getAdminBookings = async (req, res) => {
       .populate(bookingPopulate)
       .sort({ createdAt: -1 })
 
+    await Promise.all(bookings.map(reconcileStoredPaymentStatus))
+
     res.json({
       bookings: bookings.map(serializeBooking),
       stats: buildStats(bookings)
@@ -83,6 +102,8 @@ const updateAdminBooking = async (req, res) => {
       return res.status(404).json({ message: 'Vehicle booking not found' })
     }
 
+    await reconcileStoredPaymentStatus(booking)
+
     if (bookingStatus) {
       if (!BOOKING_STATUSES.includes(bookingStatus)) {
         return res.status(400).json({ message: 'Invalid booking status' })
@@ -104,6 +125,14 @@ const updateAdminBooking = async (req, res) => {
         if (bookingStatus === 'closed' && !['completed', 'cancelled'].includes(booking.bookingStatus)) {
           return res.status(400).json({ message: 'Only completed or cancelled vehicle bookings can be closed' })
         }
+
+        if (
+          bookingStatus === 'closed'
+          && booking.bookingStatus === 'completed'
+          && booking.paymentStatus !== 'paid'
+        ) {
+          return res.status(400).json({ message: 'Completed vehicle bookings can be closed only after payment is paid' })
+        }
       }
 
       booking.bookingStatus = bookingStatus
@@ -112,13 +141,25 @@ const updateAdminBooking = async (req, res) => {
     booking.adminNote = String(adminNote).trim()
     await booking.save()
 
+    const customerNotification = {
+      type: 'booking',
+      title: 'Vehicle booking updated',
+      message: `Admin updated vehicle booking ${booking.bookingNo}${bookingStatus ? ` to ${bookingStatus}` : ''}.`,
+      link: '/bookings'
+    }
+
+    if (bookingStatus === 'confirmed') {
+      customerNotification.title = 'Reservation accepted'
+      customerNotification.message = 'Your reservation has been accepted. Payment will be available after the trip is completed.'
+    }
+
+    if (bookingStatus === 'completed') {
+      customerNotification.title = 'Trip completed'
+      customerNotification.message = `Booking ${booking.bookingNo} is completed. You can now complete payment.`
+    }
+
     await Promise.all([
-      addNotificationToUser(booking.customer?._id || booking.customer, {
-        type: 'booking',
-        title: 'Vehicle booking updated',
-        message: `Admin updated vehicle booking ${booking.bookingNo}${bookingStatus ? ` to ${bookingStatus}` : ''}.`,
-        link: '/bookings'
-      }),
+      addNotificationToUser(booking.customer?._id || booking.customer, customerNotification),
       addNotificationToUser(req.user._id, {
         type: 'admin',
         title: 'Vehicle booking action completed',

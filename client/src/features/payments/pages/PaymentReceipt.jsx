@@ -37,7 +37,7 @@ export default function PaymentReceipt() {
       <main className="dashboard-content">
         <div className="form-header">
           <h2>Payment Receipt</h2>
-          <p style={{ color: 'var(--text-light)' }}>Official simulated receipt for academic payment tracking.</p>
+          <p style={{ color: 'var(--text-light)' }}>Official receipt for payment tracking.</p>
         </div>
 
         {message && (
@@ -89,8 +89,7 @@ export default function PaymentReceipt() {
             )}
 
             <div className="receipt-note">
-              Sensitive card information is not stored. This simulated academic module keeps only masked card details,
-              last four digits, card brand, expiry date, and generated mock tokens.
+              Full card numbers and CVV are not stored. Only masked card details, expiry date, and a local card token are retained.
             </div>
 
             <div className="table-actions">

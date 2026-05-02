@@ -1,5 +1,6 @@
 const Booking = require('./booking.model')
 const DriverAd = require('../drivers/driverAd.model')
+const Payment = require('../payments/payment.model')
 const Vehicle = require('../vehicles/vehicle.model')
 const { sendServerError } = require('../../utils/errorResponses')
 const {
@@ -80,6 +81,22 @@ const buildOverlapQuery = (resourceQuery, startDate, endDate) => ({
   endDate: { $gte: startDate }
 })
 
+const reconcileStoredPaymentStatus = async (booking) => {
+  if (!booking || !['paid', 'refunded'].includes(booking.paymentStatus)) {
+    return
+  }
+
+  const paymentExists = await Payment.exists({
+    booking: booking._id,
+    status: booking.paymentStatus
+  })
+
+  if (!paymentExists) {
+    booking.paymentStatus = 'pending'
+    await booking.save()
+  }
+}
+
 const getMyBookings = async (req, res) => {
   try {
     const { status, paymentStatus, search = '' } = req.query
@@ -97,6 +114,8 @@ const getMyBookings = async (req, res) => {
     const bookings = await Booking.find(searchQuery ? { ...query, ...searchQuery } : query)
       .populate(bookingPopulate)
       .sort({ startDate: -1, createdAt: -1 })
+
+    await Promise.all(bookings.map(reconcileStoredPaymentStatus))
 
     res.json({
       bookings: bookings.map(serializeBooking),
@@ -370,6 +389,8 @@ const getDriverBookings = async (req, res) => {
       .populate(bookingPopulate)
       .sort({ createdAt: -1 })
 
+    await Promise.all(bookings.map(reconcileStoredPaymentStatus))
+
     res.json({
       bookings: bookings.map(serializeBooking),
       stats: buildStats(bookings)
@@ -401,6 +422,8 @@ const updateDriverBookingStatus = async (req, res) => {
       return res.status(404).json({ message: 'Booking request not found' })
     }
 
+    await reconcileStoredPaymentStatus(booking)
+
     if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
       return res.status(400).json({ message: 'Only pending driver requests can be confirmed' })
     }
@@ -417,6 +440,23 @@ const updateDriverBookingStatus = async (req, res) => {
     booking.driverResponseNote = String(driverResponseNote).trim()
     await booking.save()
 
+    const customerNotification = {
+      type: 'booking',
+      title: 'Driver updated your trip request',
+      message: `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
+      link: '/bookings'
+    }
+
+    if (bookingStatus === 'confirmed') {
+      customerNotification.title = 'Driver request accepted'
+      customerNotification.message = 'Your driver request has been accepted. Payment will be available after the trip is completed.'
+    }
+
+    if (bookingStatus === 'completed') {
+      customerNotification.title = 'Trip completed'
+      customerNotification.message = `Booking ${booking.bookingNo} is completed. You can now complete payment.`
+    }
+
     await Promise.all([
       addNotificationToUser(req.user._id, {
         type: 'booking',
@@ -424,14 +464,7 @@ const updateDriverBookingStatus = async (req, res) => {
         message: `You marked booking ${booking.bookingNo} as ${bookingStatus}.`,
         link: '/driver/bookings'
       }),
-      addNotificationToUser(booking.customer?._id || booking.customer, {
-        type: 'booking',
-        title: bookingStatus === 'confirmed' ? 'Driver request accepted' : 'Driver updated your trip request',
-        message: bookingStatus === 'confirmed'
-          ? 'Your driver request has been accepted. You can now complete payment.'
-          : `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
-        link: '/bookings'
-      })
+      addNotificationToUser(booking.customer?._id || booking.customer, customerNotification)
     ])
 
     res.json({
@@ -465,6 +498,8 @@ const getStaffVehicleBookings = async (req, res) => {
       .populate(bookingPopulate)
       .sort({ createdAt: -1 })
 
+    await Promise.all(bookings.map(reconcileStoredPaymentStatus))
+
     res.json({
       bookings: bookings.map(serializeBooking),
       stats: buildStats(bookings)
@@ -497,6 +532,8 @@ const updateStaffVehicleBookingStatus = async (req, res) => {
       return res.status(404).json({ message: 'Vehicle booking not found' })
     }
 
+    await reconcileStoredPaymentStatus(booking)
+
     if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
       return res.status(400).json({ message: 'Only pending vehicle bookings can be confirmed' })
     }
@@ -513,8 +550,33 @@ const updateStaffVehicleBookingStatus = async (req, res) => {
       return res.status(400).json({ message: 'Only completed or cancelled vehicle bookings can be closed' })
     }
 
+    if (
+      bookingStatus === 'closed'
+      && booking.bookingStatus === 'completed'
+      && booking.paymentStatus !== 'paid'
+    ) {
+      return res.status(400).json({ message: 'Completed vehicle bookings can be closed only after payment is paid' })
+    }
+
     booking.bookingStatus = bookingStatus
     await booking.save()
+
+    const customerNotification = {
+      type: 'booking',
+      title: 'Store updated your vehicle booking',
+      message: `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
+      link: '/bookings'
+    }
+
+    if (bookingStatus === 'confirmed') {
+      customerNotification.title = 'Reservation accepted'
+      customerNotification.message = 'Your reservation has been accepted. Payment will be available after the trip is completed.'
+    }
+
+    if (bookingStatus === 'completed') {
+      customerNotification.title = 'Trip completed'
+      customerNotification.message = `Booking ${booking.bookingNo} is completed. You can now complete payment.`
+    }
 
     await Promise.all([
       addNotificationToUser(req.user._id, {
@@ -523,14 +585,7 @@ const updateStaffVehicleBookingStatus = async (req, res) => {
         message: `You marked booking ${booking.bookingNo} as ${bookingStatus}.`,
         link: '/staff/bookings'
       }),
-      addNotificationToUser(booking.customer?._id || booking.customer, {
-        type: 'booking',
-        title: bookingStatus === 'confirmed' ? 'Reservation accepted' : 'Store updated your vehicle booking',
-        message: bookingStatus === 'confirmed'
-          ? 'Your reservation has been accepted. You can now complete payment.'
-          : `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
-        link: '/bookings'
-      })
+      addNotificationToUser(booking.customer?._id || booking.customer, customerNotification)
     ])
 
     res.json({

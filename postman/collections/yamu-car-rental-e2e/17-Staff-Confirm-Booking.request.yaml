@@ -27,3 +27,8 @@ scripts:
         pm.expect(json).to.have.property("booking");
         pm.expect(json.booking.bookingStatus).to.equal("confirmed");
       });
+
+      pm.test("Payment is still pending after confirmation", () => {
+        const json = pm.response.json();
+        pm.expect(json.booking.paymentStatus).to.equal("pending");
+      });

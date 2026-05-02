@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
+import { getProfilePathForRole } from '../../../utils/roles';
+import GoogleAuthButton from '../components/GoogleAuthButton';
 
 export default function SignUp() {
-  const { register } = useAuth();
+  const { register, googleLogin } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     fullName: '',
@@ -14,6 +16,21 @@ export default function SignUp() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const getPostLoginRoute = (nextUser) => {
+    const nextRole = nextUser.activeRole || nextUser.role;
+
+    if (nextRole === 'admin') {
+      return '/admin/dashboard';
+    }
+
+    if (nextRole === 'customer') {
+      return '/dashboard';
+    }
+
+    return getProfilePathForRole(nextRole);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -35,7 +52,7 @@ export default function SignUp() {
       });
       navigate('/signin', {
         state: {
-          message: result?.message || 'Registration submitted. Wait for admin approval before signing in.'
+          message: result?.message || 'Registration successful. You can now sign in.'
         },
         replace: true
       });
@@ -46,12 +63,34 @@ export default function SignUp() {
     }
   };
 
+  const handleGoogleCredential = async (credential) => {
+    setGoogleLoading(true);
+    setError('');
+
+    try {
+      const nextUser = await googleLogin(credential);
+      navigate(getPostLoginRoute(nextUser));
+    } catch (err) {
+      setError(err.response?.data?.message || 'Google sign in failed. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   return (
     <div className="auth-page page-content">
       <div className="auth-card">
         <h1>Create Account</h1>
         <p className="subtitle">Sign up as a user first, then apply for driver or store access after onboarding.</p>
         {error && <div className="alert alert-danger">{error}</div>}
+        <GoogleAuthButton
+          buttonText="Sign up with Google"
+          disabled={loading || googleLoading}
+          googleText="signup_with"
+          onCredential={handleGoogleCredential}
+          onError={setError}
+        />
+        <div className="auth-separator"><span>or</span></div>
         <form onSubmit={handleSubmit} autoComplete="off">
           <input type="text" name="register-username" autoComplete="username" style={{ display: 'none' }} tabIndex={-1} />
           <input type="password" name="register-password" autoComplete="new-password" style={{ display: 'none' }} tabIndex={-1} />
@@ -114,7 +153,7 @@ export default function SignUp() {
               required
             />
           </div>
-          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading}>
+          <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={loading || googleLoading}>
             {loading ? 'Creating Account...' : 'Sign Up'}
           </button>
         </form>

@@ -28,7 +28,7 @@ scripts:
         pm.expect(json.booking.bookingStatus).to.equal("completed");
       });
 
-      pm.test("Payment status is still paid after completion", () => {
+      pm.test("Payment is pending after completion", () => {
         const json = pm.response.json();
-        pm.expect(json.booking.paymentStatus).to.equal("paid");
+        pm.expect(json.booking.paymentStatus).to.equal("pending");
       });

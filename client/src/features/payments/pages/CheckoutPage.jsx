@@ -6,6 +6,7 @@ import { useAuth } from '../../../context/AuthContext'
 import BankTransferForm from '../components/BankTransferForm'
 import CardPaymentForm from '../components/CardPaymentForm'
 import CashPaymentBox from '../components/CashPaymentBox'
+import { isFutureExpiry, isSecurityCodeValid, isSixteenDigitCardNumber } from '../cardValidation'
 import PaymentSummary from '../components/PaymentSummary'
 import SavedCardSelector from '../components/SavedCardSelector'
 import { checkoutPayment, getCustomerPayments, getPaymentMethods } from '../paymentApi'
@@ -30,47 +31,6 @@ const emptyBankTransfer = {
   note: ''
 }
 
-const normalizeDigits = (value = '') => String(value || '').replace(/\D/g, '')
-
-const isLuhnValid = (value = '') => {
-  const digits = normalizeDigits(value)
-
-  if (!/^\d{13,19}$/.test(digits)) {
-    return false
-  }
-
-  let sum = 0
-  let shouldDouble = false
-
-  for (let index = digits.length - 1; index >= 0; index -= 1) {
-    let digit = Number(digits[index])
-
-    if (shouldDouble) {
-      digit *= 2
-      if (digit > 9) {
-        digit -= 9
-      }
-    }
-
-    sum += digit
-    shouldDouble = !shouldDouble
-  }
-
-  return sum % 10 === 0
-}
-
-const isFutureExpiry = (month, year) => {
-  const monthNumber = Number(month)
-  const yearNumber = Number(year)
-
-  if (!monthNumber || monthNumber < 1 || monthNumber > 12 || !yearNumber) {
-    return false
-  }
-
-  const expiryDate = new Date(Date.UTC(yearNumber, monthNumber, 0, 23, 59, 59, 999))
-  return expiryDate >= new Date()
-}
-
 const validateCard = (card) => {
   const errors = {}
 
@@ -78,15 +38,17 @@ const validateCard = (card) => {
     errors.cardholderName = 'Cardholder name is required.'
   }
 
-  if (!isLuhnValid(card.cardNumber)) {
-    errors.cardNumber = 'Enter a valid card number.'
+  if (!isSixteenDigitCardNumber(card.cardNumber)) {
+    errors.cardNumber = 'Enter a 16-digit card number.'
   }
 
-  if (!isFutureExpiry(card.expiryMonth, card.expiryYear)) {
+  if (!card.expiryMonth || !card.expiryYear) {
+    errors.expiry = 'Expiry date is required.'
+  } else if (!isFutureExpiry(card.expiryMonth, card.expiryYear)) {
     errors.expiry = 'Expiry date must be in the future.'
   }
 
-  if (!/^\d{3,4}$/.test(card.cvv)) {
+  if (!isSecurityCodeValid(card.cvv)) {
     errors.cvv = 'CVV must be 3 or 4 digits.'
   }
 
@@ -183,7 +145,11 @@ export default function CheckoutPage() {
     }
 
     if (booking.bookingStatus === 'pending') {
-      return 'Payment is available only after the provider accepts your reservation.'
+      return 'Payment is available after the provider accepts and completes your trip.'
+    }
+
+    if (booking.bookingStatus === 'confirmed') {
+      return 'Payment is available after the trip is marked completed.'
     }
 
     if (booking.bookingStatus === 'cancelled') {
@@ -206,8 +172,8 @@ export default function CheckoutPage() {
       return 'Pending verification'
     }
 
-    if (booking.bookingStatus !== 'confirmed') {
-      return 'Payment is available only after the provider accepts your reservation.'
+    if (booking.bookingStatus !== 'completed') {
+      return 'Payment is available only after the trip is completed.'
     }
 
     return ''
@@ -287,7 +253,7 @@ export default function CheckoutPage() {
         return
       }
 
-      if (!/^\d{3,4}$/.test(savedCardCvv)) {
+      if (!isSecurityCodeValid(savedCardCvv)) {
         setErrors({ cvv: 'CVV must be 3 or 4 digits.' })
         return
       }
@@ -354,7 +320,7 @@ export default function CheckoutPage() {
       <main className="dashboard-content">
         <div className="form-header">
           <h2>Payment Checkout</h2>
-          <p style={{ color: 'var(--text-light)' }}>Complete a simulated payment without storing sensitive card data.</p>
+          <p style={{ color: 'var(--text-light)' }}>Complete your payment using card, cash, or bank transfer.</p>
         </div>
 
         {submitError && <div className="alert alert-danger">{submitError}</div>}
@@ -384,7 +350,7 @@ export default function CheckoutPage() {
             <div className="payment-method-grid">
               <button type="button" className={`payment-method-card${method === 'card' ? ' active' : ''}`} onClick={() => setMethod('card')}>
                 <strong>New Card</strong>
-                <span>Visa, Mastercard, Amex, or other Luhn-valid mock card</span>
+                <span>Pay by card and get an instant receipt</span>
               </button>
               <button
                 type="button"
@@ -393,7 +359,7 @@ export default function CheckoutPage() {
                 onClick={() => activeSavedCards.length && setMethod('saved_card')}
               >
                 <strong>Saved Card</strong>
-                <span>{activeSavedCards.length ? 'Use a stored mock token' : 'No saved card available'}</span>
+                <span>{activeSavedCards.length ? 'Use a saved card' : 'No saved card available'}</span>
               </button>
               <button type="button" className={`payment-method-card${method === 'cash' ? ' active' : ''}`} onClick={() => setMethod('cash')}>
                 <strong>Cash on Pickup</strong>

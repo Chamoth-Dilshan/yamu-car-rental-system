@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import Sidebar from '../../../components/layout/Sidebar'
 import CardPaymentForm from '../components/CardPaymentForm'
+import { isFutureExpiry, isSecurityCodeValid, isSixteenDigitCardNumber } from '../cardValidation'
 import {
   createPaymentMethod,
   deletePaymentMethod,
@@ -17,35 +17,6 @@ const emptyCard = {
   cvv: ''
 }
 
-const normalizeDigits = (value = '') => String(value || '').replace(/\D/g, '')
-
-const isLuhnValid = (value = '') => {
-  const digits = normalizeDigits(value)
-
-  if (!/^\d{13,19}$/.test(digits)) {
-    return false
-  }
-
-  let sum = 0
-  let shouldDouble = false
-
-  for (let index = digits.length - 1; index >= 0; index -= 1) {
-    let digit = Number(digits[index])
-
-    if (shouldDouble) {
-      digit *= 2
-      if (digit > 9) {
-        digit -= 9
-      }
-    }
-
-    sum += digit
-    shouldDouble = !shouldDouble
-  }
-
-  return sum % 10 === 0
-}
-
 const validateCard = (card) => {
   const errors = {}
 
@@ -53,35 +24,63 @@ const validateCard = (card) => {
     errors.cardholderName = 'Cardholder name is required.'
   }
 
-  if (!isLuhnValid(card.cardNumber)) {
-    errors.cardNumber = 'Enter a valid card number.'
+  if (!isSixteenDigitCardNumber(card.cardNumber)) {
+    errors.cardNumber = 'Enter a 16-digit card number.'
   }
 
   if (!card.expiryMonth || !card.expiryYear) {
     errors.expiry = 'Expiry date is required.'
-  } else {
-    const expiryDate = new Date(Date.UTC(Number(card.expiryYear), Number(card.expiryMonth), 0, 23, 59, 59, 999))
-    if (expiryDate < new Date()) {
-      errors.expiry = 'Expiry date must be in the future.'
-    }
+  } else if (!isFutureExpiry(card.expiryMonth, card.expiryYear)) {
+    errors.expiry = 'Expiry date must be in the future.'
   }
 
-  if (!/^\d{3,4}$/.test(card.cvv)) {
+  if (!isSecurityCodeValid(card.cvv)) {
     errors.cvv = 'CVV must be 3 or 4 digits.'
   }
 
   return errors
 }
 
+const formatExpiryYear = (year = '') => String(year).slice(-2)
+
+const formatStatusLabel = (status = '') => {
+  if (!status) {
+    return ''
+  }
+
+  return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
 export default function SavedCards() {
   const [methods, setMethods] = useState([])
   const [card, setCard] = useState(emptyCard)
   const [isDefault, setIsDefault] = useState(false)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(true)
   const [busyAction, setBusyAction] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+
+  const openAddModal = () => {
+    setCard(emptyCard)
+    setIsDefault(false)
+    setErrors({})
+    setError('')
+    setMessage('')
+    setIsAddModalOpen(true)
+  }
+
+  const closeAddModal = () => {
+    if (busyAction === 'save') {
+      return
+    }
+
+    setIsAddModalOpen(false)
+    setCard(emptyCard)
+    setIsDefault(false)
+    setErrors({})
+  }
 
   const loadCards = () => {
     setLoading(true)
@@ -89,13 +88,31 @@ export default function SavedCards() {
 
     getPaymentMethods()
       .then((res) => setMethods(res.data.methods || []))
-      .catch((err) => setError(err.response?.data?.message || 'Failed to load saved cards'))
+      .catch((err) => setError(err.response?.data?.message || 'Failed to load payment methods'))
       .finally(() => setLoading(false))
   }
 
   useEffect(() => {
     loadCards()
   }, [])
+
+  useEffect(() => {
+    if (!isAddModalOpen) {
+      return undefined
+    }
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape' && busyAction !== 'save') {
+        setIsAddModalOpen(false)
+        setCard(emptyCard)
+        setIsDefault(false)
+        setErrors({})
+      }
+    }
+
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [isAddModalOpen, busyAction])
 
   const updateCard = (field, value) => {
     setCard((current) => ({ ...current, [field]: value }))
@@ -120,7 +137,8 @@ export default function SavedCards() {
       await createPaymentMethod({ card, isDefault })
       setCard(emptyCard)
       setIsDefault(false)
-      setMessage('Saved card added')
+      setIsAddModalOpen(false)
+      setMessage('Card added')
       loadCards()
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save card')
@@ -169,45 +187,26 @@ export default function SavedCards() {
     <div className="dashboard-layout page-content">
       <Sidebar />
       <main className="dashboard-content">
-        <div className="form-header">
-          <h2>Saved Cards</h2>
-          <p style={{ color: 'var(--text-light)' }}>Store only masked card details and generated mock tokens for faster checkout.</p>
-        </div>
-
-        {message && <div className="alert alert-success">{message}</div>}
-        {error && <div className="alert alert-danger">{error}</div>}
-
-        <div className="payment-layout">
-          <section className="form-card payment-main-card">
-            <div className="card-header">
-              <div>
-                <h3>Add Saved Card</h3>
-                <p style={{ color: 'var(--text-light)' }}>Full card number and CVV are validated only for this request and are never stored.</p>
-              </div>
+        <div className="payment-methods-shell">
+          <div className="payment-page-header">
+            <div className="form-header">
+              <h2>Payment Methods</h2>
+              <p style={{ color: 'var(--text-light)' }}>Manage saved payment cards for faster checkout.</p>
             </div>
-
-            <form onSubmit={submitCard}>
-              <CardPaymentForm card={card} errors={errors} onChange={updateCard} />
-              <div className="payment-check-row">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={isDefault}
-                    onChange={(event) => setIsDefault(event.target.checked)}
-                  />
-                  Make this my default card
-                </label>
-              </div>
-              <button className="btn btn-primary" type="submit" disabled={busyAction === 'save'}>
-                {busyAction === 'save' ? 'Saving...' : 'Save Card'}
+            <div className="payment-page-actions">
+              <button className="btn btn-primary" type="button" onClick={openAddModal}>
+                Add Payment Method
               </button>
-            </form>
-          </section>
+            </div>
+          </div>
 
-          <aside className="form-card payment-summary-card">
+          {message && <div className="alert alert-success">{message}</div>}
+          {error && <div className="alert alert-danger">{error}</div>}
+
+          <section className="form-card payment-methods-card">
             <div className="card-header">
               <div>
-                <h3>Card Wallet</h3>
+                <h3>Saved Cards</h3>
                 <p style={{ color: 'var(--text-light)' }}>Only active cards can be used during checkout.</p>
               </div>
             </div>
@@ -215,15 +214,24 @@ export default function SavedCards() {
             {loading ? (
               <div className="reservation-empty">Loading cards...</div>
             ) : methods.length ? (
-              <div className="payment-card-list">
+              <div className="payment-method-list">
                 {methods.map((method) => (
-                  <div className="saved-card-row" key={method._id}>
-                    <div>
-                      <strong>{method.brand} ending {method.last4}</strong>
-                      <span>{method.maskedNumber}</span>
-                      <small>{method.expiryMonth}/{method.expiryYear} - {method.status}{method.isDefault ? ' - Default' : ''}</small>
+                  <div className="payment-method-row" key={method._id}>
+                    <div className="payment-method-card-mark" aria-hidden="true">
+                      {String(method.brand || 'Card').slice(0, 1).toUpperCase()}
                     </div>
-                    <div className="table-actions">
+                    <div className="payment-method-copy">
+                      <strong>{method.brand || 'Card'} ending {method.last4}</strong>
+                      <span>{method.maskedNumber}</span>
+                      <small>Expires {method.expiryMonth}/{formatExpiryYear(method.expiryYear)}</small>
+                    </div>
+                    <div className="payment-method-status">
+                      {method.isDefault && <span className="payment-method-badge">Default</span>}
+                      {method.status && method.status !== 'active' && (
+                        <span className="payment-method-badge muted">{formatStatusLabel(method.status)}</span>
+                      )}
+                    </div>
+                    <div className="payment-method-actions">
                       {method.status === 'active' && !method.isDefault && (
                         <button
                           className="btn btn-outline btn-sm"
@@ -231,7 +239,7 @@ export default function SavedCards() {
                           disabled={busyAction === `default-${method._id}`}
                           onClick={() => makeDefault(method._id)}
                         >
-                          Default
+                          Make Default
                         </button>
                       )}
                       {method.status !== 'removed' && (
@@ -249,12 +257,69 @@ export default function SavedCards() {
                 ))}
               </div>
             ) : (
-              <div className="reservation-empty">No saved cards yet.</div>
+              <div className="payment-method-empty">
+                <h3>No payment methods yet</h3>
+                <p>Add a card once and use it for faster checkout on future bookings.</p>
+                <button className="btn btn-primary" type="button" onClick={openAddModal}>
+                  Add Payment Method
+                </button>
+              </div>
             )}
-
-            <Link className="btn btn-outline btn-block" to="/payments/history">Payment History</Link>
-          </aside>
+          </section>
         </div>
+
+        {isAddModalOpen && (
+          <div className="payment-modal-overlay" onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeAddModal()
+            }
+          }}>
+            <section
+              className="form-card payment-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="add-payment-card-title"
+            >
+              <div className="payment-modal-header">
+                <div>
+                  <h3 id="add-payment-card-title">Add Payment Card</h3>
+                  <p>Your full card number and CVV are validated only for this request and are never stored.</p>
+                </div>
+                <button
+                  className="payment-icon-button"
+                  type="button"
+                  aria-label="Close"
+                  onClick={closeAddModal}
+                  disabled={busyAction === 'save'}
+                >
+                  x
+                </button>
+              </div>
+
+              <form onSubmit={submitCard}>
+                <CardPaymentForm card={card} errors={errors} onChange={updateCard} />
+                <div className="payment-check-row">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={isDefault}
+                      onChange={(event) => setIsDefault(event.target.checked)}
+                    />
+                    Make this my default card
+                  </label>
+                </div>
+                <div className="payment-modal-footer">
+                  <button className="btn btn-outline" type="button" onClick={closeAddModal} disabled={busyAction === 'save'}>
+                    Cancel
+                  </button>
+                  <button className="btn btn-primary" type="submit" disabled={busyAction === 'save'}>
+                    {busyAction === 'save' ? 'Saving...' : 'Save Card'}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   )

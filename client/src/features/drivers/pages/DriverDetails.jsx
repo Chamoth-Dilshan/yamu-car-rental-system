@@ -1,15 +1,54 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { FaStar } from 'react-icons/fa'
 import API from '../../../api/axios'
 import { useAuth } from '../../../context/AuthContext'
-import { formatCurrency, formatList, getBadgeClass } from '../../../utils/formatters'
+import { formatCurrency, formatDate, formatList, getBadgeClass } from '../../../utils/formatters'
 import { getMediaImage, getUserAvatar } from '../../../utils/media'
+import { getDriverAdReviews } from '../../reviews/reviewApi'
+
+const emptyReviewSummary = {
+  ratingAverage: 0,
+  reviewCount: 0,
+  reviews: []
+}
+
+function RatingStars({ rating = 0 }) {
+  return (
+    <span className="quality-stars" aria-label={`${rating} out of 5`}>
+      {[1, 2, 3, 4, 5].map((value) => (
+        <FaStar key={value} className={value <= Math.round(Number(rating || 0)) ? 'filled' : ''} />
+      ))}
+    </span>
+  )
+}
+
+function ReviewCard({ review }) {
+  return (
+    <article className="quality-review-card">
+      <div className="quality-review-top">
+        <div>
+          <strong>{review.passengerName || 'Customer'}</strong>
+          <span>{formatDate(review.createdAt)}</span>
+        </div>
+        <span className="quality-rating-pill">
+          <FaStar /> {Number(review.driverRating || 0).toFixed(1)}
+        </span>
+      </div>
+      <p className="quality-review-quote">&ldquo;{review.feedback}&rdquo;</p>
+      <div className="quality-review-meta">
+        <span>Driver <RatingStars rating={review.driverRating} /></span>
+      </div>
+    </article>
+  )
+}
 
 export default function DriverDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, refreshNotifications } = useAuth()
   const [ad, setAd] = useState(null)
+  const [reviewSummary, setReviewSummary] = useState(emptyReviewSummary)
   const [form, setForm] = useState({
     startDate: '',
     endDate: '',
@@ -26,12 +65,21 @@ export default function DriverDetails() {
   useEffect(() => {
     setLoading(true)
     setError('')
+    setReviewSummary(emptyReviewSummary)
 
     API.get(`/driver-ads/${id}`)
-      .then((res) => setAd(res.data))
+      .then((res) => {
+        setAd(res.data)
+        return getDriverAdReviews(id)
+          .then((reviewRes) => setReviewSummary({ ...emptyReviewSummary, ...reviewRes.data }))
+          .catch(() => setReviewSummary(emptyReviewSummary))
+      })
       .catch((err) => setError(err.response?.data?.message || 'Failed to load driver profile'))
       .finally(() => setLoading(false))
   }, [id])
+
+  const ratingAverage = reviewSummary.reviewCount ? reviewSummary.ratingAverage : (ad?.ratingAverage || 0)
+  const reviewCount = reviewSummary.reviewCount || ad?.reviewCount || 0
 
   const submitRequest = async (event) => {
     event.preventDefault()
@@ -128,6 +176,14 @@ export default function DriverDetails() {
                 <div>
                   <span>Trips</span>
                   <strong>{ad.completedTrips}</strong>
+                </div>
+                <div>
+                  <span>Rating</span>
+                  <strong>{Number(ratingAverage || 0).toFixed(1)}/5</strong>
+                </div>
+                <div>
+                  <span>Reviews</span>
+                  <strong>{reviewCount}</strong>
                 </div>
               </div>
               <div className="driver-summary-actions">
@@ -232,10 +288,18 @@ export default function DriverDetails() {
                 <div className="card-header">
                   <div>
                     <h3>Recent Reviews</h3>
-                    <p style={{ color: 'var(--text-light)' }}>This screen is ready for future review integration once the review module is connected.</p>
+                    <p style={{ color: 'var(--text-light)' }}>Approved feedback from completed driver requests.</p>
                   </div>
                 </div>
-                <div className="reservation-empty">No public reviews yet for this driver advertisement.</div>
+                {(reviewSummary.reviews || []).length > 0 ? (
+                  <div className="quality-review-grid">
+                    {reviewSummary.reviews.map((review) => (
+                      <ReviewCard key={review._id} review={review} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="reservation-empty">No approved reviews yet for this driver.</div>
+                )}
               </section>
             </div>
           </div>

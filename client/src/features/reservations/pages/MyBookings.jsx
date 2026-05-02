@@ -105,12 +105,21 @@ export default function MyBookings() {
       return 'Pending verification'
     }
 
-    if (booking.bookingStatus === 'confirmed') {
+    if (booking.bookingStatus === 'completed') {
       return 'Payment required'
+    }
+
+    if (booking.bookingStatus === 'confirmed') {
+      return 'Pay after trip'
     }
 
     return 'Waiting for approval'
   }
+
+  const canReviewBooking = (booking) => (
+    ['completed', 'closed'].includes(booking.bookingStatus)
+    && booking.paymentStatus === 'paid'
+  )
 
   return (
     <div className="dashboard-layout page-content">
@@ -190,7 +199,7 @@ export default function MyBookings() {
                     const latestPayment = getLatestPayment(booking._id)
                     const isProcessing = latestPayment?.status === 'processing'
                     const paymentDisplayStatus = isProcessing ? 'processing' : booking.paymentStatus
-                    const canReviewBooking = ['completed', 'closed'].includes(booking.bookingStatus)
+                    const canReviewCurrentBooking = canReviewBooking(booking)
 
                     return (
                       <tr key={booking._id}>
@@ -216,12 +225,17 @@ export default function MyBookings() {
                                 Waiting for approval
                               </button>
                             )}
-                            {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'pending' && isProcessing && (
+                            {['confirmed', 'completed'].includes(booking.bookingStatus) && booking.paymentStatus === 'pending' && isProcessing && (
                               <button className="btn btn-outline btn-sm" type="button" disabled>
                                 Pending verification
                               </button>
                             )}
                             {booking.bookingStatus === 'confirmed' && booking.paymentStatus === 'pending' && !isProcessing && (
+                              <button className="btn btn-outline btn-sm" type="button" disabled>
+                                Pay after trip
+                              </button>
+                            )}
+                            {booking.bookingStatus === 'completed' && booking.paymentStatus === 'pending' && !isProcessing && (
                               <Link className="btn btn-secondary btn-sm" to={`/payments/checkout/${booking._id}`}>
                                 Pay Now
                               </Link>
@@ -246,7 +260,7 @@ export default function MyBookings() {
                                 Refunded
                               </button>
                             )}
-                            {canReviewBooking && (
+                            {canReviewCurrentBooking && (
                               <Link className="btn btn-primary btn-sm" to={`/bookings/${booking._id}/review`}>
                                 Review
                               </Link>

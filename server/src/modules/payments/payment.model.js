@@ -13,7 +13,7 @@ const paymentSchema = new mongoose.Schema({
   currency: { type: String, default: PAYMENT_CURRENCY },
   method: { type: String, enum: PAYMENT_METHODS, required: true },
   status: { type: String, enum: PAYMENT_STATUSES, default: 'pending' },
-  paymentMethod: { type: mongoose.Schema.Types.ObjectId, ref: 'PaymentMethod', default: null },
+  paymentMethod: { type: mongoose.Schema.Types.ObjectId, ref: 'UserPaymentCard', default: null },
   transactionId: { type: String, default: '' },
   bookingSnapshot: {
     bookingNo: { type: String, default: '' },

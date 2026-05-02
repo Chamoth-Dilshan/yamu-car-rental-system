@@ -1,8 +1,8 @@
 $kind: http-request
-name: '20 - Verify Final Booking State'
+name: '21 - Verify Final Booking State'
 method: GET
 url: '{{baseUrl}}/api/bookings/customer'
-order: 20000
+order: 21000
 headers:
   - key: Authorization
     value: 'Bearer {{customerToken}}'

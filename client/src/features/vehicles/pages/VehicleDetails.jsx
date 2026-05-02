@@ -1,15 +1,54 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { FaStar } from 'react-icons/fa'
 import API from '../../../api/axios'
 import { buildUploadUrl } from '../../../api/config'
 import { useAuth } from '../../../context/AuthContext'
-import { formatCurrency, getBadgeClass } from '../../../utils/formatters'
+import { formatCurrency, formatDate, getBadgeClass } from '../../../utils/formatters'
+import { getVehicleReviews } from '../../reviews/reviewApi'
+
+const emptyReviewSummary = {
+  ratingAverage: 0,
+  reviewCount: 0,
+  reviews: []
+}
+
+function RatingStars({ rating = 0 }) {
+  return (
+    <span className="quality-stars" aria-label={`${rating} out of 5`}>
+      {[1, 2, 3, 4, 5].map((value) => (
+        <FaStar key={value} className={value <= Math.round(Number(rating || 0)) ? 'filled' : ''} />
+      ))}
+    </span>
+  )
+}
+
+function ReviewCard({ review }) {
+  return (
+    <article className="quality-review-card">
+      <div className="quality-review-top">
+        <div>
+          <strong>{review.passengerName || 'Customer'}</strong>
+          <span>{formatDate(review.createdAt)}</span>
+        </div>
+        <span className="quality-rating-pill">
+          <FaStar /> {Number(review.vehicleRating || 0).toFixed(1)}
+        </span>
+      </div>
+      <p className="quality-review-quote">&ldquo;{review.feedback}&rdquo;</p>
+      <div className="quality-review-meta">
+        <span>Vehicle <RatingStars rating={review.vehicleRating} /></span>
+      </div>
+    </article>
+  )
+}
 
 export default function VehicleDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user, refreshNotifications } = useAuth()
   const [vehicle, setVehicle] = useState(null)
+  const [reviewSummary, setReviewSummary] = useState(emptyReviewSummary)
   const [selectedImage, setSelectedImage] = useState('')
   const [bookingForm, setBookingForm] = useState({
     startDate: '',
@@ -26,11 +65,15 @@ export default function VehicleDetails() {
   useEffect(() => {
     setLoading(true)
     setError('')
+    setReviewSummary(emptyReviewSummary)
 
     API.get(`/vehicles/${id}`)
       .then((res) => {
         setVehicle(res.data)
         setSelectedImage(res.data.images?.[0] || '')
+        return getVehicleReviews(id)
+          .then((reviewRes) => setReviewSummary({ ...emptyReviewSummary, ...reviewRes.data }))
+          .catch(() => setReviewSummary(emptyReviewSummary))
       })
       .catch((err) => setError(err.response?.data?.message || 'Failed to load vehicle details'))
       .finally(() => setLoading(false))
@@ -55,6 +98,8 @@ export default function VehicleDetails() {
   const isOwnVehicleListing = Boolean(user && vehicle?.owner?._id && String(vehicle.owner._id) === String(user._id))
   const storeUnavailable = !vehicle?.owner
   const listedStoreName = vehicle?.owner?.storeName || vehicle?.owner?.fullName || ''
+  const ratingAverage = reviewSummary.reviewCount ? reviewSummary.ratingAverage : (vehicle?.ratingAverage || 0)
+  const reviewCount = reviewSummary.reviewCount || vehicle?.reviewCount || 0
 
   const submitBooking = async (event) => {
     event.preventDefault()
@@ -153,6 +198,10 @@ export default function VehicleDetails() {
               <div className="pill-row">
                 <span className={`badge ${getBadgeClass(vehicle.status)}`}>{vehicle.status}</span>
                 <span className="badge badge-info">{vehicle.location}</span>
+                <span className="quality-rating-pill">
+                  <FaStar /> {Number(ratingAverage || 0).toFixed(1)}
+                  <span>({reviewCount})</span>
+                </span>
               </div>
               <form onSubmit={submitBooking}>
                 <div className="form-group">
@@ -240,6 +289,7 @@ export default function VehicleDetails() {
                 <div><span>Listed By</span><strong>{listedStoreName || 'Store pending'}</strong></div>
                 <div><span>Owner Contact</span><strong>{vehicle.ownerContact || 'Available on request'}</strong></div>
                 <div><span>Vehicle ID</span><strong>{vehicle.vehicleCode}</strong></div>
+                <div><span>Rating</span><strong>{Number(ratingAverage || 0).toFixed(1)}/5</strong></div>
               </div>
             </div>
 
@@ -256,6 +306,24 @@ export default function VehicleDetails() {
                   <span key={feature} className="feature-chip">{feature}</span>
                 ))}
               </div>
+            </div>
+
+            <div className="form-card">
+              <div className="card-header">
+                <div>
+                  <h3>Recent Vehicle Reviews</h3>
+                  <p style={{ color: 'var(--text-light)' }}>Approved feedback from completed vehicle reservations.</p>
+                </div>
+              </div>
+              {(reviewSummary.reviews || []).length > 0 ? (
+                <div className="quality-review-grid">
+                  {reviewSummary.reviews.map((review) => (
+                    <ReviewCard key={review._id} review={review} />
+                  ))}
+                </div>
+              ) : (
+                <div className="reservation-empty">No approved reviews yet for this vehicle.</div>
+              )}
             </div>
           </div>
         </div>

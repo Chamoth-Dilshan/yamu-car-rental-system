@@ -1,8 +1,8 @@
 $kind: http-request
-name: '18 - Customer Cannot Pay Before Completion'
+name: '20 - Customer Pay Completed Booking by Card'
 method: POST
 url: '{{baseUrl}}/api/payments/checkout/{{e2eBookingId}}'
-order: 18000
+order: 20000
 headers:
   - key: Authorization
     value: 'Bearer {{customerToken}}'
@@ -26,11 +26,18 @@ scripts:
   - type: afterResponse
     language: text/javascript
     code: |-
-      pm.test("Customer cannot pay before trip completion", () => {
-        pm.response.to.have.status(400);
+      pm.test("Customer can pay completed booking by card", () => {
+        pm.response.to.have.status(201);
       });
 
-      pm.test("Payment is blocked until trip completion", () => {
+      pm.test("Payment record is paid", () => {
         const json = pm.response.json();
-        pm.expect(json.message).to.include("trip is completed");
+        pm.expect(json).to.have.property("payment");
+        pm.expect(json.payment.status).to.equal("paid");
+        pm.environment.set("e2ePaymentId", json.payment._id);
+      });
+
+      pm.test("Transaction ID is generated", () => {
+        const json = pm.response.json();
+        pm.expect(json.payment.transactionId).to.be.a("string").and.not.empty;
       });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { FaStar } from 'react-icons/fa'
 import API from '../../../api/axios'
 import { buildUploadUrl } from '../../../api/config'
 import { formatCurrency, getBadgeClass } from '../../../utils/formatters'
@@ -213,6 +214,10 @@ export default function Vehicles() {
                         <div>
                           <span>Seats</span>
                           <strong>{vehicle.seats}</strong>
+                        </div>
+                        <div>
+                          <span>Rating</span>
+                          <strong><FaStar /> {Number(vehicle.ratingAverage || 0).toFixed(1)}/5</strong>
                         </div>
                       </div>
                       <div className="vehicle-card-footer">
