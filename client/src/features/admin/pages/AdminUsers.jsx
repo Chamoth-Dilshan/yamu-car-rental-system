@@ -5,7 +5,14 @@ import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
 import { formatDateTime } from '../../../utils/formatters';
 import { openProtectedFile } from '../../../utils/protectedFiles';
-import { validateEmail, validateRequiredText, validateUsername } from '../../../utils/validation';
+import {
+  validateEmail,
+  validateLicenseExpiryDate,
+  validateRequiredText,
+  validateSriLankanDrivingLicenseNumber,
+  validateSriLankanNic,
+  validateUsername
+} from '../../../utils/validation';
 
 const manageableRoles = ['customer', 'driver', 'staff', 'admin'];
 const roleDisplayMap = {
@@ -80,6 +87,7 @@ const providerReviewConfig = {
   driver: {
     fields: [
       ['drivingLicenseNumber', 'Driving license number'],
+      ['licenseExpiryDate', 'License expiry date'],
       ['nicId', 'NIC / ID'],
       ['serviceArea', 'Service area']
     ],
@@ -121,6 +129,26 @@ const hasProtectedDocumentFile = (document = {}) => Boolean(
   document?.filePath && !/^\/?uploads\//i.test(document.filePath)
 );
 
+const getProviderFieldValidationError = (roleKey, field, value) => {
+  if (roleKey !== 'driver' || !hasContent(value)) {
+    return '';
+  }
+
+  if (field === 'drivingLicenseNumber') {
+    return validateSriLankanDrivingLicenseNumber(value);
+  }
+
+  if (field === 'licenseExpiryDate') {
+    return validateLicenseExpiryDate(value);
+  }
+
+  if (field === 'nicId') {
+    return validateSriLankanNic(value);
+  }
+
+  return '';
+};
+
 const getDocumentDetails = (roleKey, documents = {}) => (
   (providerDocumentKeys[roleKey] || Object.keys(documents || {}))
     .map((key) => ({ key, value: documents?.[key] || {} }))
@@ -137,12 +165,18 @@ const buildPendingReviewAssessment = (user, application) => {
       complete: user.accountStatus === 'active',
       detail: user.accountStatus === 'active' ? 'Ready for review' : `Current status: ${formatLabel(user.accountStatus)}`
     },
-    ...config.fields.map(([field, label]) => ({
-      key: field,
-      label,
-      complete: hasContent(applicationData[field]),
-      detail: hasContent(applicationData[field]) ? String(applicationData[field]) : 'Missing'
-    })),
+    ...config.fields.map(([field, label]) => {
+      const validationError = getProviderFieldValidationError(application.roleKey, field, applicationData[field]);
+
+      return {
+        key: field,
+        label,
+        complete: hasContent(applicationData[field]) && !validationError,
+        detail: !hasContent(applicationData[field])
+          ? 'Missing'
+          : validationError || String(applicationData[field])
+      };
+    }),
     ...config.documents.map(([documentKey, label]) => {
       const document = applicationData.documents?.[documentKey] || {};
 
