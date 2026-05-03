@@ -4,7 +4,7 @@ import API from '../../../api/axios';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
 import { buildLatestProviderApplicationMap } from '../../../utils/providerApplications';
-import { formatRoleLabel, getProfilePathForRole } from '../../../utils/roles';
+import { formatRoleLabel, getApplicationPathForRole } from '../../../utils/roles';
 
 const roleCards = [
   {
@@ -74,10 +74,10 @@ export default function ApplyRoles() {
             const isWithdrawn = application?.status === 'withdrawn';
             const isCurrentRole = user?.activeRole === item.key;
             const target = isCurrentRole
-              ? getProfilePathForRole(item.key)
+              ? getApplicationPathForRole(item.key)
               : isApproved
                 ? '/switch-roles'
-                : getProfilePathForRole(item.key);
+                : getApplicationPathForRole(item.key);
             const actionLabel = isCurrentRole
               ? 'Manage Active Profile'
               : isApproved

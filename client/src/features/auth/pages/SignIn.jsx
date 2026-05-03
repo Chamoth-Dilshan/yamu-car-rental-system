@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
-import { getProfilePathForRole } from '../../../utils/roles';
+import { getWorkspacePathForRole } from '../../../utils/roles';
 import { validateRequiredText } from '../../../utils/validation';
 import GoogleAuthButton from '../components/GoogleAuthButton';
 
@@ -57,7 +57,7 @@ export default function SignIn() {
       return '/';
     }
 
-    return getProfilePathForRole(nextRole);
+    return getWorkspacePathForRole(nextRole);
   };
 
   const handleSubmit = async (e) => {

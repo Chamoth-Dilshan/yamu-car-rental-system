@@ -625,7 +625,8 @@ input.field-invalid:focus, select.field-invalid:focus, textarea.field-invalid:fo
 .stat-info h3 { font-size: 1.75rem; font-weight: 800; color: var(--primary); }
 .stat-info p { font-size: 0.85rem; color: var(--text-light); }
 
-.customer-dashboard-grid {
+.customer-dashboard-grid,
+.store-dashboard-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
   gap: 1.5rem;
@@ -3837,7 +3838,8 @@ input.field-invalid:focus, select.field-invalid:focus, textarea.field-invalid:fo
     border-right: 1px solid rgba(240,165,0,0.35);
   }
   .dashboard-content { margin-left: 0; }
-  .customer-dashboard-grid {
+  .customer-dashboard-grid,
+  .store-dashboard-grid {
     grid-template-columns: 1fr;
   }
   .account-grid,

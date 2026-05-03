@@ -3,7 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { buildUploadUrl } from '../../api/config';
 import { formatDateTime } from '../../utils/formatters';
-import { formatRoleLabel, getProfilePathForRole } from '../../utils/roles';
+import { formatRoleLabel, getProfilePathForRole, getWorkspacePathForRole } from '../../utils/roles';
 import BrandLogo from './BrandLogo';
 import Footer from './Footer';
 
@@ -54,7 +54,8 @@ export default function Layout({ children }) {
   const canManagePayments = hasPermission('payments.manage');
   const userProfilePath = getProfilePathForRole('customer');
   const roleProfilePath = getProfilePathForRole(activeRole);
-  const logoTarget = isAdmin ? '/admin/dashboard' : isCustomer ? '/dashboard' : user ? roleProfilePath : '/';
+  const roleWorkspacePath = getWorkspacePathForRole(activeRole);
+  const logoTarget = isAdmin ? '/admin/dashboard' : isCustomer ? '/dashboard' : user ? roleWorkspacePath : '/';
   const roleProfileNavLabel = `${formatRoleLabel(activeRole || 'customer')} Profile`;
   const recentNotifications = (notifications || []).slice(0, 5);
 
@@ -128,6 +129,7 @@ export default function Layout({ children }) {
             {showDiscoverLinks && <NavLink to="/cars">Explore Cars</NavLink>}
             {showDiscoverLinks && <NavLink to="/drivers">Explore Drivers</NavLink>}
             {user && isCustomer && <NavLink to="/dashboard">Dashboard</NavLink>}
+            {isStaff && <NavLink to="/staff/dashboard">Store Dashboard</NavLink>}
             {user && isCustomer && canManageProfile && <NavLink to={userProfilePath}>User Profile</NavLink>}
             {user && !isCustomer && !isAdmin && canManageProfile && <NavLink to={roleProfilePath}>{roleProfileNavLabel}</NavLink>}
             {user && isAdmin && canManageProfile && <NavLink to={roleProfilePath}>Admin Profile</NavLink>}
@@ -209,6 +211,7 @@ export default function Layout({ children }) {
                     {showDiscoverLinks && <Link to="/cars">Explore Cars</Link>}
                     {showDiscoverLinks && <Link to="/drivers">Explore Drivers</Link>}
                     {isCustomer && <Link to="/dashboard">Dashboard</Link>}
+                    {isStaff && <Link to="/staff/dashboard">Store Dashboard</Link>}
                     {canManageProfile && isCustomer && <Link to={userProfilePath}>User Profile</Link>}
                     {canManageProfile && !isCustomer && !isAdmin && <Link to={roleProfilePath}>{roleProfileNavLabel}</Link>}
                     {canManageProfile && isAdmin && <Link to={roleProfilePath}>Admin Profile</Link>}

@@ -1,6 +1,7 @@
-import { Route } from 'react-router-dom'
+import { Navigate, Route } from 'react-router-dom'
 
 import ProtectedRoute from '../components/common/ProtectedRoute'
+import StoreDashboard from '../features/staff/pages/StoreDashboard'
 import InventoryManagement from '../features/maintenance/pages/InventoryManagement'
 import MaintenanceManagement from '../features/maintenance/pages/MaintenanceManagement'
 import StaffVehicleBookings from '../features/reservations/pages/StaffVehicleBookings'
@@ -8,6 +9,16 @@ import StaffVehicleForm from '../features/vehicles/pages/StaffVehicleForm'
 import StaffVehicleList from '../features/vehicles/pages/StaffVehicleList'
 
 const StaffRoutes = [
+  <Route key="staff-root" path="/staff" element={<Navigate to="/staff/dashboard" replace />} />,
+  <Route
+    key="staff-dashboard"
+    path="/staff/dashboard"
+    element={(
+      <ProtectedRoute roles={['staff']}>
+        <StoreDashboard />
+      </ProtectedRoute>
+    )}
+  />,
   <Route
     key="staff-vehicles"
     path="/staff/vehicles"

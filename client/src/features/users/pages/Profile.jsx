@@ -8,7 +8,7 @@ import { formatDateTime } from '../../../utils/formatters';
 import { isRoleManagementNotification } from '../../../utils/notifications';
 import { buildLatestProviderApplicationMap } from '../../../utils/providerApplications';
 import { openProtectedFile } from '../../../utils/protectedFiles';
-import { formatRoleLabel, getProfilePathForRole } from '../../../utils/roles';
+import { formatRoleLabel, getApplicationPathForRole, getProfilePathForRole } from '../../../utils/roles';
 import {
   hasDocumentMetadata,
   isValidLicenseExpiryDate,
@@ -120,6 +120,13 @@ const providerApplicationRequirements = {
       ['proofOfAddressDocument', 'Proof of address document']
     ]
   }
+};
+const profileSectionPaths = {
+  user: '/profile/user',
+  driver: '/profile/driverapplication',
+  storeProfile: '/profile/store',
+  storeApplication: '/profile/storeapplication',
+  admin: '/profile/admin'
 };
 const canUseAssignedRole = (role = null) => role?.roleStatus === 'active' && role?.verificationStatus === 'verified';
 const calculateCompletionPercent = (items = []) => {
@@ -431,6 +438,37 @@ export default function Profile() {
     return nextErrors;
   };
 
+  const validateStoreProfileForm = () => {
+    const nextErrors = {};
+    const requiredFields = [
+      ['storeName', 'Store name'],
+      ['storeOwner', 'Store owner'],
+      ['businessRegistrationNumber', 'Business registration number'],
+      ['storeAddress', 'Store address'],
+      ['storeContactNumber', 'Store contact number'],
+      ['storeEmail', 'Store email']
+    ];
+
+    requiredFields.forEach(([key, label]) => {
+      const fieldError = validateRequiredText(staffProfile[key], label);
+      if (fieldError) {
+        nextErrors[key] = fieldError;
+      }
+    });
+
+    const storeEmailError = validateEmail(staffProfile.storeEmail, 'Store email');
+    if (storeEmailError && !nextErrors.storeEmail) {
+      nextErrors.storeEmail = storeEmailError;
+    }
+
+    const storePhoneError = validateOptionalPhone(staffProfile.storeContactNumber, 'Store contact number');
+    if (storePhoneError && !nextErrors.storeContactNumber) {
+      nextErrors.storeContactNumber = storePhoneError;
+    }
+
+    return nextErrors;
+  };
+
   const saveBasicProfile = async (event) => {
     event.preventDefault();
     const validationErrors = validateBasicProfileForm();
@@ -637,10 +675,18 @@ export default function Profile() {
     hasDocumentReference(staffProfile.documents.businessRegistrationDocument),
     hasDocumentReference(staffProfile.documents.proofOfAddressDocument)
   ]);
+  const staffProfileCompletion = calculateCompletionPercent([
+    staffProfile.storeName,
+    staffProfile.storeOwner,
+    staffProfile.businessRegistrationNumber,
+    staffProfile.storeAddress,
+    staffProfile.storeContactNumber,
+    staffProfile.storeEmail
+  ]);
   const defaultProfileSection = activeRoleKey === 'driver'
     ? 'driver'
     : activeRoleKey === 'staff'
-      ? 'store'
+      ? 'storeProfile'
       : activeRoleKey === 'admin'
         ? 'admin'
         : 'user';
@@ -649,16 +695,19 @@ export default function Profile() {
     : '';
   const pathSection = rawPathSection === 'driverapplication'
     ? 'driver'
+    : rawPathSection === 'store' || rawPathSection === 'storeprofile'
+      ? 'storeProfile'
     : rawPathSection === 'storeapplication'
-      ? 'store'
+      ? 'storeApplication'
       : rawPathSection;
-  const selectedProfileSection = ['user', 'driver', 'store', 'admin'].includes(pathSection)
+  const selectedProfileSection = ['user', 'driver', 'storeProfile', 'storeApplication', 'admin'].includes(pathSection)
     ? pathSection
     : defaultProfileSection;
   const profileTabs = [
     ...(activeRoleKey === 'customer' ? [{ key: 'user', to: '/profile/user', label: 'User Profile' }] : []),
     ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driverapplication', label: 'Driver Application' }] : []),
-    ...(activeRoleKey === 'staff' || hasUsableCustomerRole ? [{ key: 'store', to: '/profile/storeapplication', label: 'Store Application' }] : []),
+    ...(activeRoleKey === 'staff' ? [{ key: 'storeProfile', to: '/profile/store', label: 'Store Profile' }] : []),
+    ...(activeRoleKey === 'staff' || hasUsableCustomerRole ? [{ key: 'storeApplication', to: getApplicationPathForRole('staff'), label: 'Store Application' }] : []),
     ...(activeRoleKey === 'admin' ? [{ key: 'admin', to: '/profile/admin', label: 'Admin Profile' }] : [])
   ];
   const availableProfileSections = profileTabs.map((tab) => tab.key);
@@ -667,24 +716,29 @@ export default function Profile() {
     : defaultProfileSection;
   const selectedProfileLabel = resolvedProfileSection === 'driver'
     ? 'Driver Application'
-    : resolvedProfileSection === 'store'
+    : resolvedProfileSection === 'storeApplication'
       ? 'Store Application'
+      : resolvedProfileSection === 'storeProfile'
+        ? 'Store Profile'
       : resolvedProfileSection === 'admin'
         ? 'Admin Profile'
         : 'User Profile';
-  const profileHeroName = resolvedProfileSection === 'store'
+  const profileHeroName = ['storeProfile', 'storeApplication'].includes(resolvedProfileSection)
     ? staffProfile.storeName || user?.staffProfile?.storeName || user?.fullName
     : user?.fullName;
   const showUserProfile = resolvedProfileSection === 'user';
   const showDriverProfile = ['customer', 'driver'].includes(activeRoleKey) && resolvedProfileSection === 'driver';
-  const showStaffProfile = (activeRoleKey === 'staff' || hasUsableCustomerRole) && resolvedProfileSection === 'store';
+  const showStoreProfile = activeRoleKey === 'staff' && resolvedProfileSection === 'storeProfile';
+  const showStaffProfile = (activeRoleKey === 'staff' || hasUsableCustomerRole) && resolvedProfileSection === 'storeApplication';
   const showAdminProfile = activeRoleKey === 'admin' && resolvedProfileSection === 'admin';
-  const showProfileHero = !['driver', 'store'].includes(resolvedProfileSection);
+  const showProfileHero = !['driver', 'storeApplication'].includes(resolvedProfileSection);
   const showRoleSwitcher = activeRoleKey !== 'admin';
   const visibleProfileCompletion = resolvedProfileSection === 'driver'
     ? driverReadiness
-    : resolvedProfileSection === 'store'
+    : resolvedProfileSection === 'storeApplication'
       ? staffReadiness
+      : resolvedProfileSection === 'storeProfile'
+        ? staffProfileCompletion
       : baseProfileCompletion;
 
   useEffect(() => {
@@ -692,7 +746,7 @@ export default function Profile() {
       return;
     }
 
-    const targetProfilePath = getProfilePathForRole(resolvedProfileSection);
+    const targetProfilePath = profileSectionPaths[resolvedProfileSection] || getProfilePathForRole(resolvedProfileSection);
 
     if (location.pathname !== targetProfilePath) {
       navigate(targetProfilePath, { replace: true });
@@ -883,6 +937,36 @@ export default function Profile() {
       await openProtectedFile(`/users/documents/${roleKey}/${documentKey}`);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to open document');
+    }
+  };
+
+  const saveStoreProfile = async (event) => {
+    event.preventDefault();
+    const validationErrors = validateStoreProfileForm();
+
+    if (Object.keys(validationErrors).length) {
+      setMessage('');
+      setError('');
+      setProviderErrors((current) => ({ ...current, staff: validationErrors }));
+      return;
+    }
+
+    setBusyAction('storeProfile');
+    setMessage('');
+    setError('');
+    setProviderErrors((current) => ({ ...current, staff: {} }));
+
+    try {
+      const res = await API.put('/users/staff-profile', buildProviderFormData(staffProfile, {}), {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setUser(res.data.user);
+      setIsEditMode(false);
+      setMessage('Store profile updated successfully');
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save store profile');
+    } finally {
+      setBusyAction('');
     }
   };
 
@@ -1396,6 +1480,126 @@ export default function Profile() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {showStoreProfile && (
+          <div id="store-profile" className="form-card profile-section-card" style={{ marginBottom: '1.5rem' }}>
+            <div className="profile-section-heading">
+              <div>
+                <h3>Store Profile</h3>
+                <p>Update your store identity and public contact details here.</p>
+              </div>
+              <label className="profile-edit-toggle">
+                <input
+                  type="checkbox"
+                  checked={isEditMode}
+                  onChange={(e) => setIsEditMode(e.target.checked)}
+                />
+                <span>Edit Mode</span>
+              </label>
+            </div>
+
+            <div className="pill-row profile-panel-pills">
+              <span className={getBadgeClass(getStatusTone(staffRole?.roleStatus || 'not_assigned'))}>
+                Role: {formatStatusLabel(staffRole?.roleStatus || 'not_assigned')}
+              </span>
+              <span className={getBadgeClass(getStatusTone(staffRole?.verificationStatus || 'unverified'))}>
+                Verification: {formatStatusLabel(staffRole?.verificationStatus || 'unverified')}
+              </span>
+              <span className={getBadgeClass(getStatusTone(staffApplication?.status || 'not_submitted'))}>
+                Application: {formatStatusLabel(staffApplication?.status || 'not_submitted')}
+              </span>
+            </div>
+
+            {staffProfileBlocked && (
+              <div className="alert alert-danger">This role is blocked. Contact an admin before submitting further store updates.</div>
+            )}
+
+            <form onSubmit={saveStoreProfile}>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Store Name</label>
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeName)}
+                    disabled={!isEditMode}
+                    value={staffProfile.storeName}
+                    onChange={(e) => updateStaffProfileField('storeName', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeName')}
+                </div>
+                <div className="form-group">
+                  <label>Store Owner</label>
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeOwner)}
+                    disabled={!isEditMode}
+                    value={staffProfile.storeOwner}
+                    onChange={(e) => updateStaffProfileField('storeOwner', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeOwner')}
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Business Registration Number</label>
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.businessRegistrationNumber)}
+                    disabled={!isEditMode}
+                    value={staffProfile.businessRegistrationNumber}
+                    onChange={(e) => updateStaffProfileField('businessRegistrationNumber', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'businessRegistrationNumber')}
+                </div>
+                <div className="form-group">
+                  <label>Store Contact Number</label>
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeContactNumber)}
+                    disabled={!isEditMode}
+                    value={staffProfile.storeContactNumber}
+                    onChange={(e) => updateStaffProfileField('storeContactNumber', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeContactNumber')}
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Store Email</label>
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeEmail)}
+                    disabled={!isEditMode}
+                    type="email"
+                    value={staffProfile.storeEmail}
+                    onChange={(e) => updateStaffProfileField('storeEmail', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeEmail')}
+                </div>
+                <div className="form-group">
+                  <label>Store Address</label>
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeAddress)}
+                    disabled={!isEditMode}
+                    value={staffProfile.storeAddress}
+                    onChange={(e) => updateStaffProfileField('storeAddress', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeAddress')}
+                </div>
+              </div>
+
+              <div className="profile-form-actions">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={busyAction === 'storeProfile' || !isEditMode || staffProfileBlocked}
+                >
+                  {busyAction === 'storeProfile' ? 'Saving...' : 'Save Store Profile'}
+                </button>
+                <button className="btn btn-outline" type="button" onClick={() => navigate(getApplicationPathForRole('staff'))}>
+                  Store Application
+                </button>
+              </div>
+            </form>
           </div>
         )}
 

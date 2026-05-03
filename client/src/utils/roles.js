@@ -11,9 +11,37 @@ export const getProfilePathForRole = (role = '') => {
       return '/profile/driverapplication';
     case 'store':
     case 'staff':
-      return '/profile/storeapplication';
+      return '/profile/store';
     case 'admin':
       return '/profile/admin';
+    default:
+      return '/profile/user';
+  }
+};
+
+export const getApplicationPathForRole = (role = '') => {
+  switch (role) {
+    case 'driver':
+      return '/profile/driverapplication';
+    case 'store':
+    case 'staff':
+      return '/profile/storeapplication';
+    default:
+      return getProfilePathForRole(role);
+  }
+};
+
+export const getWorkspacePathForRole = (role = '') => {
+  switch (role) {
+    case 'driver':
+      return '/driver/ads';
+    case 'store':
+    case 'staff':
+      return '/staff/dashboard';
+    case 'admin':
+      return '/admin/dashboard';
+    case 'customer':
+      return '/dashboard';
     default:
       return '/profile/user';
   }

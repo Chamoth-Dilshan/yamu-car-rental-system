@@ -202,7 +202,7 @@ export default function MaintenanceManagement() {
       <Sidebar />
       <main className="dashboard-content">
         <div className="form-header">
-          <h2>Maintenance Records</h2>
+          <h2>Maintenance</h2>
           <p style={{ color: 'var(--text-light)' }}>Record vehicle service work and mark vehicles unavailable while maintenance is active.</p>
         </div>
 

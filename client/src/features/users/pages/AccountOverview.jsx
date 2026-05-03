@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
-import { formatRoleLabel, getProfilePathForRole } from '../../../utils/roles';
+import { formatRoleLabel, getApplicationPathForRole, getProfilePathForRole } from '../../../utils/roles';
 
 const providerRoles = ['driver', 'staff'];
 
@@ -180,7 +180,7 @@ export default function AccountOverview() {
                     {application.reviewedAt && <p>Reviewed: {new Date(application.reviewedAt).toLocaleDateString()}</p>}
                     {application.rejectionReason && <p>Admin note: {application.rejectionReason}</p>}
                   </div>
-                  <Link to={getProfilePathForRole(application.roleKey)} className="btn btn-outline btn-sm">Open Role Form</Link>
+                  <Link to={getApplicationPathForRole(application.roleKey)} className="btn btn-outline btn-sm">Open Role Form</Link>
                 </div>
               ))}
             </div>
