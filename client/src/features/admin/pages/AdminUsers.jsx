@@ -4,7 +4,7 @@ import API from '../../../api/axios';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
 import { formatDateTime } from '../../../utils/formatters';
-import { openProtectedFile } from '../../../utils/protectedFiles';
+import { createProtectedFileUrl, openProtectedFile } from '../../../utils/protectedFiles';
 import {
   validateEmail,
   validateLicenseExpiryDate,
@@ -128,6 +128,70 @@ const hasDocumentMetadata = (document = {}) => hasContent(document.fileName) || 
 const hasProtectedDocumentFile = (document = {}) => Boolean(
   document?.filePath && !/^\/?uploads\//i.test(document.filePath)
 );
+const isImageDocument = (document = {}) => (
+  /^image\//i.test(document.mimeType || '')
+  || /\.(jpe?g|png|gif|webp)$/i.test(document.fileName || document.filePath || '')
+);
+const getAdminProviderDocumentEndpoint = (userId, roleKey, documentKey) => (
+  `/admin/users/${userId}/documents/${roleKey}/${documentKey}`
+);
+
+const ProtectedDocumentPreview = ({ endpoint, fileName = '', filePath = '', mimeType = '', label = 'Document' }) => {
+  const canPreview = Boolean(endpoint) && hasProtectedDocumentFile({ filePath }) && isImageDocument({ fileName, filePath, mimeType });
+  const [preview, setPreview] = useState({ loading: false, url: '', error: '' });
+
+  useEffect(() => {
+    let cancelled = false;
+    let previewUrl = '';
+
+    if (!canPreview) {
+      setPreview({ loading: false, url: '', error: '' });
+      return undefined;
+    }
+
+    setPreview({ loading: true, url: '', error: '' });
+
+    createProtectedFileUrl(endpoint)
+      .then(({ contentType, url }) => {
+        if (!/^image\//i.test(contentType)) {
+          URL.revokeObjectURL(url);
+          throw new Error('Protected file is not an image');
+        }
+
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+
+        previewUrl = url;
+        setPreview({ loading: false, url, error: '' });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPreview({ loading: false, url: '', error: 'Preview unavailable' });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [canPreview, endpoint, filePath]);
+
+  if (!canPreview) {
+    return null;
+  }
+
+  return (
+    <div className="admin-document-preview">
+      {preview.loading && <span>Loading preview...</span>}
+      {preview.error && <span>{preview.error}</span>}
+      {preview.url && <img src={preview.url} alt={`${label} preview`} />}
+    </div>
+  );
+};
 
 const getProviderFieldValidationError = (roleKey, field, value) => {
   if (roleKey !== 'driver' || !hasContent(value)) {
@@ -150,9 +214,12 @@ const getProviderFieldValidationError = (roleKey, field, value) => {
 };
 
 const getDocumentDetails = (roleKey, documents = {}) => (
-  (providerDocumentKeys[roleKey] || Object.keys(documents || {}))
+  (providerDocumentKeys[roleKey]?.length ? providerDocumentKeys[roleKey] : Object.keys(documents || {}))
     .map((key) => ({ key, value: documents?.[key] || {} }))
-    .filter(({ value }) => value && (value.filePath || value.fileName || value.status !== 'not_uploaded' || value.rejectionReason || value.reviewedAt))
+    .filter(({ value }) => (
+      providerDocumentKeys[roleKey]?.length
+      || (value && (value.filePath || value.fileName || value.status !== 'not_uploaded' || value.rejectionReason || value.reviewedAt))
+    ))
 );
 
 const buildPendingReviewAssessment = (user, application) => {
@@ -184,8 +251,10 @@ const buildPendingReviewAssessment = (user, application) => {
         key: documentKey,
         label,
         complete: hasDocumentMetadata(document),
+        document,
+        documentKey,
         detail: hasDocumentMetadata(document)
-          ? `${document.fileName || 'Unnamed file'}${document.filePath ? ` | ${document.filePath}` : ''}`
+          ? document.fileName || document.filePath || 'Uploaded file'
           : 'Missing'
       };
     })
@@ -264,6 +333,7 @@ export default function AdminUsers() {
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [rejectionDraft, setRejectionDraft] = useState(null);
   const isPendingPath = location.pathname.startsWith('/admin/pending-approvals');
   const isUsersPath = location.pathname.startsWith('/admin/users');
   const isRolesPath = location.pathname.startsWith('/admin/roles');
@@ -283,13 +353,31 @@ export default function AdminUsers() {
   const canEditUsersPermission = hasPermission('users.edit');
   const canReviewRolesPermission = hasPermission('roles.review');
   const canAssignRolesPermission = hasPermission('roles.assign');
+  const rejectModalBusy = rejectionDraft
+    ? busyAction === `reject-${rejectionDraft.userId}-${rejectionDraft.roleKey}`
+    : false;
+
+  useEffect(() => {
+    if (!rejectionDraft) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !rejectModalBusy) {
+        setRejectionDraft(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [rejectionDraft, rejectModalBusy]);
 
   const viewProviderDocument = async (userId, roleKey, documentKey) => {
     setMessage('');
     setError('');
 
     try {
-      await openProtectedFile(`/admin/users/${userId}/documents/${roleKey}/${documentKey}`);
+      await openProtectedFile(getAdminProviderDocumentEndpoint(userId, roleKey, documentKey));
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to open provider document');
     }
@@ -629,22 +717,36 @@ export default function AdminUsers() {
     }
   };
 
-  const reviewApplication = async (userId, roleKey, action) => {
+  const openRejectionModal = (user, roleKey) => {
+    setMessage('');
+    setError('');
+    setRejectionDraft({
+      userId: user._id,
+      userName: user.fullName,
+      roleKey,
+      reason: '',
+      error: ''
+    });
+  };
+
+  const closeRejectionModal = () => {
+    if (!rejectModalBusy) {
+      setRejectionDraft(null);
+    }
+  };
+
+  const reviewApplication = async (userId, roleKey, action, rejectionReason = '') => {
     if (action === 'approve' && !window.confirm(`Approve this ${roleKey} application?`)) {
-      return;
+      return false;
     }
 
-    let reason = '';
+    const reason = rejectionReason.trim();
     if (action === 'reject') {
-      const promptValue = window.prompt(`Reason for rejecting ${roleKey} application:`);
-      if (promptValue === null) {
-        return;
-      }
-
-      reason = promptValue.trim();
       if (!reason) {
-        setError('A rejection reason is required');
-        return;
+        setRejectionDraft((current) => current
+          ? { ...current, error: 'A rejection reason is required' }
+          : current);
+        return false;
       }
     }
 
@@ -667,10 +769,31 @@ export default function AdminUsers() {
       if (pendingDetailUserId === userId && getPendingApplications(nextUser).length === 0) {
         navigate('/admin/pending-approvals');
       }
+      return true;
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to review application');
+      return false;
     } finally {
       setBusyAction('');
+    }
+  };
+
+  const submitRejectionReason = async (event) => {
+    event.preventDefault();
+
+    if (!rejectionDraft) {
+      return;
+    }
+
+    const success = await reviewApplication(
+      rejectionDraft.userId,
+      rejectionDraft.roleKey,
+      'reject',
+      rejectionDraft.reason
+    );
+
+    if (success) {
+      setRejectionDraft(null);
     }
   };
 
@@ -747,9 +870,9 @@ export default function AdminUsers() {
                 </div>
               )}
               <div className="admin-stack" style={{ marginBottom: '0.75rem' }}>
-                {assessment.checks.map((check) => (
+                {assessment.checks.filter((check) => !check.documentKey).map((check) => (
                   <div key={`${application.roleKey}-${check.key}`} className="admin-list-item">
-                    <div>
+                    <div className="admin-check-content">
                       <h4>{check.label}</h4>
                       <p>{check.detail}</p>
                     </div>
@@ -775,43 +898,55 @@ export default function AdminUsers() {
               {documentDetails.length > 0 && (
                 <>
                   <div className="admin-meta-text" style={{ marginTop: '0.75rem', marginBottom: '0.5rem' }}>Verification documents</div>
-                  <div className="admin-data-grid">
-                    {documentDetails.map(({ key, value }) => (
-                      <div key={key} className="admin-data-item">
-                        <span>{formatLabel(key)}</span>
-                        <strong>{value.fileName || value.filePath || 'Metadata added'}</strong>
-                        <small style={{ color: 'var(--text-light)' }}>
-                          Path: {value.filePath || 'Placeholder not added'}
-                        </small>
-                        <small style={{ color: 'var(--text-light)' }}>
-                          Status: {formatLabel(value.status || 'not_uploaded')}
-                        </small>
-                        {value.uploadedAt && (
-                          <small style={{ color: 'var(--text-light)' }}>
-                            Uploaded: {new Date(value.uploadedAt).toLocaleDateString()}
-                          </small>
-                        )}
-                        {hasProtectedDocumentFile(value) && (
-                          <button
-                            className="btn btn-outline btn-sm"
-                            type="button"
-                            onClick={() => viewProviderDocument(user._id, application.roleKey, key)}
-                          >
-                            View File
-                          </button>
-                        )}
-                        {value.reviewedAt && (
-                          <small style={{ color: 'var(--text-light)' }}>
-                            Reviewed: {new Date(value.reviewedAt).toLocaleDateString()}
-                          </small>
-                        )}
-                        {value.rejectionReason && (
-                          <small style={{ color: 'var(--text-light)' }}>
-                            Rejection: {value.rejectionReason}
-                          </small>
-                        )}
-                      </div>
-                    ))}
+                  <div className="admin-document-grid">
+                    {documentDetails.map(({ key, value }) => {
+                      const canOpenDocument = hasProtectedDocumentFile(value);
+                      const documentEndpoint = getAdminProviderDocumentEndpoint(user._id, application.roleKey, key);
+
+                      return (
+                        <div key={key} className="admin-document-card">
+                          <div className="admin-document-card-header">
+                            <div>
+                              <span>{formatLabel(key)}</span>
+                              <strong>{value.fileName || value.filePath || 'No file uploaded'}</strong>
+                            </div>
+                            <span className={`badge ${hasDocumentMetadata(value) ? 'badge-success' : 'badge-danger'}`}>
+                              {hasDocumentMetadata(value) ? 'Ready' : 'Missing'}
+                            </span>
+                          </div>
+
+                          {canOpenDocument && (
+                            <ProtectedDocumentPreview
+                              endpoint={documentEndpoint}
+                              fileName={value.fileName}
+                              filePath={value.filePath}
+                              mimeType={value.mimeType}
+                              label={formatLabel(key)}
+                            />
+                          )}
+
+                          <div className="admin-document-meta">
+                            <span>Status: {formatLabel(value.status || 'not_uploaded')}</span>
+                            {value.uploadedAt && <span>Uploaded: {new Date(value.uploadedAt).toLocaleDateString()}</span>}
+                            {value.reviewedAt && <span>Reviewed: {new Date(value.reviewedAt).toLocaleDateString()}</span>}
+                            {!canOpenDocument && value.filePath && <span>Reference: {value.filePath}</span>}
+                            {value.rejectionReason && <span>Rejection: {value.rejectionReason}</span>}
+                          </div>
+
+                          {canOpenDocument && (
+                            <div className="admin-document-actions">
+                              <button
+                                className="btn btn-outline btn-sm"
+                                type="button"
+                                onClick={() => viewProviderDocument(user._id, application.roleKey, key)}
+                              >
+                                View File
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </>
               )}
@@ -849,7 +984,7 @@ export default function AdminUsers() {
                 className="btn btn-outline btn-sm"
                 type="button"
                 disabled={!canReviewRolesPermission || busyAction === `reject-${user._id}-${application.roleKey}`}
-                onClick={() => reviewApplication(user._id, application.roleKey, 'reject')}
+                onClick={() => openRejectionModal(user, application.roleKey)}
               >
                 {busyAction === `reject-${user._id}-${application.roleKey}` ? 'Rejecting...' : 'Reject'}
               </button>
@@ -1812,6 +1947,80 @@ export default function AdminUsers() {
     )
   );
 
+  const renderRejectReasonModal = () => {
+    if (!rejectionDraft) {
+      return null;
+    }
+
+    return (
+      <div
+        className="payment-modal-overlay"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) {
+            closeRejectionModal();
+          }
+        }}
+      >
+        <form
+          className="form-card payment-modal admin-reject-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-reject-modal-title"
+          onSubmit={submitRejectionReason}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div className="payment-modal-header">
+            <div>
+              <h3 id="admin-reject-modal-title">Reject {formatLabel(rejectionDraft.roleKey)} Application</h3>
+              <p>
+                Add a clear reason for {rejectionDraft.userName}. This note will be saved on the application and shown to the user.
+              </p>
+            </div>
+            <button
+              className="payment-icon-button"
+              type="button"
+              aria-label="Close reject reason modal"
+              disabled={rejectModalBusy}
+              onClick={closeRejectionModal}
+            >
+              x
+            </button>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="admin-reject-reason">Reject Reason</label>
+            <textarea
+              id="admin-reject-reason"
+              className={rejectionDraft.error ? 'field-invalid' : ''}
+              rows="5"
+              autoFocus
+              value={rejectionDraft.reason}
+              onChange={(event) => setRejectionDraft((current) => current
+                ? {
+                    ...current,
+                    reason: event.target.value,
+                    error: ''
+                  }
+                : current)}
+              placeholder="Explain what the applicant must fix before resubmitting."
+              disabled={rejectModalBusy}
+            />
+            {rejectionDraft.error && <small className="field-error">{rejectionDraft.error}</small>}
+          </div>
+
+          <div className="payment-modal-footer">
+            <button className="btn btn-outline" type="button" onClick={closeRejectionModal} disabled={rejectModalBusy}>
+              Cancel
+            </button>
+            <button className="btn btn-danger" type="submit" disabled={rejectModalBusy}>
+              {rejectModalBusy ? 'Rejecting...' : 'Reject Application'}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  };
+
   return (
     <div className="dashboard-layout page-content">
       <Sidebar />
@@ -1830,6 +2039,7 @@ export default function AdminUsers() {
         {isPendingPath && (isPendingDetailPath ? renderPendingDetailsPanel() : renderPendingSection())}
         {isUsersPath && (isUserDetailPath ? renderUserDetailsPanel() : renderUsersSection())}
         {isRolesPath && (isRolesDetailPath ? renderRoleDetailsPanel() : renderRolesSection())}
+        {renderRejectReasonModal()}
       </main>
     </div>
   );
