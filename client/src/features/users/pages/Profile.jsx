@@ -647,14 +647,18 @@ export default function Profile() {
   const rawPathSection = location.pathname.startsWith('/profile/')
     ? location.pathname.split('/')[2] || ''
     : '';
-  const pathSection = rawPathSection === 'driverapplication' ? 'driver' : rawPathSection;
+  const pathSection = rawPathSection === 'driverapplication'
+    ? 'driver'
+    : rawPathSection === 'storeapplication'
+      ? 'store'
+      : rawPathSection;
   const selectedProfileSection = ['user', 'driver', 'store', 'admin'].includes(pathSection)
     ? pathSection
     : defaultProfileSection;
   const profileTabs = [
     ...(activeRoleKey === 'customer' ? [{ key: 'user', to: '/profile/user', label: 'User Profile' }] : []),
     ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driverapplication', label: 'Driver Application' }] : []),
-    ...(activeRoleKey === 'staff' || hasUsableCustomerRole ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
+    ...(activeRoleKey === 'staff' || hasUsableCustomerRole ? [{ key: 'store', to: '/profile/storeapplication', label: 'Store Application' }] : []),
     ...(activeRoleKey === 'admin' ? [{ key: 'admin', to: '/profile/admin', label: 'Admin Profile' }] : [])
   ];
   const availableProfileSections = profileTabs.map((tab) => tab.key);
@@ -664,7 +668,7 @@ export default function Profile() {
   const selectedProfileLabel = resolvedProfileSection === 'driver'
     ? 'Driver Application'
     : resolvedProfileSection === 'store'
-      ? 'Store Profile'
+      ? 'Store Application'
       : resolvedProfileSection === 'admin'
         ? 'Admin Profile'
         : 'User Profile';
@@ -675,7 +679,7 @@ export default function Profile() {
   const showDriverProfile = ['customer', 'driver'].includes(activeRoleKey) && resolvedProfileSection === 'driver';
   const showStaffProfile = (activeRoleKey === 'staff' || hasUsableCustomerRole) && resolvedProfileSection === 'store';
   const showAdminProfile = activeRoleKey === 'admin' && resolvedProfileSection === 'admin';
-  const showProfileHero = resolvedProfileSection !== 'driver';
+  const showProfileHero = !['driver', 'store'].includes(resolvedProfileSection);
   const showRoleSwitcher = activeRoleKey !== 'admin';
   const visibleProfileCompletion = resolvedProfileSection === 'driver'
     ? driverReadiness
@@ -1399,12 +1403,41 @@ export default function Profile() {
           <div id="staff-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
             <div className="profile-section-heading">
               <div>
-                <h3>Store Profile</h3>
-                <p>Maintain store information, document placeholders, and the store provider request in one place.</p>
+                <h3>Store Application</h3>
+                <p>Maintain store details, review application state, and manage the next action from one card.</p>
               </div>
               <span className={getBadgeClass(staffOnboardingState.tone)}>{staffOnboardingState.stateLabel}</span>
             </div>
 
+            <div className="role-onboarding-summary-grid">
+              <div className="admin-data-item">
+                <span>Readiness</span>
+                <strong>{staffOnboardingState.readinessPercent}%</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Role status</span>
+                <strong>{formatStatusLabel(staffRole?.roleStatus || 'not_assigned')}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Verification</span>
+                <strong>{formatStatusLabel(staffRole?.verificationStatus || 'unverified')}</strong>
+              </div>
+              <div className="admin-data-item">
+                <span>Application</span>
+                <strong>{formatStatusLabel(staffApplication?.status || 'not_submitted')}</strong>
+              </div>
+            </div>
+
+            <div className={`profile-next-step profile-next-step-${staffOnboardingState.tone}`}>
+              <strong>{staffOnboardingState.helperTitle}</strong>
+              <p>{staffOnboardingState.helperText}</p>
+            </div>
+
+            <div className="pill-row profile-panel-pills">
+              <span className="badge badge-info">Role status: {staffRole?.roleStatus || 'not assigned'}</span>
+              <span className="badge badge-warning">Verification: {staffRole?.verificationStatus || 'unverified'}</span>
+              <span className="badge badge-success">Application: {staffApplication?.status || 'not submitted'}</span>
+            </div>
             {staffApplication?.rejectionReason && (
               <div className="alert alert-warning">Admin note: {staffApplication.rejectionReason}</div>
             )}
@@ -1494,7 +1527,7 @@ export default function Profile() {
               <div className="profile-form-actions">
                 {staffRole && (
                   <button className="btn btn-secondary" type="submit" disabled={busyAction === 'staff' || staffProfileBlocked}>
-                    {busyAction === 'staff' ? 'Saving...' : 'Save Store Profile'}
+                    {busyAction === 'staff' ? 'Saving...' : 'Save Store Application'}
                   </button>
                 )}
               </div>
@@ -1516,10 +1549,10 @@ export default function Profile() {
                     : staffApplication?.status === 'pending'
                       ? 'Store Application Pending'
                       : staffApplication?.status === 'rejected'
-                        ? 'Re-apply for Store Role'
+                        ? 'Re-submit Store Application'
                         : canUseAssignedRole(staffRole)
                           ? 'Store Role Approved'
-                          : 'Apply for Store Role'}
+                          : 'Submit Store Application'}
                 </button>
               </div>
             )}

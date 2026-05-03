@@ -33,7 +33,7 @@ const menuItems = {
     { to: '/staff/maintenance', label: 'Maintenance Records', end: true },
     { to: '/staff/inventory', label: 'Inventory Items', end: true },
     { section: 'Account' },
-    { to: '/profile/store', label: 'Store Profile', end: true },
+    { to: '/profile/storeapplication', label: 'Store Application', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: false },
     { to: '/switch-roles', label: 'Switch Roles', end: true }

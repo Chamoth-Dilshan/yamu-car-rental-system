@@ -11,7 +11,7 @@ export const getProfilePathForRole = (role = '') => {
       return '/profile/driverapplication';
     case 'store':
     case 'staff':
-      return '/profile/store';
+      return '/profile/storeapplication';
     case 'admin':
       return '/profile/admin';
     default:

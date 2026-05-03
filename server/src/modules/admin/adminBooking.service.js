@@ -23,6 +23,8 @@ const bookingPopulate = [
   }
 ]
 
+const ADMIN_BOOKING_STATUS_ACTIONS = ['cancelled', 'closed']
+
 const buildStats = (bookings) => ({
   totalBookings: bookings.length,
   pendingCount: bookings.filter((booking) => booking.bookingStatus === 'pending').length,
@@ -125,15 +127,11 @@ const updateAdminBooking = async ({ bookingId, adminId, body }) => {
   await reconcileStoredPaymentStatus(booking)
 
   if (bookingStatus) {
+    if (!ADMIN_BOOKING_STATUS_ACTIONS.includes(bookingStatus)) {
+      return { error: 'Admin can only cancel or close vehicle bookings. Stores confirm and complete them.', statusCode: 403 }
+    }
+
     if (bookingStatus !== booking.bookingStatus) {
-      if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
-        return { error: 'Only pending vehicle bookings can be confirmed', statusCode: 400 }
-      }
-
-      if (bookingStatus === 'completed' && booking.bookingStatus !== 'confirmed') {
-        return { error: 'Only confirmed vehicle bookings can be completed', statusCode: 400 }
-      }
-
       if (bookingStatus === 'cancelled' && !['pending', 'confirmed'].includes(booking.bookingStatus)) {
         return { error: 'Only pending or confirmed vehicle bookings can be cancelled', statusCode: 400 }
       }
@@ -162,16 +160,6 @@ const updateAdminBooking = async ({ bookingId, adminId, body }) => {
     title: 'Vehicle booking updated',
     message: `Admin updated vehicle booking ${booking.bookingNo}${bookingStatus ? ` to ${bookingStatus}` : ''}.`,
     link: '/bookings'
-  }
-
-  if (bookingStatus === 'confirmed') {
-    customerNotification.title = 'Reservation accepted'
-    customerNotification.message = 'Your reservation has been accepted. Payment will be available after the trip is completed.'
-  }
-
-  if (bookingStatus === 'completed') {
-    customerNotification.title = 'Trip completed'
-    customerNotification.message = `Booking ${booking.bookingNo} is completed. You can now complete payment.`
   }
 
   await Promise.all([

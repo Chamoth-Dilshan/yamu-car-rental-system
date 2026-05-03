@@ -1,13 +1,24 @@
 import API from '../api/axios'
 
+export const createProtectedFileUrl = async (endpoint) => {
+  const res = await API.get(endpoint, { responseType: 'blob' })
+  const contentType = res.headers['content-type'] || res.data?.type || 'application/octet-stream'
+  const blob = new Blob([res.data], { type: contentType })
+
+  return {
+    contentType,
+    url: URL.createObjectURL(blob)
+  }
+}
+
 export const openProtectedFile = async (endpoint) => {
-  const previewWindow = window.open('', '_blank', 'noopener,noreferrer')
+  const previewWindow = window.open('', '_blank')
+  if (previewWindow) {
+    previewWindow.opener = null
+  }
 
   try {
-    const res = await API.get(endpoint, { responseType: 'blob' })
-    const contentType = res.headers['content-type'] || 'application/octet-stream'
-    const blob = new Blob([res.data], { type: contentType })
-    const url = URL.createObjectURL(blob)
+    const { url } = await createProtectedFileUrl(endpoint)
 
     if (previewWindow) {
       previewWindow.location.href = url
