@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import API from '../../../api/axios';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
+import { buildLatestProviderApplicationMap } from '../../../utils/providerApplications';
 import { formatRoleLabel, getProfilePathForRole } from '../../../utils/roles';
 
 const roleCards = [
@@ -27,8 +28,8 @@ export default function ApplyRoles() {
     Object.fromEntries((user?.roles || []).map((item) => [item.roleKey, item]))
   ), [user]);
   const applicationMap = useMemo(() => (
-    Object.fromEntries((user?.providerApplications || []).map((item) => [item.roleKey, item]))
-  ), [user]);
+    buildLatestProviderApplicationMap(user?.providerApplications || [])
+  ), [user?.providerApplications]);
 
   const visibleRoleCards = roleCards;
 

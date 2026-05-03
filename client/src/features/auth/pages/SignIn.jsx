@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { getProfilePathForRole } from '../../../utils/roles';
+import { validateRequiredText } from '../../../utils/validation';
 import GoogleAuthButton from '../components/GoogleAuthButton';
 
 const REMEMBERED_SIGNIN_KEY = 'uprm_remembered_signin';
@@ -27,12 +28,15 @@ export default function SignIn() {
 
       const parsedCredentials = JSON.parse(rememberedCredentials);
 
-      if (parsedCredentials?.email && parsedCredentials?.password) {
-        setForm({
-          email: parsedCredentials.email,
-          password: parsedCredentials.password
-        });
+      if (parsedCredentials?.email) {
+        const rememberedEmail = String(parsedCredentials.email || '');
+        setForm((prev) => ({
+          ...prev,
+          email: rememberedEmail,
+          password: ''
+        }));
         setRememberMe(true);
+        localStorage.setItem(REMEMBERED_SIGNIN_KEY, JSON.stringify({ email: rememberedEmail }));
         return;
       }
     } catch {
@@ -50,7 +54,7 @@ export default function SignIn() {
     }
 
     if (nextRole === 'customer') {
-      return '/dashboard';
+      return '/';
     }
 
     return getProfilePathForRole(nextRole);
@@ -58,6 +62,15 @@ export default function SignIn() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const validationError = validateRequiredText(form.email, 'Email or username')
+      || validateRequiredText(form.password, 'Password');
+
+    if (validationError) {
+      setError(validationError);
+      setMessage('');
+      return;
+    }
+
     setLoading(true);
     setError('');
     setMessage('');
@@ -65,7 +78,7 @@ export default function SignIn() {
       const nextUser = await login(form.email, form.password);
 
       if (rememberMe) {
-        localStorage.setItem(REMEMBERED_SIGNIN_KEY, JSON.stringify(form));
+        localStorage.setItem(REMEMBERED_SIGNIN_KEY, JSON.stringify({ email: form.email }));
       } else {
         localStorage.removeItem(REMEMBERED_SIGNIN_KEY);
       }

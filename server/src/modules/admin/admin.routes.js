@@ -1,5 +1,5 @@
 const express = require('express');
-const { getAllUsers, getUserRoleHistory, updateUser, reviewProviderApplication, deactivateUser, restoreUser } = require('./admin.controller')
+const { getAllUsers, getUserRoleHistory, getUserProviderDocument, updateUser, reviewProviderApplication, deactivateUser, restoreUser } = require('./admin.controller')
 const {
   getAdminBookings,
   updateAdminBooking,
@@ -13,6 +13,7 @@ router.use(protect, authorize('admin'))
 
 router.get('/users', authorizePermissions('users.view'), getAllUsers)
 router.get('/users/:id/role-history', authorizePermissions('users.view'), getUserRoleHistory)
+router.get('/users/:id/documents/:roleKey/:documentKey', authorizePermissions('roles.review'), getUserProviderDocument)
 router.put('/users/:id', authorizePermissions('users.edit', 'roles.assign'), updateUser)
 router.put('/users/:id/applications/:roleKey/review', authorizePermissions('roles.review'), reviewProviderApplication)
 router.delete('/users/:id', authorizePermissions('users.edit'), deactivateUser)

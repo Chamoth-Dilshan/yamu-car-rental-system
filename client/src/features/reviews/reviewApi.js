@@ -26,7 +26,7 @@ export const getAdminReviewAnalytics = () => API.get('/reviews/admin/analytics')
 
 export const getComplaintContext = (bookingId) => API.get(`/complaints/bookings/${bookingId}/context`)
 
-export const submitComplaint = (payload) => API.post('/complaints', payload)
+export const submitComplaint = (payload, config = {}) => API.post('/complaints', payload, config)
 
 export const getAdminComplaints = () => API.get('/complaints/admin')
 

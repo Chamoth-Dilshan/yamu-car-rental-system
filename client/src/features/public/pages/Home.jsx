@@ -296,7 +296,7 @@ export default function Home() {
 
               <div className="home-review-highlight">
                 <div className="home-review-highlight-top">
-                  <span>Latest Approved Review</span>
+                  <span>Latest Review</span>
                   <div className="home-review-stars" aria-label={`Latest review rating ${formatRating(featuredReviewRating)}`}>
                     {[1, 2, 3, 4, 5].map((rating) => (
                       <FaStar
@@ -329,7 +329,6 @@ export default function Home() {
         <div className="container">
           <div className="home-top-rated-header">
             <span className="home-eyebrow home-eyebrow-dark">Top Rated</span>
-            <h2>Top 5 rated drivers and vehicles</h2>
           </div>
 
           <div className="home-top-rated-grid">

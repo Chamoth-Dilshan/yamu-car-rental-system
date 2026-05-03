@@ -8,6 +8,12 @@ const {
   serializeNotification
 } = require('../../utils/notificationHelpers');
 const {
+  getFileMetadataFromUpload,
+  getFilesByField,
+  removeUploadedFiles,
+  sendProtectedUpload
+} = require('../../utils/fileHelpers');
+const {
   PROVIDER_ROLE_KEYS,
   buildRoleAssignment,
   canManageRoleProfile,
@@ -30,9 +36,27 @@ const {
   parseDate,
   setDocumentCollectionStatus,
   trimValue,
+  validateEmailAddress,
+  validateOptionalPhone,
   validateRequiredTextFields,
-  validatePasswordStrength
+  validatePasswordStrength,
+  validateUsernameValue
 } = require('../../utils/profileHelpers');
+
+const RESTRICTED_PROFILE_FIELDS = [
+  'role',
+  'roles',
+  'activeRole',
+  'primaryRole',
+  'accountStatus',
+  'verificationStatus',
+  'isSystemAdmin',
+  'permissions',
+  'providerApplications',
+  'emailVerified',
+  'authProvider',
+  'googleId'
+];
 
 const roleLabel = (value) => ({
   customer: 'User',
@@ -42,22 +66,97 @@ const roleLabel = (value) => ({
 }[value] || value.charAt(0).toUpperCase() + value.slice(1));
 
 const ensureUniqueIdentityFields = async (userId, email, username) => {
-  const normalizedEmail = String(email).trim().toLowerCase();
-  const normalizedUsername = String(username).trim().toLowerCase();
+  const emailValidation = validateEmailAddress(email);
+  if (emailValidation.error) {
+    throw new Error(emailValidation.error);
+  }
+
+  const usernameValidation = validateUsernameValue(username);
+  if (usernameValidation.error) {
+    throw new Error(usernameValidation.error);
+  }
 
   const existing = await User.findOne({
     _id: { $ne: userId },
-    $or: [{ email: normalizedEmail }, { username: normalizedUsername }]
+    $or: [{ email: emailValidation.value }, { username: usernameValidation.value }]
   });
 
   if (existing) {
     throw new Error('Email or username is already in use');
   }
 
-  return { normalizedEmail, normalizedUsername };
+  return {
+    normalizedEmail: emailValidation.value,
+    normalizedUsername: usernameValidation.value
+  };
 };
 
 const getPlainObject = (value) => (value?.toObject ? value.toObject() : (value || {}));
+
+const parseStructuredBody = (req) => {
+  if (req.body?.payload === undefined) {
+    return { payload: req.body || {} };
+  }
+
+  if (typeof req.body.payload === 'object') {
+    return { payload: req.body.payload || {} };
+  }
+
+  try {
+    return { payload: JSON.parse(req.body.payload || '{}') };
+  } catch {
+    return { error: 'Invalid JSON payload' };
+  }
+};
+
+const getProviderDocumentKeys = (roleKey) => (
+  getProviderRequirementConfig(roleKey).documents.map(({ key }) => key)
+);
+
+const mergeUploadedDocumentFiles = (roleKey, payload = {}, files = {}, uploadDir = '') => {
+  const filesByField = getFilesByField(files);
+  const documentKeys = getProviderDocumentKeys(roleKey);
+  const uploadedDocuments = documentKeys.reduce((acc, documentKey) => {
+    const file = filesByField[documentKey];
+
+    if (!file) {
+      return acc;
+    }
+
+    return {
+      ...acc,
+      [documentKey]: getFileMetadataFromUpload(file, uploadDir)
+    };
+  }, {});
+
+  if (!Object.keys(uploadedDocuments).length) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    documents: {
+      ...(payload.documents || {}),
+      ...uploadedDocuments
+    }
+  };
+};
+
+const getProviderDocumentMetadata = (user, roleKey, documentKey) => {
+  if (!PROVIDER_ROLE_KEYS.includes(roleKey) || !getProviderDocumentKeys(roleKey).includes(documentKey)) {
+    return null;
+  }
+
+  const profile = roleKey === 'driver' ? user.driverProfile : user.staffProfile;
+  const profileDocument = profile?.documents?.[documentKey];
+
+  if (profileDocument?.filePath) {
+    return profileDocument;
+  }
+
+  const applicationDocument = getLatestPendingProviderApplication(user, roleKey)?.applicationData?.documents?.[documentKey];
+  return applicationDocument?.filePath ? applicationDocument : profileDocument;
+};
 
 const buildDriverProfilePayload = (payload = {}, currentProfile = {}) => {
   const current = getPlainObject(currentProfile);
@@ -138,6 +237,11 @@ const updateProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const restrictedField = RESTRICTED_PROFILE_FIELDS.find((field) => Object.prototype.hasOwnProperty.call(req.body, field));
+    if (restrictedField) {
+      return res.status(400).json({ message: 'Role and account status fields cannot be updated from profile settings' });
+    }
+
     const nextEmail = req.body.email || user.email;
     const nextUsername = req.body.username || user.username || nextEmail;
     const missingIdentityField = validateRequiredTextFields([
@@ -156,6 +260,22 @@ const updateProfile = async (req, res) => {
       nextUsername
     );
 
+    const phoneValidation = validateOptionalPhone(req.body.phone);
+    if (phoneValidation.error) {
+      return res.status(400).json({ message: phoneValidation.error });
+    }
+
+    const emergencyPhoneValidation = validateOptionalPhone(req.body.emergencyContactPhone, {
+      label: 'Emergency contact phone'
+    });
+    if (emergencyPhoneValidation.error) {
+      return res.status(400).json({ message: emergencyPhoneValidation.error });
+    }
+
+    if (req.body.confirmPassword && !req.body.password) {
+      return res.status(400).json({ message: 'New password is required to confirm password' });
+    }
+
     if (req.body.password) {
       const passwordError = validatePasswordStrength(req.body.password);
       if (passwordError) {
@@ -169,13 +289,25 @@ const updateProfile = async (req, res) => {
       if (!(await user.matchPassword(req.body.currentPassword))) {
         return res.status(400).json({ message: 'Current password is incorrect' });
       }
+
+      if (!req.body.confirmPassword) {
+        return res.status(400).json({ message: 'Confirm password is required' });
+      }
+
+      if (req.body.password !== req.body.confirmPassword) {
+        return res.status(400).json({ message: 'Passwords do not match' });
+      }
+
+      if (await user.matchPassword(req.body.password)) {
+        return res.status(400).json({ message: 'New password must be different from the current password' });
+      }
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
     user.fullName = trimValue(req.body.fullName, user.fullName);
     user.email = normalizedEmail;
     user.username = normalizedUsername;
-    user.phone = trimValue(req.body.phone, '');
+    user.phone = phoneValidation.value;
     user.address = trimValue(req.body.address, '');
     user.city = trimValue(req.body.city, '');
     user.dob = trimValue(req.body.dob, '');
@@ -183,7 +315,7 @@ const updateProfile = async (req, res) => {
     user.preferredLanguage = normalizePreferredLanguage(req.body.preferredLanguage, user.preferredLanguage || 'English');
     user.emergencyContact = normalizeEmergencyContact({
       name: req.body.emergencyContactName,
-      phone: req.body.emergencyContactPhone,
+      phone: emergencyPhoneValidation.value,
       relationship: req.body.emergencyContactRelationship
     });
 
@@ -210,28 +342,45 @@ const updateProfile = async (req, res) => {
       return res.status(400).json({ message: 'Email or username is already in use' });
     }
 
+    if (
+      error.message?.includes('must be a valid email address')
+      || error.message?.includes('must be 3-30 characters')
+      || error.message?.includes('is required')
+    ) {
+      return res.status(400).json({ message: error.message });
+    }
+
     sendServerError(res, error, 'Failed to update profile');
   }
 };
 
 const updateDriverProfile = async (req, res) => {
   try {
+    const parsedBody = parseStructuredBody(req);
+    if (parsedBody.error) {
+      removeUploadedFiles(req.files);
+      return res.status(400).json({ message: parsedBody.error });
+    }
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
+      removeUploadedFiles(req.files);
       return res.status(404).json({ message: 'User not found' });
     }
 
     const roleAssignment = getRoleAssignment(user, 'driver');
     if (!canManageRoleProfile(roleAssignment)) {
+      removeUploadedFiles(req.files);
       return res.status(403).json({ message: 'Driver onboarding is available only for assigned driver applicants or roles' });
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
     const documentKeys = getProviderRequirementConfig('driver').documents.map(({ key }) => key);
+    const driverPayload = mergeUploadedDocumentFiles('driver', parsedBody.payload, req.files, req.uploadDir);
     user.driverProfile = {
       ...getPlainObject(user.driverProfile),
-      ...buildDriverProfilePayload(req.body, user.driverProfile)
+      ...buildDriverProfilePayload(driverPayload, user.driverProfile)
     };
 
     const pendingApplication = getLatestPendingProviderApplication(user, 'driver');
@@ -269,22 +418,31 @@ const updateDriverProfile = async (req, res) => {
 
 const updateStaffProfile = async (req, res) => {
   try {
+    const parsedBody = parseStructuredBody(req);
+    if (parsedBody.error) {
+      removeUploadedFiles(req.files);
+      return res.status(400).json({ message: parsedBody.error });
+    }
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
+      removeUploadedFiles(req.files);
       return res.status(404).json({ message: 'User not found' });
     }
 
     const roleAssignment = getRoleAssignment(user, 'staff');
     if (!canManageRoleProfile(roleAssignment)) {
+      removeUploadedFiles(req.files);
       return res.status(403).json({ message: 'Store onboarding is available only for assigned store applicants or roles' });
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
     const documentKeys = getProviderRequirementConfig('staff').documents.map(({ key }) => key);
+    const staffPayload = mergeUploadedDocumentFiles('staff', parsedBody.payload, req.files, req.uploadDir);
     user.staffProfile = {
       ...getPlainObject(user.staffProfile),
-      ...buildStaffProfilePayload(req.body, user.staffProfile)
+      ...buildStaffProfilePayload(staffPayload, user.staffProfile)
     };
 
     const pendingApplication = getLatestPendingProviderApplication(user, 'staff');
@@ -361,40 +519,54 @@ const updateAdminProfile = async (req, res) => {
 const applyForProviderRole = async (req, res) => {
   try {
     const { roleKey } = req.params;
+    const parsedBody = parseStructuredBody(req);
+    if (parsedBody.error) {
+      removeUploadedFiles(req.files);
+      return res.status(400).json({ message: parsedBody.error });
+    }
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
+      removeUploadedFiles(req.files);
       return res.status(404).json({ message: 'User not found' });
     }
 
     if (!PROVIDER_ROLE_KEYS.includes(roleKey)) {
+      removeUploadedFiles(req.files);
       return res.status(400).json({ message: 'Unsupported provider role application' });
     }
 
     if (!canUseRole(getRoleAssignment(user, 'customer'))) {
+      removeUploadedFiles(req.files);
       return res.status(403).json({ message: 'Only accounts with active user access can apply for provider roles' });
     }
 
     const roleAssignment = getRoleAssignment(user, roleKey);
     if (roleAssignment && canUseRole(roleAssignment)) {
+      removeUploadedFiles(req.files);
       return res.status(400).json({ message: `Your ${roleKey} role is already approved` });
     }
 
     if (roleAssignment && ['suspended', 'deactivated'].includes(roleAssignment.roleStatus)) {
+      removeUploadedFiles(req.files);
       return res.status(403).json({ message: `Your ${roleKey} access is currently restricted. Contact an administrator for help.` });
     }
 
     if (getLatestPendingProviderApplication(user, roleKey)) {
+      removeUploadedFiles(req.files);
       return res.status(400).json({ message: `A ${roleKey} application is already pending review` });
     }
 
+    const providerPayload = mergeUploadedDocumentFiles(roleKey, parsedBody.payload, req.files, req.uploadDir);
     const applicationData = roleKey === 'driver'
-      ? buildDriverProfilePayload(req.body, user.driverProfile)
-      : buildStaffProfilePayload(req.body, user.staffProfile);
+      ? buildDriverProfilePayload(providerPayload, user.driverProfile)
+      : buildStaffProfilePayload(providerPayload, user.staffProfile);
     const documentKeys = getProviderRequirementConfig(roleKey).documents.map(({ key }) => key);
 
     const validation = validateProviderApplicationData(roleKey, applicationData);
     if (!validation.valid) {
+      removeUploadedFiles(req.files);
       return res.status(400).json({ message: validation.message });
     }
 
@@ -549,6 +721,26 @@ const getNotifications = async (req, res) => {
   }
 };
 
+const getMyProviderDocument = async (req, res) => {
+  try {
+    const { roleKey, documentKey } = req.params;
+    const user = await User.findById(req.user._id).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const document = getProviderDocumentMetadata(user, roleKey, documentKey);
+    if (!document?.filePath) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    return sendProtectedUpload(res, document);
+  } catch (error) {
+    return sendServerError(res, error, 'Failed to load document');
+  }
+};
+
 const markNotificationRead = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -617,6 +809,7 @@ module.exports = {
   updateAdminProfile,
   applyForProviderRole,
   withdrawProviderApplication,
+  getMyProviderDocument,
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead

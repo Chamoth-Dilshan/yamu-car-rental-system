@@ -4,6 +4,8 @@ import API from '../../../api/axios';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
 import { formatDateTime } from '../../../utils/formatters';
+import { openProtectedFile } from '../../../utils/protectedFiles';
+import { validateEmail, validateRequiredText, validateUsername } from '../../../utils/validation';
 
 const manageableRoles = ['customer', 'driver', 'staff', 'admin'];
 const roleDisplayMap = {
@@ -115,6 +117,9 @@ const hasContent = (value) => {
 };
 
 const hasDocumentMetadata = (document = {}) => hasContent(document.fileName) || hasContent(document.filePath);
+const hasProtectedDocumentFile = (document = {}) => Boolean(
+  document?.filePath && !/^\/?uploads\//i.test(document.filePath)
+);
 
 const getDocumentDetails = (roleKey, documents = {}) => (
   (providerDocumentKeys[roleKey] || Object.keys(documents || {}))
@@ -244,6 +249,17 @@ export default function AdminUsers() {
   const canEditUsersPermission = hasPermission('users.edit');
   const canReviewRolesPermission = hasPermission('roles.review');
   const canAssignRolesPermission = hasPermission('roles.assign');
+
+  const viewProviderDocument = async (userId, roleKey, documentKey) => {
+    setMessage('');
+    setError('');
+
+    try {
+      await openProtectedFile(`/admin/users/${userId}/documents/${roleKey}/${documentKey}`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to open provider document');
+    }
+  };
 
   const pendingReviewUsers = users.filter((user) => getPendingApplications(user).length > 0);
   const orderedUsers = [...users].sort((left, right) => {
@@ -486,6 +502,15 @@ export default function AdminUsers() {
     }));
   };
 
+  const validateAdminEditableUser = (user) => (
+    validateRequiredText(user.fullName, 'Full name')
+    || validateUsername(user.username)
+    || validateEmail(user.email)
+    || (accountStatuses.includes(user.accountStatus) ? '' : 'Invalid account status')
+    || (user.roles?.some((role) => role.roleKey === user.primaryRole) ? '' : 'Primary role must be assigned to this user')
+    || (user.roles?.some((role) => role.roleKey === user.activeRole) ? '' : 'Active role must be assigned to this user')
+  );
+
   const toggleAssignedRole = (userId, roleKey) => {
     setUsers((prev) => prev.map((user) => {
       if (user._id !== userId) {
@@ -527,6 +552,14 @@ export default function AdminUsers() {
   };
 
   const saveUser = async (user, destination = `/admin/users/${user._id}`) => {
+    const validationError = validateAdminEditableUser(user);
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return null;
+    }
+
     setBusyAction(`save-${user._id}`);
     setMessage('');
     setError('');
@@ -563,6 +596,10 @@ export default function AdminUsers() {
   };
 
   const reviewApplication = async (userId, roleKey, action) => {
+    if (action === 'approve' && !window.confirm(`Approve this ${roleKey} application?`)) {
+      return;
+    }
+
     let reason = '';
     if (action === 'reject') {
       const promptValue = window.prompt(`Reason for rejecting ${roleKey} application:`);
@@ -719,6 +756,15 @@ export default function AdminUsers() {
                           <small style={{ color: 'var(--text-light)' }}>
                             Uploaded: {new Date(value.uploadedAt).toLocaleDateString()}
                           </small>
+                        )}
+                        {hasProtectedDocumentFile(value) && (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            type="button"
+                            onClick={() => viewProviderDocument(user._id, application.roleKey, key)}
+                          >
+                            View File
+                          </button>
                         )}
                         {value.reviewedAt && (
                           <small style={{ color: 'var(--text-light)' }}>
@@ -1430,7 +1476,7 @@ export default function AdminUsers() {
             <div className="form-row">
               <div className="form-group">
                 <label>Email</label>
-                <input value={selectedUser.email} onChange={(e) => updateField(selectedUser._id, 'email', e.target.value)} />
+                <input type="email" value={selectedUser.email} onChange={(e) => updateField(selectedUser._id, 'email', e.target.value)} />
               </div>
               <div className="form-group">
                 <label>NIC</label>

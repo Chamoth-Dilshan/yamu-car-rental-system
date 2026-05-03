@@ -10,6 +10,9 @@ const DOCUMENT_STATUSES = [
   'verified'
 ];
 const MIN_PASSWORD_LENGTH = 8;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const USERNAME_REGEX = /^[a-z0-9._-]{3,30}$/;
+const PHONE_REGEX = /^\+?[\d\s().-]{7,20}$/;
 
 const trimValue = (value, fallback = '') => (
   typeof value === 'string' ? value.trim() : (value ?? fallback)
@@ -49,6 +52,59 @@ const validatePasswordStrength = (password) => {
   return null;
 };
 
+const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+
+const normalizeUsername = (value) => String(value || '').trim().toLowerCase();
+
+const validateEmailAddress = (value, { label = 'Email', required = true } = {}) => {
+  const normalized = normalizeEmail(value);
+
+  if (!normalized) {
+    return required
+      ? { value: normalized, error: `${label} is required` }
+      : { value: normalized, error: null };
+  }
+
+  if (!EMAIL_REGEX.test(normalized)) {
+    return { value: normalized, error: `${label} must be a valid email address` };
+  }
+
+  return { value: normalized, error: null };
+};
+
+const validateUsernameValue = (value, { label = 'Username', required = true } = {}) => {
+  const normalized = normalizeUsername(value);
+
+  if (!normalized) {
+    return required
+      ? { value: normalized, error: `${label} is required` }
+      : { value: normalized, error: null };
+  }
+
+  if (!USERNAME_REGEX.test(normalized)) {
+    return {
+      value: normalized,
+      error: `${label} must be 3-30 characters and use only letters, numbers, underscores, dots, or hyphens`
+    };
+  }
+
+  return { value: normalized, error: null };
+};
+
+const validateOptionalPhone = (value, { label = 'Phone number' } = {}) => {
+  const normalized = trimValue(value, '');
+
+  if (!normalized) {
+    return { value: normalized, error: null };
+  }
+
+  if (!PHONE_REGEX.test(normalized)) {
+    return { value: normalized, error: `${label} must be a valid phone number` };
+  }
+
+  return { value: normalized, error: null };
+};
+
 const hasDocumentFile = (input = {}) => Boolean(
   trimValue(input.filePath, '')
   || trimValue(input.reference, '')
@@ -83,6 +139,8 @@ const buildDocumentMetadata = (input = {}, current = {}) => {
   const currentFilePath = trimValue(current.filePath, current.reference || '');
   const fileName = trimValue(input.fileName, currentFileName);
   const filePath = trimValue(input.filePath, input.reference || currentFilePath);
+  const mimeType = trimValue(input.mimeType, current.mimeType || '');
+  const size = Number(input.size ?? current.size ?? 0) || 0;
   const hasCurrentFile = hasDocumentFile(current);
   const hasNextFile = Boolean(fileName || filePath);
   const currentStatus = normalizeDocumentStatus(current.status, hasCurrentFile);
@@ -114,6 +172,8 @@ const buildDocumentMetadata = (input = {}, current = {}) => {
     fileName,
     filePath,
     reference: filePath,
+    mimeType,
+    size,
     status,
     rejectionReason,
     uploadedAt,
@@ -234,11 +294,19 @@ module.exports = {
   SUPPORTED_LANGUAGES,
   DOCUMENT_STATUSES,
   MIN_PASSWORD_LENGTH,
+  EMAIL_REGEX,
+  USERNAME_REGEX,
+  PHONE_REGEX,
   trimValue,
   parseDate,
   normalizePreferredLanguage,
   normalizeEmergencyContact,
   validatePasswordStrength,
+  normalizeEmail,
+  normalizeUsername,
+  validateEmailAddress,
+  validateUsernameValue,
+  validateOptionalPhone,
   hasDocumentFile,
   normalizeDocumentStatus,
   buildDocumentMetadata,

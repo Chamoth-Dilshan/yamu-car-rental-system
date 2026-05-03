@@ -6,15 +6,30 @@ import { useAuth } from '../../../context/AuthContext';
 import Sidebar from '../../../components/layout/Sidebar';
 import { formatDateTime } from '../../../utils/formatters';
 import { isRoleManagementNotification } from '../../../utils/notifications';
+import { buildLatestProviderApplicationMap } from '../../../utils/providerApplications';
+import { openProtectedFile } from '../../../utils/protectedFiles';
 import { formatRoleLabel, getProfilePathForRole } from '../../../utils/roles';
+import {
+  hasDocumentMetadata,
+  validateDocumentFile,
+  validateEmail,
+  validateOptionalPhone,
+  validatePasswordStrength,
+  validateProfileImage,
+  validateRequiredText,
+  validateUsername
+} from '../../../utils/validation';
 
 const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
 const blockedApplicationStatuses = ['suspended', 'deactivated'];
+const providerDocumentAccept = 'image/jpeg,image/png,image/webp,application/pdf';
 
 const roleLabel = (value) => formatRoleLabel(value);
 const createDocumentDraft = (document = {}) => ({
   fileName: document?.fileName || '',
   filePath: document?.filePath || document?.reference || '',
+  mimeType: document?.mimeType || '',
+  size: document?.size || 0,
   status: document?.status || 'not_uploaded',
   rejectionReason: document?.rejectionReason || '',
   uploadedAt: document?.uploadedAt || null,
@@ -72,6 +87,34 @@ const getBadgeClass = (tone) => {
   }
 };
 const hasDocumentReference = (document = {}) => Boolean(document?.fileName || document?.filePath);
+const providerApplicationRequirements = {
+  driver: {
+    fields: [
+      ['drivingLicenseNumber', 'Driving license number'],
+      ['nicId', 'NIC / ID'],
+      ['serviceArea', 'Service area']
+    ],
+    documents: [
+      ['nicDocument', 'NIC / ID document'],
+      ['drivingLicenseDocument', 'Driving license document'],
+      ['proofOfAddressDocument', 'Proof of address document']
+    ]
+  },
+  staff: {
+    fields: [
+      ['storeName', 'Store name'],
+      ['businessRegistrationNumber', 'Business registration number'],
+      ['storeAddress', 'Store address'],
+      ['storeContactNumber', 'Store contact number'],
+      ['storeEmail', 'Store email']
+    ],
+    documents: [
+      ['businessRegistrationDocument', 'Business registration document'],
+      ['proofOfAddressDocument', 'Proof of address document']
+    ]
+  }
+};
+const canUseAssignedRole = (role = null) => role?.roleStatus === 'active' && role?.verificationStatus === 'verified';
 const calculateCompletionPercent = (items = []) => {
   if (!items.length) {
     return 0;
@@ -104,8 +147,10 @@ export default function Profile() {
     emergencyContactPhone: '',
     emergencyContactRelationship: '',
     currentPassword: '',
-    password: ''
+    password: '',
+    confirmPassword: ''
   });
+  const [profileImage, setProfileImage] = useState(null);
   const [driverProfile, setDriverProfile] = useState({
     drivingLicenseNumber: '',
     licenseExpiryDate: '',
@@ -123,6 +168,8 @@ export default function Profile() {
     storeEmail: '',
     documents: createStaffDocumentsDraft()
   });
+  const [driverDocumentFiles, setDriverDocumentFiles] = useState({});
+  const [staffDocumentFiles, setStaffDocumentFiles] = useState({});
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyAction, setBusyAction] = useState('');
@@ -135,8 +182,8 @@ export default function Profile() {
   ), [user]);
 
   const applicationMap = useMemo(() => (
-    Object.fromEntries((user?.providerApplications || []).map((item) => [item.roleKey, item]))
-  ), [user]);
+    buildLatestProviderApplicationMap(user?.providerApplications || [])
+  ), [user?.providerApplications]);
 
   useEffect(() => {
     if (!user) {
@@ -157,7 +204,8 @@ export default function Profile() {
       emergencyContactPhone: user.emergencyContact?.phone || '',
       emergencyContactRelationship: user.emergencyContact?.relationship || '',
       currentPassword: '',
-      password: ''
+      password: '',
+      confirmPassword: ''
     });
 
     setDriverProfile({
@@ -178,6 +226,8 @@ export default function Profile() {
       storeEmail: user.staffProfile?.storeEmail || '',
       documents: createStaffDocumentsDraft(user.staffProfile?.documents || {})
     });
+    setDriverDocumentFiles({});
+    setStaffDocumentFiles({});
   }, [user]);
 
   useEffect(() => {
@@ -213,9 +263,66 @@ export default function Profile() {
   const driverApplication = applicationMap.driver;
   const staffApplication = applicationMap.staff;
   const activeRoleKey = user?.activeRole || user?.role || 'customer';
+  const hasUsableCustomerRole = canUseAssignedRole(customerRole);
+
+  const validateBasicProfileForm = () => {
+    const passwordFieldsTouched = Boolean(profile.password || profile.currentPassword || profile.confirmPassword);
+
+    if (passwordFieldsTouched) {
+      return validateRequiredText(profile.fullName, 'Full name')
+        || validateUsername(profile.username)
+        || validateEmail(profile.email)
+        || validateOptionalPhone(profile.phone)
+        || validateOptionalPhone(profile.emergencyContactPhone, 'Emergency contact phone')
+        || validateProfileImage(profileImage)
+        || validateRequiredText(profile.password, 'New password')
+        || validatePasswordStrength(profile.password)
+        || validateRequiredText(profile.currentPassword, 'Current password')
+        || validateRequiredText(profile.confirmPassword, 'Confirm password')
+        || (profile.password === profile.confirmPassword ? '' : 'Passwords do not match');
+    }
+
+    return validateRequiredText(profile.fullName, 'Full name')
+      || validateUsername(profile.username)
+      || validateEmail(profile.email)
+      || validateOptionalPhone(profile.phone)
+      || validateOptionalPhone(profile.emergencyContactPhone, 'Emergency contact phone')
+      || validateProfileImage(profileImage);
+  };
+
+  const validateProviderApplicationForm = (roleKey, payload) => {
+    const config = providerApplicationRequirements[roleKey] || { fields: [], documents: [] };
+    const missingField = config.fields.find(([key]) => !String(payload?.[key] || '').trim());
+
+    if (missingField) {
+      return `${missingField[1]} is required`;
+    }
+
+    if (roleKey === 'staff') {
+      const storeEmailError = validateEmail(payload.storeEmail, 'Store email');
+      if (storeEmailError) {
+        return storeEmailError;
+      }
+    }
+
+    const missingDocument = config.documents.find(([key]) => !hasDocumentMetadata(payload?.documents?.[key] || {}));
+    if (missingDocument) {
+      return `${missingDocument[1]} metadata is required`;
+    }
+
+    return '';
+  };
 
   const saveBasicProfile = async (event) => {
     event.preventDefault();
+    const validationError = validateBasicProfileForm();
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
     setBusyAction('basic');
     setMessage('');
     setError('');
@@ -237,16 +344,28 @@ export default function Profile() {
           return;
         }
 
+        if (key === 'confirmPassword') {
+          if (profile.password && value) {
+            formData.append(key, value);
+          }
+          return;
+        }
+
         if (value !== undefined && value !== null) {
           formData.append(key, value);
         }
       });
 
+      if (profileImage) {
+        formData.append('profilePic', profileImage);
+      }
+
       const res = await API.put('/users/profile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setUser(res.data);
-      setProfile((prev) => ({ ...prev, currentPassword: '', password: '' }));
+      setProfile((prev) => ({ ...prev, currentPassword: '', password: '', confirmPassword: '' }));
+      setProfileImage(null);
       setIsEditMode(false);
       setMessage('User profile updated successfully');
     } catch (err) {
@@ -256,14 +375,42 @@ export default function Profile() {
     }
   };
 
+  const getProviderDocumentFiles = (roleKey) => (
+    roleKey === 'driver' ? driverDocumentFiles : staffDocumentFiles
+  );
+
+  const clearProviderDocumentFiles = (roleKey) => {
+    if (roleKey === 'driver') {
+      setDriverDocumentFiles({});
+      return;
+    }
+
+    setStaffDocumentFiles({});
+  };
+
+  const buildProviderFormData = (payload, files) => {
+    const formData = new FormData();
+    formData.append('payload', JSON.stringify(payload));
+    Object.entries(files || {}).forEach(([documentKey, file]) => {
+      if (file) {
+        formData.append(documentKey, file);
+      }
+    });
+
+    return formData;
+  };
+
   const saveRoleProfile = async (endpoint, payload, successMessage, actionKey) => {
     setBusyAction(actionKey);
     setMessage('');
     setError('');
 
     try {
-      const res = await API.put(endpoint, payload);
+      const res = await API.put(endpoint, buildProviderFormData(payload, getProviderDocumentFiles(actionKey)), {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       setUser(res.data.user);
+      clearProviderDocumentFiles(actionKey);
       setMessage(successMessage);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save profile');
@@ -273,13 +420,24 @@ export default function Profile() {
   };
 
   const submitProviderApplication = async (roleKey, payload) => {
+    const validationError = validateProviderApplicationForm(roleKey, payload);
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
     setBusyAction(`apply-${roleKey}`);
     setMessage('');
     setError('');
 
     try {
-      const res = await API.post(`/users/applications/${roleKey}`, payload);
+      const res = await API.post(`/users/applications/${roleKey}`, buildProviderFormData(payload, getProviderDocumentFiles(roleKey)), {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
       setUser(res.data.user);
+      clearProviderDocumentFiles(roleKey);
       await refreshNotifications().catch(() => {});
       setMessage(`${roleLabel(roleKey)} application submitted for review`);
     } catch (err) {
@@ -363,7 +521,7 @@ export default function Profile() {
   const profileTabs = [
     ...(activeRoleKey === 'customer' ? [{ key: 'user', to: '/profile/user', label: 'User Profile' }] : []),
     ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driver', label: 'Driver Profile' }] : []),
-    ...(activeRoleKey === 'staff' ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
+    ...(activeRoleKey === 'staff' || hasUsableCustomerRole ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
     ...(activeRoleKey === 'admin' ? [{ key: 'admin', to: '/profile/admin', label: 'Admin Profile' }] : [])
   ];
   const availableProfileSections = profileTabs.map((tab) => tab.key);
@@ -382,7 +540,7 @@ export default function Profile() {
     : user?.fullName;
   const showUserProfile = resolvedProfileSection === 'user';
   const showDriverProfile = ['customer', 'driver'].includes(activeRoleKey) && resolvedProfileSection === 'driver';
-  const showStaffProfile = activeRoleKey === 'staff' && resolvedProfileSection === 'store';
+  const showStaffProfile = (activeRoleKey === 'staff' || hasUsableCustomerRole) && resolvedProfileSection === 'store';
   const showAdminProfile = activeRoleKey === 'admin' && resolvedProfileSection === 'admin';
   const showRoleSwitcher = activeRoleKey !== 'admin';
   const visibleProfileCompletion = resolvedProfileSection === 'driver'
@@ -504,62 +662,98 @@ export default function Profile() {
     staffApplicationBlocked
   );
 
-  const updateDriverDocument = (documentKey, field, value) => {
+  const updateDriverDocumentDraft = (documentKey, updates) => {
     setDriverProfile((prev) => ({
       ...prev,
       documents: {
         ...prev.documents,
         [documentKey]: {
           ...prev.documents[documentKey],
-          [field]: value,
-          ...(['fileName', 'filePath'].includes(field)
-            ? (() => {
-                const nextDocument = {
-                  ...prev.documents[documentKey],
-                  [field]: value
-                };
-                const hasFile = Boolean(nextDocument.fileName || nextDocument.filePath);
-
-                return {
-                  status: hasFile ? 'uploaded' : 'not_uploaded',
-                  rejectionReason: '',
-                  reviewedAt: null,
-                  uploadedAt: hasFile ? (nextDocument.uploadedAt || new Date().toISOString()) : null
-                };
-              })()
-            : {})
+          ...updates
         }
       }
     }));
   };
 
-  const updateStaffDocument = (documentKey, field, value) => {
+  const updateStaffDocumentDraft = (documentKey, updates) => {
     setStaffProfile((prev) => ({
       ...prev,
       documents: {
         ...prev.documents,
         [documentKey]: {
           ...prev.documents[documentKey],
-          [field]: value,
-          ...(['fileName', 'filePath'].includes(field)
-            ? (() => {
-                const nextDocument = {
-                  ...prev.documents[documentKey],
-                  [field]: value
-                };
-                const hasFile = Boolean(nextDocument.fileName || nextDocument.filePath);
-
-                return {
-                  status: hasFile ? 'uploaded' : 'not_uploaded',
-                  rejectionReason: '',
-                  reviewedAt: null,
-                  uploadedAt: hasFile ? (nextDocument.uploadedAt || new Date().toISOString()) : null
-                };
-              })()
-            : {})
+          ...updates
         }
       }
     }));
+  };
+
+  const getSelectedFileMetadata = (file) => ({
+    fileName: file.name,
+    filePath: '',
+    mimeType: file.type,
+    size: file.size,
+    status: 'uploaded',
+    rejectionReason: '',
+    reviewedAt: null,
+    uploadedAt: new Date().toISOString()
+  });
+
+  const handleProviderDocumentChange = (roleKey, documentKey, label, event) => {
+    const file = event.target.files?.[0] || null;
+
+    if (!file) {
+      return;
+    }
+
+    const validationError = validateDocumentFile(file, label);
+    if (validationError) {
+      event.target.value = '';
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
+    if (roleKey === 'driver') {
+      setDriverDocumentFiles((prev) => ({ ...prev, [documentKey]: file }));
+      updateDriverDocumentDraft(documentKey, getSelectedFileMetadata(file));
+    } else {
+      setStaffDocumentFiles((prev) => ({ ...prev, [documentKey]: file }));
+      updateStaffDocumentDraft(documentKey, getSelectedFileMetadata(file));
+    }
+
+    setError('');
+  };
+
+  const hasProtectedDocumentFile = (document = {}) => Boolean(
+    document?.filePath && !/^\/?uploads\//i.test(document.filePath)
+  );
+
+  const viewProviderDocument = async (roleKey, documentKey) => {
+    setMessage('');
+    setError('');
+
+    try {
+      await openProtectedFile(`/users/documents/${roleKey}/${documentKey}`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to open document');
+    }
+  };
+
+  const handleProfileImageChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    const validationError = validateProfileImage(file);
+
+    if (validationError) {
+      event.target.value = '';
+      setProfileImage(null);
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
+    setProfileImage(file);
+    setError('');
   };
 
   const renderDocumentMeta = (document) => (
@@ -581,6 +775,41 @@ export default function Profile() {
         </div>
       )}
     </>
+  );
+
+  const renderDocumentUpload = ({ roleKey, documentKey, label, document, selectedFile }) => (
+    <div className="provider-document-upload">
+      <div className="provider-document-upload-main">
+        <div className="form-group">
+          <label>{label}</label>
+          <input
+            type="file"
+            accept={providerDocumentAccept}
+            onChange={(event) => handleProviderDocumentChange(roleKey, documentKey, label, event)}
+          />
+        </div>
+        <div className="provider-document-current">
+          <strong>{selectedFile?.name || document?.fileName || 'No file selected'}</strong>
+          {document?.filePath && (
+            <span>
+              {hasProtectedDocumentFile(document) ? 'Stored file available' : `Legacy reference: ${document.filePath}`}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="pill-row">
+        {hasProtectedDocumentFile(document) && (
+          <button
+            className="btn btn-outline btn-sm"
+            type="button"
+            onClick={() => viewProviderDocument(roleKey, documentKey)}
+          >
+            View File
+          </button>
+        )}
+      </div>
+      {renderDocumentMeta(document)}
+    </div>
   );
 
   return (
@@ -715,6 +944,15 @@ export default function Profile() {
                   <input disabled={!isEditMode} value={profile.phone} onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))} />
                 </div>
               </div>
+              <div className="form-group">
+                <label>Profile Image</label>
+                <input
+                  disabled={!isEditMode}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleProfileImageChange}
+                />
+              </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>City</label>
@@ -780,7 +1018,11 @@ export default function Profile() {
                 </div>
                 <div className="form-group">
                   <label>New Password</label>
-                  <input disabled={!isEditMode} type="password" value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                  <input disabled={!isEditMode} type="password" minLength={8} value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Confirm Password</label>
+                  <input disabled={!isEditMode} type="password" value={profile.confirmPassword} onChange={(e) => setProfile((prev) => ({ ...prev, confirmPassword: e.target.value }))} />
                 </div>
               </div>
               <div className="profile-form-actions">
@@ -867,66 +1109,31 @@ export default function Profile() {
                 <textarea rows="3" value={driverProfile.providerDetails} onChange={(e) => setDriverProfile((prev) => ({ ...prev, providerDetails: e.target.value }))} />
               </div>
               <div className="form-header" style={{ marginTop: '1rem' }}>
-                <h3>Document Metadata</h3>
-                <p style={{ color: 'var(--text-light)' }}>Add placeholder file details now. Real uploads can replace these paths later without changing the API shape.</p>
+                <h3>Verification Documents</h3>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>NIC / ID File Name</label>
-                  <input
-                    value={driverProfile.documents.nicDocument.fileName}
-                    onChange={(e) => updateDriverDocument('nicDocument', 'fileName', e.target.value)}
-                    placeholder="nic-scan.pdf"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>NIC / ID File Path / Placeholder</label>
-                  <input
-                    value={driverProfile.documents.nicDocument.filePath}
-                    onChange={(e) => updateDriverDocument('nicDocument', 'filePath', e.target.value)}
-                    placeholder="uploads/driver/nic-scan.pdf"
-                  />
-                </div>
+              <div className="provider-document-stack">
+                {renderDocumentUpload({
+                  roleKey: 'driver',
+                  documentKey: 'nicDocument',
+                  label: 'NIC / ID Document',
+                  document: driverProfile.documents.nicDocument,
+                  selectedFile: driverDocumentFiles.nicDocument
+                })}
+                {renderDocumentUpload({
+                  roleKey: 'driver',
+                  documentKey: 'drivingLicenseDocument',
+                  label: 'Driving License Document',
+                  document: driverProfile.documents.drivingLicenseDocument,
+                  selectedFile: driverDocumentFiles.drivingLicenseDocument
+                })}
+                {renderDocumentUpload({
+                  roleKey: 'driver',
+                  documentKey: 'proofOfAddressDocument',
+                  label: 'Proof of Address Document',
+                  document: driverProfile.documents.proofOfAddressDocument,
+                  selectedFile: driverDocumentFiles.proofOfAddressDocument
+                })}
               </div>
-              {renderDocumentMeta(driverProfile.documents.nicDocument)}
-              <div className="form-row" style={{ marginTop: '1rem' }}>
-                <div className="form-group">
-                  <label>Driving License File Name</label>
-                  <input
-                    value={driverProfile.documents.drivingLicenseDocument.fileName}
-                    onChange={(e) => updateDriverDocument('drivingLicenseDocument', 'fileName', e.target.value)}
-                    placeholder="license-front.jpg"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Driving License File Path / Placeholder</label>
-                  <input
-                    value={driverProfile.documents.drivingLicenseDocument.filePath}
-                    onChange={(e) => updateDriverDocument('drivingLicenseDocument', 'filePath', e.target.value)}
-                    placeholder="uploads/driver/license-front.jpg"
-                  />
-                </div>
-              </div>
-              {renderDocumentMeta(driverProfile.documents.drivingLicenseDocument)}
-              <div className="form-row" style={{ marginTop: '1rem' }}>
-                <div className="form-group">
-                  <label>Proof of Address File Name</label>
-                  <input
-                    value={driverProfile.documents.proofOfAddressDocument.fileName}
-                    onChange={(e) => updateDriverDocument('proofOfAddressDocument', 'fileName', e.target.value)}
-                    placeholder="utility-bill.pdf"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Proof of Address File Path / Placeholder</label>
-                  <input
-                    value={driverProfile.documents.proofOfAddressDocument.filePath}
-                    onChange={(e) => updateDriverDocument('proofOfAddressDocument', 'filePath', e.target.value)}
-                    placeholder="uploads/driver/utility-bill.pdf"
-                  />
-                </div>
-              </div>
-              {renderDocumentMeta(driverProfile.documents.proofOfAddressDocument)}
               <div className="profile-form-actions">
                 {driverRole && (
                   <button className="btn btn-secondary" type="submit" disabled={busyAction === 'driver' || driverProfileBlocked}>
@@ -1013,41 +1220,24 @@ export default function Profile() {
                   <input value={staffProfile.storeAddress} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeAddress: e.target.value }))} />
                 </div>
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Business Registration File Name</label>
-                  <input
-                    value={staffProfile.documents.businessRegistrationDocument.fileName}
-                    onChange={(e) => updateStaffDocument('businessRegistrationDocument', 'fileName', e.target.value)}
-                    placeholder="business-registration.pdf"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Business Registration File Path / Placeholder</label>
-                  <input
-                    value={staffProfile.documents.businessRegistrationDocument.filePath}
-                    onChange={(e) => updateStaffDocument('businessRegistrationDocument', 'filePath', e.target.value)}
-                    placeholder="uploads/staff/business-registration.pdf"
-                  />
-                </div>
+              <div className="form-header" style={{ marginTop: '1rem' }}>
+                <h3>Verification Documents</h3>
               </div>
-              <div className="form-row" style={{ marginTop: '1rem' }}>
-                <div className="form-group">
-                  <label>Proof of Address File Name</label>
-                  <input
-                    value={staffProfile.documents.proofOfAddressDocument.fileName}
-                    onChange={(e) => updateStaffDocument('proofOfAddressDocument', 'fileName', e.target.value)}
-                    placeholder="store-utility-bill.pdf"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Proof of Address File Path / Placeholder</label>
-                  <input
-                    value={staffProfile.documents.proofOfAddressDocument.filePath}
-                    onChange={(e) => updateStaffDocument('proofOfAddressDocument', 'filePath', e.target.value)}
-                    placeholder="uploads/staff/store-utility-bill.pdf"
-                  />
-                </div>
+              <div className="provider-document-stack">
+                {renderDocumentUpload({
+                  roleKey: 'staff',
+                  documentKey: 'businessRegistrationDocument',
+                  label: 'Business Registration Document',
+                  document: staffProfile.documents.businessRegistrationDocument,
+                  selectedFile: staffDocumentFiles.businessRegistrationDocument
+                })}
+                {renderDocumentUpload({
+                  roleKey: 'staff',
+                  documentKey: 'proofOfAddressDocument',
+                  label: 'Proof of Address Document',
+                  document: staffProfile.documents.proofOfAddressDocument,
+                  selectedFile: staffDocumentFiles.proofOfAddressDocument
+                })}
               </div>
               <div className="profile-form-actions">
                 {staffRole && (
@@ -1057,6 +1247,30 @@ export default function Profile() {
                 )}
               </div>
             </form>
+            {hasUsableCustomerRole && !staffApplicationBlocked && (
+              <div className="profile-form-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={
+                    busyAction === 'apply-staff'
+                    || staffApplication?.status === 'pending'
+                    || canUseAssignedRole(staffRole)
+                  }
+                  onClick={() => submitProviderApplication('staff', staffProfile)}
+                >
+                  {busyAction === 'apply-staff'
+                    ? 'Submitting...'
+                    : staffApplication?.status === 'pending'
+                      ? 'Store Application Pending'
+                      : staffApplication?.status === 'rejected'
+                        ? 'Re-apply for Store Role'
+                        : canUseAssignedRole(staffRole)
+                          ? 'Store Role Approved'
+                          : 'Apply for Store Role'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1096,6 +1310,15 @@ export default function Profile() {
                   <label>Phone</label>
                   <input disabled={!isEditMode} value={profile.phone} onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))} />
                 </div>
+              </div>
+              <div className="form-group">
+                <label>Profile Image</label>
+                <input
+                  disabled={!isEditMode}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleProfileImageChange}
+                />
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -1162,7 +1385,11 @@ export default function Profile() {
                 </div>
                 <div className="form-group">
                   <label>New Password</label>
-                  <input disabled={!isEditMode} type="password" value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                  <input disabled={!isEditMode} type="password" minLength={8} value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Confirm Password</label>
+                  <input disabled={!isEditMode} type="password" value={profile.confirmPassword} onChange={(e) => setProfile((prev) => ({ ...prev, confirmPassword: e.target.value }))} />
                 </div>
               </div>
               <div className="profile-form-actions">

@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../context/AuthContext';
 import { getProfilePathForRole } from '../../../utils/roles';
+import {
+  validateEmail,
+  validatePasswordStrength,
+  validateRequiredText,
+  validateUsername
+} from '../../../utils/validation';
 import GoogleAuthButton from '../components/GoogleAuthButton';
 
 export default function SignUp() {
@@ -26,7 +32,7 @@ export default function SignUp() {
     }
 
     if (nextRole === 'customer') {
-      return '/dashboard';
+      return '/';
     }
 
     return getProfilePathForRole(nextRole);
@@ -34,6 +40,16 @@ export default function SignUp() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    const validationError = validateRequiredText(form.fullName, 'Full name')
+      || validateUsername(form.username)
+      || validateEmail(form.email)
+      || validatePasswordStrength(form.password);
+
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
 
     if (form.password !== form.confirmPassword) {
       setError('Passwords do not match');
@@ -48,7 +64,8 @@ export default function SignUp() {
         fullName: form.fullName,
         username: form.username,
         email: form.email,
-        password: form.password
+        password: form.password,
+        confirmPassword: form.confirmPassword
       });
       navigate('/signin', {
         state: {
@@ -113,6 +130,8 @@ export default function SignUp() {
               value={form.username}
               onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
               placeholder="Choose a username"
+              pattern="[A-Za-z0-9._-]{3,30}"
+              title="Use 3-30 letters, numbers, underscores, dots, or hyphens"
               required
             />
           </div>

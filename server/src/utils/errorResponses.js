@@ -10,7 +10,7 @@ const getPublicError = (error, fallbackMessage = 'Server error') => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return {
         status: 400,
-        message: 'Each uploaded image must be 5 MB or smaller.'
+        message: 'Each uploaded file must fit the allowed size limit.'
       };
     }
 
@@ -21,6 +21,13 @@ const getPublicError = (error, fallbackMessage = 'Server error') => {
   }
 
   if (error?.message === 'Only image files are allowed') {
+    return {
+      status: 400,
+      message: error.message
+    };
+  }
+
+  if (error?.message === 'Only JPG, PNG, WebP, or PDF files are allowed') {
     return {
       status: 400,
       message: error.message

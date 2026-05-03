@@ -1,5 +1,6 @@
 const User = require('../users/user.model');
 const { sendServerError } = require('../../utils/errorResponses');
+const { sendProtectedUpload } = require('../../utils/fileHelpers');
 const { addNotificationToUser, appendNotification } = require('../../utils/notificationHelpers');
 const { buildUserAuditSnapshot, logAuditEvent, getRoleHistoryTimeline } = require('../../utils/auditHelpers');
 const {
@@ -23,7 +24,9 @@ const {
   normalizeStaffDocuments,
   setDocumentCollectionStatus,
   trimValue,
-  validateRequiredTextFields
+  validateEmailAddress,
+  validateRequiredTextFields,
+  validateUsernameValue
 } = require('../../utils/profileHelpers');
 
 const MANAGEABLE_ROLE_KEYS = [...ROLE_KEYS];
@@ -38,19 +41,29 @@ const toPlain = (value) => (value?.toObject ? value.toObject() : value);
 const snapshotsEqual = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const isProtectedAdminAccount = (user) => Boolean(user?.isSystemAdmin);
 const ensureUniqueIdentityFields = async (userId, email, username) => {
-  const normalizedEmail = String(email).trim().toLowerCase();
-  const normalizedUsername = String(username).trim().toLowerCase();
+  const emailValidation = validateEmailAddress(email);
+  if (emailValidation.error) {
+    throw new Error(emailValidation.error);
+  }
+
+  const usernameValidation = validateUsernameValue(username);
+  if (usernameValidation.error) {
+    throw new Error(usernameValidation.error);
+  }
 
   const existing = await User.findOne({
     _id: { $ne: userId },
-    $or: [{ email: normalizedEmail }, { username: normalizedUsername }]
+    $or: [{ email: emailValidation.value }, { username: usernameValidation.value }]
   });
 
   if (existing) {
     throw new Error('Email or username is already in use');
   }
 
-  return { normalizedEmail, normalizedUsername };
+  return {
+    normalizedEmail: emailValidation.value,
+    normalizedUsername: usernameValidation.value
+  };
 };
 
 const buildManageableRoles = (incomingRoles = []) => {
@@ -222,6 +235,40 @@ const getUserRoleHistory = async (req, res) => {
     res.json({ items });
   } catch (error) {
     sendServerError(res, error, 'Failed to load role history');
+  }
+};
+
+const getUserProviderDocument = async (req, res) => {
+  try {
+    const { id, roleKey, documentKey } = req.params;
+
+    if (!['driver', 'staff'].includes(roleKey)) {
+      return res.status(400).json({ message: 'Unsupported provider role' });
+    }
+
+    const documentKeys = getProviderRequirementConfig(roleKey).documents.map(({ key }) => key);
+    if (!documentKeys.includes(documentKey)) {
+      return res.status(400).json({ message: 'Unsupported provider document' });
+    }
+
+    const user = await User.findById(id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const pendingApplication = getLatestPendingProviderApplication(user, roleKey);
+    const pendingApplicationDocument = pendingApplication?.applicationData?.documents?.[documentKey];
+    const profile = roleKey === 'driver' ? user.driverProfile : user.staffProfile;
+    const profileDocument = profile?.documents?.[documentKey];
+    const document = pendingApplicationDocument?.filePath ? pendingApplicationDocument : profileDocument;
+
+    if (!document?.filePath) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    return sendProtectedUpload(res, document);
+  } catch (error) {
+    return sendServerError(res, error, 'Failed to load provider document');
   }
 };
 
@@ -430,6 +477,14 @@ const updateUser = async (req, res) => {
   } catch (error) {
     if (error.code === 11000 || error.message === 'Email or username is already in use') {
       return res.status(400).json({ message: 'Email or username is already in use' });
+    }
+
+    if (
+      error.message?.includes('must be a valid email address')
+      || error.message?.includes('must be 3-30 characters')
+      || error.message?.includes('is required')
+    ) {
+      return res.status(400).json({ message: error.message });
     }
 
     sendServerError(res, error, 'Failed to update user');
@@ -741,4 +796,4 @@ const restoreUser = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, getUserRoleHistory, updateUser, reviewProviderApplication, deactivateUser, restoreUser };
+module.exports = { getAllUsers, getUserRoleHistory, getUserProviderDocument, updateUser, reviewProviderApplication, deactivateUser, restoreUser };

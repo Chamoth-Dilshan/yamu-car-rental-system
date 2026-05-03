@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { FaPlus, FaTimes } from 'react-icons/fa'
 import API from '../../../api/axios'
 import Sidebar from '../../../components/layout/Sidebar'
 import { formatCurrency, formatDate, getBadgeClass } from '../../../utils/formatters'
@@ -16,6 +17,7 @@ export default function InventoryManagement() {
   const [filters, setFilters] = useState({ search: '' })
   const [form, setForm] = useState(emptyForm)
   const [editingId, setEditingId] = useState('')
+  const [isItemModalOpen, setIsItemModalOpen] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -36,9 +38,33 @@ export default function InventoryManagement() {
       .finally(() => setLoading(false))
   }, [filters, reloadKey])
 
+  useEffect(() => {
+    if (!isItemModalOpen) {
+      return undefined
+    }
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape' && !busy) {
+        setIsItemModalOpen(false)
+        setForm(emptyForm)
+        setEditingId('')
+      }
+    }
+
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [busy, isItemModalOpen])
+
   const resetForm = () => {
     setForm(emptyForm)
     setEditingId('')
+  }
+
+  const openAddModal = () => {
+    resetForm()
+    setMessage('')
+    setError('')
+    setIsItemModalOpen(true)
   }
 
   const openEditForm = (item) => {
@@ -49,6 +75,18 @@ export default function InventoryManagement() {
       price: item.price ?? '',
       description: item.description || ''
     })
+    setMessage('')
+    setError('')
+    setIsItemModalOpen(true)
+  }
+
+  const closeItemModal = () => {
+    if (busy) {
+      return
+    }
+
+    setIsItemModalOpen(false)
+    resetForm()
   }
 
   const submitForm = async (event) => {
@@ -73,6 +111,7 @@ export default function InventoryManagement() {
 
       setMessage(`Inventory item ${editingId ? 'updated' : 'created'} successfully`)
       resetForm()
+      setIsItemModalOpen(false)
       setReloadKey((prev) => prev + 1)
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to save inventory item')
@@ -95,6 +134,7 @@ export default function InventoryManagement() {
       setMessage('Inventory item deleted')
       if (editingId === itemId) {
         resetForm()
+        setIsItemModalOpen(false)
       }
       setReloadKey((prev) => prev + 1)
     } catch (err) {
@@ -134,141 +174,166 @@ export default function InventoryManagement() {
           ))}
         </div>
 
-        <div className="payment-layout">
-          <section className="form-card">
-            <div className="card-header">
-              <div>
-                <h3>Inventory List</h3>
-                <p style={{ color: 'var(--text-light)' }}>Search stock records, then edit quantities or item details.</p>
-              </div>
+        <section className="form-card">
+          <div className="card-header">
+            <div>
+              <h3>Inventory List</h3>
+              <p style={{ color: 'var(--text-light)' }}>Search stock records, then edit quantities or item details.</p>
             </div>
+            <button className="btn btn-primary" type="button" onClick={openAddModal}>
+              <FaPlus /> Add Item
+            </button>
+          </div>
 
-            <div className="filter-grid filter-grid-3">
-              <input
-                value={filters.search}
-                placeholder="Search item name or description..."
-                onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
-              />
-              <button className="btn btn-outline" type="button" onClick={() => setFilters({ search: '' })}>
-                Reset
-              </button>
-            </div>
+          <div className="filter-grid filter-grid-3">
+            <input
+              value={filters.search}
+              placeholder="Search item name or description..."
+              onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+            />
+            <button className="btn btn-outline" type="button" onClick={() => setFilters({ search: '' })}>
+              Reset
+            </button>
+          </div>
 
-            {loading ? (
-              <div className="reservation-empty">Loading inventory items...</div>
-            ) : items.length > 0 ? (
-              <div className="table-shell" style={{ marginTop: '1.5rem' }}>
-                <table className="reservation-table">
-                  <thead>
-                    <tr>
-                      <th>Item</th>
-                      <th>Quantity</th>
-                      <th>Unit Price</th>
-                      <th>Updated</th>
-                      <th>Action</th>
+          {loading ? (
+            <div className="reservation-empty">Loading inventory items...</div>
+          ) : items.length > 0 ? (
+            <div className="table-shell" style={{ marginTop: '1.5rem' }}>
+              <table className="reservation-table">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Updated</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item._id}>
+                      <td>
+                        <strong>{item.itemName}</strong>
+                        <span>{item.description || 'No description'}</span>
+                      </td>
+                      <td>
+                        <span className={`badge ${getBadgeClass(item.lowStock ? 'unavailable' : 'available')}`}>
+                          {item.quantity} units
+                        </span>
+                        {item.lowStock && <span>Low stock</span>}
+                      </td>
+                      <td>{formatCurrency(item.price)}</td>
+                      <td>{formatDate(item.updatedAt)}</td>
+                      <td>
+                        <div className="table-actions">
+                          <button className="btn btn-secondary btn-sm" type="button" onClick={() => openEditForm(item)}>
+                            Edit
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            type="button"
+                            disabled={busyAction === item._id}
+                            onClick={() => deleteItem(item._id)}
+                          >
+                            {busyAction === item._id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {items.map((item) => (
-                      <tr key={item._id}>
-                        <td>
-                          <strong>{item.itemName}</strong>
-                          <span>{item.description || 'No description'}</span>
-                        </td>
-                        <td>
-                          <span className={`badge ${getBadgeClass(item.lowStock ? 'unavailable' : 'available')}`}>
-                            {item.quantity} units
-                          </span>
-                          {item.lowStock && <span>Low stock</span>}
-                        </td>
-                        <td>{formatCurrency(item.price)}</td>
-                        <td>{formatDate(item.updatedAt)}</td>
-                        <td>
-                          <div className="table-actions">
-                            <button className="btn btn-secondary btn-sm" type="button" onClick={() => openEditForm(item)}>
-                              Edit
-                            </button>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              type="button"
-                              disabled={busyAction === item._id}
-                              onClick={() => deleteItem(item._id)}
-                            >
-                              {busyAction === item._id ? 'Deleting...' : 'Delete'}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="reservation-empty">No inventory items matched the current filters.</div>
-            )}
-          </section>
-
-          <aside className="form-card payment-side-panel">
-            <div className="card-header">
-              <div>
-                <h3>{editingId ? 'Edit Item' : 'Add Item'}</h3>
-                <p style={{ color: 'var(--text-light)' }}>Keep item details current for maintenance records.</p>
-              </div>
+                  ))}
+                </tbody>
+              </table>
             </div>
+          ) : (
+            <div className="reservation-empty">No inventory items matched the current filters.</div>
+          )}
+        </section>
 
-            <form onSubmit={submitForm}>
-              <div className="form-group">
-                <label>Item Name</label>
-                <input
-                  value={form.itemName}
-                  onChange={(e) => setForm((prev) => ({ ...prev, itemName: e.target.value }))}
-                  placeholder="Engine oil, brake pads..."
-                  required
-                />
+        {isItemModalOpen && (
+          <div className="payment-modal-overlay" onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeItemModal()
+            }
+          }}>
+            <section
+              className="form-card payment-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="inventory-item-modal-title"
+            >
+              <div className="payment-modal-header">
+                <div>
+                  <h3 id="inventory-item-modal-title">{editingId ? 'Edit Item' : 'Add Item'}</h3>
+                  <p>Keep item details current for maintenance records.</p>
+                </div>
+                <button
+                  className="payment-icon-button"
+                  type="button"
+                  aria-label="Close"
+                  onClick={closeItemModal}
+                  disabled={busy}
+                >
+                  <FaTimes />
+                </button>
               </div>
-              <div className="form-row">
+
+              {error && <div className="alert alert-danger">{error}</div>}
+
+              <form onSubmit={submitForm}>
                 <div className="form-group">
-                  <label>Quantity</label>
+                  <label>Item Name</label>
                   <input
-                    type="number"
-                    min="0"
-                    value={form.quantity}
-                    onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                    value={form.itemName}
+                    onChange={(e) => setForm((prev) => ({ ...prev, itemName: e.target.value }))}
+                    placeholder="Engine oil, brake pads..."
                     required
                   />
                 </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Quantity</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={form.quantity}
+                      onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Unit Price</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={form.price}
+                      onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
+                      required
+                    />
+                  </div>
+                </div>
                 <div className="form-group">
-                  <label>Unit Price</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={form.price}
-                    onChange={(e) => setForm((prev) => ({ ...prev, price: e.target.value }))}
-                    required
+                  <label>Description</label>
+                  <textarea
+                    rows="4"
+                    value={form.description}
+                    onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Brand, compatibility, storage notes..."
                   />
                 </div>
-              </div>
-              <div className="form-group">
-                <label>Description</label>
-                <textarea
-                  rows="4"
-                  value={form.description}
-                  onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Brand, compatibility, storage notes..."
-                />
-              </div>
-              <div className="pill-row">
-                <button className="btn btn-primary" type="submit" disabled={busy}>
-                  {busy ? 'Saving...' : editingId ? 'Update Item' : 'Create Item'}
-                </button>
-                <button className="btn btn-outline" type="button" onClick={resetForm}>
-                  New Item
-                </button>
-              </div>
-            </form>
-          </aside>
-        </div>
+                <div className="payment-modal-footer">
+                  <button className="btn btn-outline" type="button" onClick={closeItemModal} disabled={busy}>
+                    Cancel
+                  </button>
+                  <button className="btn btn-primary" type="submit" disabled={busy}>
+                    {busy ? 'Saving...' : editingId ? 'Update Item' : 'Create Item'}
+                  </button>
+                </div>
+              </form>
+            </section>
+          </div>
+        )}
       </main>
     </div>
   )
