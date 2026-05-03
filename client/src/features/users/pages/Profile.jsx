@@ -6,7 +6,17 @@ import { useAuth } from '../../../context/AuthContext';
 import Sidebar from '../../../components/layout/Sidebar';
 import { formatDateTime } from '../../../utils/formatters';
 import { isRoleManagementNotification } from '../../../utils/notifications';
+import { buildLatestProviderApplicationMap } from '../../../utils/providerApplications';
 import { formatRoleLabel, getProfilePathForRole } from '../../../utils/roles';
+import {
+  hasDocumentMetadata,
+  validateEmail,
+  validateOptionalPhone,
+  validatePasswordStrength,
+  validateProfileImage,
+  validateRequiredText,
+  validateUsername
+} from '../../../utils/validation';
 
 const blockedProfileStatuses = ['rejected', 'suspended', 'deactivated'];
 const blockedApplicationStatuses = ['suspended', 'deactivated'];
@@ -72,6 +82,34 @@ const getBadgeClass = (tone) => {
   }
 };
 const hasDocumentReference = (document = {}) => Boolean(document?.fileName || document?.filePath);
+const providerApplicationRequirements = {
+  driver: {
+    fields: [
+      ['drivingLicenseNumber', 'Driving license number'],
+      ['nicId', 'NIC / ID'],
+      ['serviceArea', 'Service area']
+    ],
+    documents: [
+      ['nicDocument', 'NIC / ID document'],
+      ['drivingLicenseDocument', 'Driving license document'],
+      ['proofOfAddressDocument', 'Proof of address document']
+    ]
+  },
+  staff: {
+    fields: [
+      ['storeName', 'Store name'],
+      ['businessRegistrationNumber', 'Business registration number'],
+      ['storeAddress', 'Store address'],
+      ['storeContactNumber', 'Store contact number'],
+      ['storeEmail', 'Store email']
+    ],
+    documents: [
+      ['businessRegistrationDocument', 'Business registration document'],
+      ['proofOfAddressDocument', 'Proof of address document']
+    ]
+  }
+};
+const canUseAssignedRole = (role = null) => role?.roleStatus === 'active' && role?.verificationStatus === 'verified';
 const calculateCompletionPercent = (items = []) => {
   if (!items.length) {
     return 0;
@@ -104,8 +142,10 @@ export default function Profile() {
     emergencyContactPhone: '',
     emergencyContactRelationship: '',
     currentPassword: '',
-    password: ''
+    password: '',
+    confirmPassword: ''
   });
+  const [profileImage, setProfileImage] = useState(null);
   const [driverProfile, setDriverProfile] = useState({
     drivingLicenseNumber: '',
     licenseExpiryDate: '',
@@ -135,8 +175,8 @@ export default function Profile() {
   ), [user]);
 
   const applicationMap = useMemo(() => (
-    Object.fromEntries((user?.providerApplications || []).map((item) => [item.roleKey, item]))
-  ), [user]);
+    buildLatestProviderApplicationMap(user?.providerApplications || [])
+  ), [user?.providerApplications]);
 
   useEffect(() => {
     if (!user) {
@@ -157,7 +197,8 @@ export default function Profile() {
       emergencyContactPhone: user.emergencyContact?.phone || '',
       emergencyContactRelationship: user.emergencyContact?.relationship || '',
       currentPassword: '',
-      password: ''
+      password: '',
+      confirmPassword: ''
     });
 
     setDriverProfile({
@@ -213,9 +254,66 @@ export default function Profile() {
   const driverApplication = applicationMap.driver;
   const staffApplication = applicationMap.staff;
   const activeRoleKey = user?.activeRole || user?.role || 'customer';
+  const hasUsableCustomerRole = canUseAssignedRole(customerRole);
+
+  const validateBasicProfileForm = () => {
+    const passwordFieldsTouched = Boolean(profile.password || profile.currentPassword || profile.confirmPassword);
+
+    if (passwordFieldsTouched) {
+      return validateRequiredText(profile.fullName, 'Full name')
+        || validateUsername(profile.username)
+        || validateEmail(profile.email)
+        || validateOptionalPhone(profile.phone)
+        || validateOptionalPhone(profile.emergencyContactPhone, 'Emergency contact phone')
+        || validateProfileImage(profileImage)
+        || validateRequiredText(profile.password, 'New password')
+        || validatePasswordStrength(profile.password)
+        || validateRequiredText(profile.currentPassword, 'Current password')
+        || validateRequiredText(profile.confirmPassword, 'Confirm password')
+        || (profile.password === profile.confirmPassword ? '' : 'Passwords do not match');
+    }
+
+    return validateRequiredText(profile.fullName, 'Full name')
+      || validateUsername(profile.username)
+      || validateEmail(profile.email)
+      || validateOptionalPhone(profile.phone)
+      || validateOptionalPhone(profile.emergencyContactPhone, 'Emergency contact phone')
+      || validateProfileImage(profileImage);
+  };
+
+  const validateProviderApplicationForm = (roleKey, payload) => {
+    const config = providerApplicationRequirements[roleKey] || { fields: [], documents: [] };
+    const missingField = config.fields.find(([key]) => !String(payload?.[key] || '').trim());
+
+    if (missingField) {
+      return `${missingField[1]} is required`;
+    }
+
+    if (roleKey === 'staff') {
+      const storeEmailError = validateEmail(payload.storeEmail, 'Store email');
+      if (storeEmailError) {
+        return storeEmailError;
+      }
+    }
+
+    const missingDocument = config.documents.find(([key]) => !hasDocumentMetadata(payload?.documents?.[key] || {}));
+    if (missingDocument) {
+      return `${missingDocument[1]} metadata is required`;
+    }
+
+    return '';
+  };
 
   const saveBasicProfile = async (event) => {
     event.preventDefault();
+    const validationError = validateBasicProfileForm();
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
     setBusyAction('basic');
     setMessage('');
     setError('');
@@ -237,16 +335,28 @@ export default function Profile() {
           return;
         }
 
+        if (key === 'confirmPassword') {
+          if (profile.password && value) {
+            formData.append(key, value);
+          }
+          return;
+        }
+
         if (value !== undefined && value !== null) {
           formData.append(key, value);
         }
       });
 
+      if (profileImage) {
+        formData.append('profilePic', profileImage);
+      }
+
       const res = await API.put('/users/profile', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       setUser(res.data);
-      setProfile((prev) => ({ ...prev, currentPassword: '', password: '' }));
+      setProfile((prev) => ({ ...prev, currentPassword: '', password: '', confirmPassword: '' }));
+      setProfileImage(null);
       setIsEditMode(false);
       setMessage('User profile updated successfully');
     } catch (err) {
@@ -273,6 +383,14 @@ export default function Profile() {
   };
 
   const submitProviderApplication = async (roleKey, payload) => {
+    const validationError = validateProviderApplicationForm(roleKey, payload);
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
     setBusyAction(`apply-${roleKey}`);
     setMessage('');
     setError('');
@@ -363,7 +481,7 @@ export default function Profile() {
   const profileTabs = [
     ...(activeRoleKey === 'customer' ? [{ key: 'user', to: '/profile/user', label: 'User Profile' }] : []),
     ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driver', label: 'Driver Profile' }] : []),
-    ...(activeRoleKey === 'staff' ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
+    ...(activeRoleKey === 'staff' || hasUsableCustomerRole ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
     ...(activeRoleKey === 'admin' ? [{ key: 'admin', to: '/profile/admin', label: 'Admin Profile' }] : [])
   ];
   const availableProfileSections = profileTabs.map((tab) => tab.key);
@@ -382,7 +500,7 @@ export default function Profile() {
     : user?.fullName;
   const showUserProfile = resolvedProfileSection === 'user';
   const showDriverProfile = ['customer', 'driver'].includes(activeRoleKey) && resolvedProfileSection === 'driver';
-  const showStaffProfile = activeRoleKey === 'staff' && resolvedProfileSection === 'store';
+  const showStaffProfile = (activeRoleKey === 'staff' || hasUsableCustomerRole) && resolvedProfileSection === 'store';
   const showAdminProfile = activeRoleKey === 'admin' && resolvedProfileSection === 'admin';
   const showRoleSwitcher = activeRoleKey !== 'admin';
   const visibleProfileCompletion = resolvedProfileSection === 'driver'
@@ -562,6 +680,22 @@ export default function Profile() {
     }));
   };
 
+  const handleProfileImageChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    const validationError = validateProfileImage(file);
+
+    if (validationError) {
+      event.target.value = '';
+      setProfileImage(null);
+      setMessage('');
+      setError(validationError);
+      return;
+    }
+
+    setProfileImage(file);
+    setError('');
+  };
+
   const renderDocumentMeta = (document) => (
     <>
       <div className="pill-row" style={{ marginTop: '0.75rem' }}>
@@ -715,6 +849,15 @@ export default function Profile() {
                   <input disabled={!isEditMode} value={profile.phone} onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))} />
                 </div>
               </div>
+              <div className="form-group">
+                <label>Profile Image</label>
+                <input
+                  disabled={!isEditMode}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleProfileImageChange}
+                />
+              </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>City</label>
@@ -780,7 +923,11 @@ export default function Profile() {
                 </div>
                 <div className="form-group">
                   <label>New Password</label>
-                  <input disabled={!isEditMode} type="password" value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                  <input disabled={!isEditMode} type="password" minLength={8} value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Confirm Password</label>
+                  <input disabled={!isEditMode} type="password" value={profile.confirmPassword} onChange={(e) => setProfile((prev) => ({ ...prev, confirmPassword: e.target.value }))} />
                 </div>
               </div>
               <div className="profile-form-actions">
@@ -1057,6 +1204,30 @@ export default function Profile() {
                 )}
               </div>
             </form>
+            {hasUsableCustomerRole && !staffApplicationBlocked && (
+              <div className="profile-form-actions">
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  disabled={
+                    busyAction === 'apply-staff'
+                    || staffApplication?.status === 'pending'
+                    || canUseAssignedRole(staffRole)
+                  }
+                  onClick={() => submitProviderApplication('staff', staffProfile)}
+                >
+                  {busyAction === 'apply-staff'
+                    ? 'Submitting...'
+                    : staffApplication?.status === 'pending'
+                      ? 'Store Application Pending'
+                      : staffApplication?.status === 'rejected'
+                        ? 'Re-apply for Store Role'
+                        : canUseAssignedRole(staffRole)
+                          ? 'Store Role Approved'
+                          : 'Apply for Store Role'}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1096,6 +1267,15 @@ export default function Profile() {
                   <label>Phone</label>
                   <input disabled={!isEditMode} value={profile.phone} onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))} />
                 </div>
+              </div>
+              <div className="form-group">
+                <label>Profile Image</label>
+                <input
+                  disabled={!isEditMode}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleProfileImageChange}
+                />
               </div>
               <div className="form-row">
                 <div className="form-group">
@@ -1162,7 +1342,11 @@ export default function Profile() {
                 </div>
                 <div className="form-group">
                   <label>New Password</label>
-                  <input disabled={!isEditMode} type="password" value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                  <input disabled={!isEditMode} type="password" minLength={8} value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Confirm Password</label>
+                  <input disabled={!isEditMode} type="password" value={profile.confirmPassword} onChange={(e) => setProfile((prev) => ({ ...prev, confirmPassword: e.target.value }))} />
                 </div>
               </div>
               <div className="profile-form-actions">

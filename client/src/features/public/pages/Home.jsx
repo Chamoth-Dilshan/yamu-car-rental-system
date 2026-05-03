@@ -296,7 +296,7 @@ export default function Home() {
 
               <div className="home-review-highlight">
                 <div className="home-review-highlight-top">
-                  <span>Latest Approved Review</span>
+                  <span>Latest Review</span>
                   <div className="home-review-stars" aria-label={`Latest review rating ${formatRating(featuredReviewRating)}`}>
                     {[1, 2, 3, 4, 5].map((rating) => (
                       <FaStar

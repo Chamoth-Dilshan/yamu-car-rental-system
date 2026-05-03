@@ -23,7 +23,9 @@ const {
   normalizeStaffDocuments,
   setDocumentCollectionStatus,
   trimValue,
-  validateRequiredTextFields
+  validateEmailAddress,
+  validateRequiredTextFields,
+  validateUsernameValue
 } = require('../../utils/profileHelpers');
 
 const MANAGEABLE_ROLE_KEYS = [...ROLE_KEYS];
@@ -38,19 +40,29 @@ const toPlain = (value) => (value?.toObject ? value.toObject() : value);
 const snapshotsEqual = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 const isProtectedAdminAccount = (user) => Boolean(user?.isSystemAdmin);
 const ensureUniqueIdentityFields = async (userId, email, username) => {
-  const normalizedEmail = String(email).trim().toLowerCase();
-  const normalizedUsername = String(username).trim().toLowerCase();
+  const emailValidation = validateEmailAddress(email);
+  if (emailValidation.error) {
+    throw new Error(emailValidation.error);
+  }
+
+  const usernameValidation = validateUsernameValue(username);
+  if (usernameValidation.error) {
+    throw new Error(usernameValidation.error);
+  }
 
   const existing = await User.findOne({
     _id: { $ne: userId },
-    $or: [{ email: normalizedEmail }, { username: normalizedUsername }]
+    $or: [{ email: emailValidation.value }, { username: usernameValidation.value }]
   });
 
   if (existing) {
     throw new Error('Email or username is already in use');
   }
 
-  return { normalizedEmail, normalizedUsername };
+  return {
+    normalizedEmail: emailValidation.value,
+    normalizedUsername: usernameValidation.value
+  };
 };
 
 const buildManageableRoles = (incomingRoles = []) => {
@@ -430,6 +442,14 @@ const updateUser = async (req, res) => {
   } catch (error) {
     if (error.code === 11000 || error.message === 'Email or username is already in use') {
       return res.status(400).json({ message: 'Email or username is already in use' });
+    }
+
+    if (
+      error.message?.includes('must be a valid email address')
+      || error.message?.includes('must be 3-30 characters')
+      || error.message?.includes('is required')
+    ) {
+      return res.status(400).json({ message: error.message });
     }
 
     sendServerError(res, error, 'Failed to update user');
