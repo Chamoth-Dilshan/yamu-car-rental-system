@@ -139,6 +139,8 @@ const buildDocumentMetadata = (input = {}, current = {}) => {
   const currentFilePath = trimValue(current.filePath, current.reference || '');
   const fileName = trimValue(input.fileName, currentFileName);
   const filePath = trimValue(input.filePath, input.reference || currentFilePath);
+  const mimeType = trimValue(input.mimeType, current.mimeType || '');
+  const size = Number(input.size ?? current.size ?? 0) || 0;
   const hasCurrentFile = hasDocumentFile(current);
   const hasNextFile = Boolean(fileName || filePath);
   const currentStatus = normalizeDocumentStatus(current.status, hasCurrentFile);
@@ -170,6 +172,8 @@ const buildDocumentMetadata = (input = {}, current = {}) => {
     fileName,
     filePath,
     reference: filePath,
+    mimeType,
+    size,
     status,
     rejectionReason,
     uploadedAt,

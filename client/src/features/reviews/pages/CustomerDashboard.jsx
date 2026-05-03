@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { FaCarSide, FaRegStar, FaStar, FaUserTie } from 'react-icons/fa'
 import Sidebar from '../../../components/layout/Sidebar'
 import { useAuth } from '../../../context/AuthContext'
 import { getCustomerBookings } from '../../reservations/bookingApi'
-import { formatCurrency, formatDateRange, getBadgeClass } from '../../../utils/formatters'
+import { formatCurrency, formatDateRange, formatDateTime, getBadgeClass } from '../../../utils/formatters'
 import { getMyReviews } from '../reviewApi'
 
 const emptyBookingStats = {
@@ -28,6 +29,12 @@ const paymentStatusLabels = {
   refunded: 'Refunded',
   failed: 'Failed',
   cancelled: 'Cancelled'
+}
+
+const reviewStatusLabels = {
+  pending: 'Pending approval',
+  approved: 'Approved',
+  rejected: 'Rejected'
 }
 
 const getTime = (value) => {
@@ -56,6 +63,58 @@ const getBookingLink = (booking) => {
 const canReviewBooking = (booking) => (
   ['completed', 'closed'].includes(booking.bookingStatus) && booking.paymentStatus === 'paid'
 )
+
+function RatingStars({ rating = 0 }) {
+  const normalizedRating = Number(rating || 0)
+
+  return (
+    <span className="dashboard-review-stars" aria-label={`${normalizedRating} out of 5`}>
+      {[1, 2, 3, 4, 5].map((value) => (
+        value <= normalizedRating
+          ? <FaStar key={value} className="filled" />
+          : <FaRegStar key={value} />
+      ))}
+    </span>
+  )
+}
+
+function ReviewDetails({ review }) {
+  if (!review) {
+    return null
+  }
+
+  return (
+    <div className="dashboard-review-summary">
+      <div className="dashboard-review-title">
+        <span className={`badge ${getBadgeClass(review.status)}`}>
+          {reviewStatusLabels[review.status] || review.status || 'Review submitted'}
+        </span>
+        <small>{formatDateTime(review.updatedAt || review.createdAt)}</small>
+      </div>
+      <p>&ldquo;{review.feedback}&rdquo;</p>
+      <div className="dashboard-review-ratings">
+        {review.vehicleRating && (
+          <span>
+            <FaCarSide />
+            Vehicle
+            <RatingStars rating={review.vehicleRating} />
+          </span>
+        )}
+        {review.driverRating && (
+          <span>
+            <FaUserTie />
+            Driver
+            <RatingStars rating={review.driverRating} />
+          </span>
+        )}
+      </div>
+      {review.status === 'rejected' && review.rejectionReason && (
+        <div className="dashboard-review-rejection">{review.rejectionReason}</div>
+      )}
+      <Link className="btn btn-outline btn-sm" to="/reviews">Open Review</Link>
+    </div>
+  )
+}
 
 export default function CustomerDashboard() {
   const { user } = useAuth()
@@ -126,16 +185,41 @@ export default function CustomerDashboard() {
     return upcomingBookings[0] || activeBookings[0] || null
   }, [bookings])
 
-  const recentBookings = useMemo(() => bookings.slice(0, 5), [bookings])
+  const recentCompletedBookings = useMemo(() => (
+    bookings
+      .filter((booking) => ['completed', 'closed'].includes(booking.bookingStatus))
+      .sort((first, second) => (
+        getTime(second.endDate) - getTime(first.endDate)
+        || getTime(second.updatedAt) - getTime(first.updatedAt)
+        || getTime(second.createdAt) - getTime(first.createdAt)
+      ))
+      .slice(0, 5)
+  ), [bookings])
 
-  const reviewedBookingKeys = useMemo(() => (
-    new Set(
-      reviews
-        .flatMap((review) => [review.booking?._id, review.booking, review.bookingNo])
+  const reviewsByBookingKey = useMemo(() => {
+    const reviewMap = new Map()
+
+    reviews.forEach((review) => {
+      const keys = [
+        review.booking?._id,
+        review.booking,
+        review.bookingNo
+      ]
+
+      keys
         .filter(Boolean)
         .map(String)
-    )
-  ), [reviews])
+        .forEach((key) => reviewMap.set(key, review))
+    })
+
+    return reviewMap
+  }, [reviews])
+
+  const getReviewForBooking = (booking) => (
+    reviewsByBookingKey.get(String(booking._id))
+      || reviewsByBookingKey.get(String(booking.bookingNo))
+      || null
+  )
 
   return (
     <div className="dashboard-layout page-content">
@@ -220,15 +304,15 @@ export default function CustomerDashboard() {
             <section className="form-card">
               <div className="card-header">
                 <div>
-                  <h3>Recent Bookings</h3>
-                  <p style={{ color: 'var(--text-light)' }}>Review your latest trips, payment state, and next actions.</p>
+                  <h3>Recent Completed Bookings</h3>
+                  <p style={{ color: 'var(--text-light)' }}>Review your latest completed trips and submitted feedback.</p>
                 </div>
                 <Link className="btn btn-outline btn-sm" to="/bookings">View All</Link>
               </div>
 
               {loading ? (
-                <div className="reservation-empty">Loading bookings...</div>
-              ) : recentBookings.length > 0 ? (
+                <div className="reservation-empty">Loading completed bookings...</div>
+              ) : recentCompletedBookings.length > 0 ? (
                 <div className="table-shell">
                   <table className="reservation-table dashboard-table">
                     <thead>
@@ -237,45 +321,55 @@ export default function CustomerDashboard() {
                         <th>Dates</th>
                         <th>Total</th>
                         <th>Status</th>
-                        <th>Action</th>
+                        <th>Review</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {recentBookings.map((booking) => (
-                        <tr key={booking._id}>
-                          <td>
-                            <strong>{booking.displayVehicle}</strong>
-                            <span>{booking.bookingNo}</span>
-                          </td>
-                          <td>{formatDateRange(booking.startDate, booking.endDate)}</td>
-                          <td>{formatCurrency(booking.totalAmount)}</td>
-                          <td>
-                            <span className={`badge ${getBadgeClass(booking.bookingStatus)}`}>
-                              {getBookingStatusLabel(booking)}
-                            </span>
-                            <span>{getPaymentStatusLabel(booking.paymentStatus)}</span>
-                          </td>
-                          <td>
-                            <div className="table-actions">
-                              {['completed', 'closed'].includes(booking.bookingStatus) && booking.paymentStatus === 'pending' && (
-                                <Link className="btn btn-secondary btn-sm" to={`/payments/checkout/${booking._id}`}>Pay Now</Link>
+                      {recentCompletedBookings.map((booking) => {
+                        const review = getReviewForBooking(booking)
+
+                        return (
+                          <tr key={booking._id}>
+                            <td>
+                              <strong>{booking.displayVehicle}</strong>
+                              <span>{booking.bookingNo}</span>
+                              <span>{booking.bookingType === 'vehicle' ? 'Vehicle reservation' : 'Driver request'}</span>
+                            </td>
+                            <td>{formatDateRange(booking.startDate, booking.endDate)}</td>
+                            <td>{formatCurrency(booking.totalAmount)}</td>
+                            <td>
+                              <span className={`badge ${getBadgeClass(booking.bookingStatus)}`}>
+                                {getBookingStatusLabel(booking)}
+                              </span>
+                              <span>{getPaymentStatusLabel(booking.paymentStatus)}</span>
+                            </td>
+                            <td>
+                              {review ? (
+                                <ReviewDetails review={review} />
+                              ) : (
+                                <div className="table-actions">
+                                  {booking.paymentStatus === 'pending' ? (
+                                    <Link className="btn btn-secondary btn-sm" to={`/payments/checkout/${booking._id}`}>Pay Now</Link>
+                                  ) : canReviewBooking(booking) ? (
+                                    <Link className="btn btn-primary btn-sm" to={`/bookings/${booking._id}/review`}>Write Review</Link>
+                                  ) : (
+                                    <button className="btn btn-outline btn-sm" type="button" disabled>
+                                      Review unavailable
+                                    </button>
+                                  )}
+                                  <Link className="btn btn-outline btn-sm" to="/bookings">Details</Link>
+                                </div>
                               )}
-                              {canReviewBooking(booking)
-                                && !reviewedBookingKeys.has(String(booking._id))
-                                && !reviewedBookingKeys.has(String(booking.bookingNo)) && (
-                                <Link className="btn btn-primary btn-sm" to={`/bookings/${booking._id}/review`}>Review</Link>
-                              )}
-                              <Link className="btn btn-outline btn-sm" to="/bookings">Details</Link>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>
               ) : (
                 <div className="reservation-empty dashboard-empty-action">
-                  <span>No bookings found.</span>
+                  <span>No completed bookings found.</span>
                   <Link className="btn btn-primary btn-sm" to="/cars">Book a Car</Link>
                 </div>
               )}

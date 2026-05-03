@@ -11,6 +11,15 @@ const complaintStatusHistorySchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 }, { _id: false })
 
+const attachmentFileSchema = new mongoose.Schema({
+  fileName: { type: String, default: '' },
+  filePath: { type: String, default: '' },
+  reference: { type: String, default: '' },
+  mimeType: { type: String, default: '' },
+  size: { type: Number, default: 0 },
+  uploadedAt: { type: Date, default: null }
+}, { _id: false })
+
 const complaintSchema = new mongoose.Schema({
   customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   booking: { type: mongoose.Schema.Types.ObjectId, ref: 'Booking', required: true },
@@ -20,6 +29,10 @@ const complaintSchema = new mongoose.Schema({
   priority: { type: String, enum: COMPLAINT_PRIORITIES, default: 'low' },
   description: { type: String, required: true, trim: true },
   attachment: { type: String, default: '' },
+  attachmentFile: {
+    type: attachmentFileSchema,
+    default: () => ({})
+  },
   status: { type: String, enum: COMPLAINT_STATUSES, default: 'pending' },
   latestAdminMessage: { type: String, default: '' },
   lastStatusUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },

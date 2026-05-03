@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Sidebar from '../../../components/layout/Sidebar'
 import { formatCurrency, formatDateTime } from '../../../utils/formatters'
+import { openProtectedFile } from '../../../utils/protectedFiles'
 import PaymentStatusBadge from '../components/PaymentStatusBadge'
 import { getAdminPayments, recordAdminManualPayment, refundPayment, verifyPayment } from '../paymentApi'
 
@@ -16,6 +17,10 @@ const methodLabels = {
 const canVerify = (payment) => (
   payment.status === 'processing'
   && ['cash', 'bank_transfer', 'admin_manual'].includes(payment.method)
+)
+
+const hasProtectedProof = (payment) => Boolean(
+  payment.bankTransfer?.proofFile?.filePath && !/^\/?uploads\//i.test(payment.bankTransfer.proofFile.filePath)
 )
 
 export default function AdminPayments() {
@@ -97,6 +102,17 @@ export default function AdminPayments() {
       setError(err.response?.data?.message || 'Failed to refund payment')
     } finally {
       setBusyAction('')
+    }
+  }
+
+  const viewProof = async (payment) => {
+    setMessage('')
+    setError('')
+
+    try {
+      await openProtectedFile(`/payments/${payment._id}/proof`)
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to open payment proof')
     }
   }
 
@@ -272,6 +288,7 @@ export default function AdminPayments() {
                           <span>{payment.cardSnapshot?.brand || 'Card'} ending {payment.cardSnapshot?.last4 || '****'}</span>
                         )}
                         {payment.method === 'bank_transfer' && <span>{payment.bankTransfer?.bankName || 'Bank'} ref {payment.bankTransfer?.referenceNo || '-'}</span>}
+                        {hasProtectedProof(payment) && <span>Proof: {payment.bankTransfer.proofFile.fileName}</span>}
                       </td>
                       <td>{formatCurrency(payment.amount)}</td>
                       <td><PaymentStatusBadge status={payment.status} /></td>
@@ -285,6 +302,15 @@ export default function AdminPayments() {
                               onClick={() => verify(payment)}
                             >
                               Verify
+                            </button>
+                          )}
+                          {hasProtectedProof(payment) && (
+                            <button
+                              className="btn btn-outline btn-sm"
+                              type="button"
+                              onClick={() => viewProof(payment)}
+                            >
+                              Proof
                             </button>
                           )}
                           {payment.status === 'paid' && (

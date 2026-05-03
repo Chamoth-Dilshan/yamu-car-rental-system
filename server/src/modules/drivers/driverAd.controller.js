@@ -1,160 +1,21 @@
-const Booking = require('../reservations/booking.model')
-const DriverAd = require('./driverAd.model')
-const Review = require('../reviews/review.model')
-const User = require('../users/user.model')
 const { sendServerError } = require('../../utils/errorResponses')
-const { serializeDriverAd, DRIVER_AD_AVAILABILITY, DRIVER_AD_VISIBILITY, parseListField } = require('../../utils/reservationHelpers')
+const {
+  listPublicDriverAds,
+  getPublicDriverAdById,
+  listDriverAdsForDriver,
+  createDriverAd: createDriverAdService,
+  updateDriverAd: updateDriverAdService,
+  deleteDriverAd: deleteDriverAdService
+} = require('./driverAd.service')
 
-const driverSummaryFields = 'fullName email phone city profilePic'
-const escapeRegex = (value = '') => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-const roundRating = (value) => Number((Number(value || 0)).toFixed(1))
-
-const getDriverAdPayload = (body, file, existingAd, user) => {
-  const title = String(body.title || existingAd?.title || '').trim()
-  const dailyRate = Number(body.dailyRate ?? existingAd?.dailyRate ?? 0)
-  const maxGroupSize = Number(body.maxGroupSize ?? existingAd?.maxGroupSize ?? 1)
-  const experienceYears = Number(body.experienceYears ?? existingAd?.experienceYears ?? 0)
-  const availability = body.availability || existingAd?.availability || 'available'
-  const visibility = body.visibility || existingAd?.visibility || 'active'
-
-  if (!title) {
-    return { error: 'Advertisement title is required' }
-  }
-
-  if (!Number.isFinite(dailyRate) || dailyRate <= 0) {
-    return { error: 'Daily rate must be greater than zero' }
-  }
-
-  if (!DRIVER_AD_AVAILABILITY.includes(availability)) {
-    return { error: 'Invalid ad availability value' }
-  }
-
-  if (!DRIVER_AD_VISIBILITY.includes(visibility)) {
-    return { error: 'Invalid ad visibility value' }
-  }
-
-  return {
-    payload: {
-      title,
-      tagline: String(body.tagline || existingAd?.tagline || '').trim(),
-      serviceLocation: String(
-        body.serviceLocation
-        || existingAd?.serviceLocation
-        || user.driverProfile?.serviceArea
-        || user.city
-        || ''
-      ).trim(),
-      languages: parseListField(body.languages || existingAd?.languages || []),
-      experienceYears: Number.isFinite(experienceYears) && experienceYears >= 0 ? experienceYears : 0,
-      dailyRate,
-      maxGroupSize: Number.isFinite(maxGroupSize) && maxGroupSize > 0 ? maxGroupSize : 1,
-      availability,
-      visibility,
-      preferredContact: String(body.preferredContact || existingAd?.preferredContact || '').trim(),
-      specialties: parseListField(body.specialties || existingAd?.specialties || []),
-      description: String(body.description || existingAd?.description || '').trim(),
-      photo: file ? `driver-ads/${file.filename}` : (existingAd?.photo || (user.profilePic !== 'avatar.png' ? user.profilePic : ''))
-    }
-  }
-}
-
-const buildStats = (ads) => ({
-  totalAds: ads.length,
-  activeAds: ads.filter((ad) => ad.visibility === 'active').length,
-  availableAds: ads.filter((ad) => ad.availability === 'available').length,
-  pausedAds: ads.filter((ad) => ad.visibility === 'paused').length
-})
-
-const buildDriverAdReviewStatsMap = async (ads) => {
-  const adIds = ads.map((ad) => ad._id).filter(Boolean)
-
-  if (!adIds.length) {
-    return new Map()
-  }
-
-  const stats = await Review.aggregate([
-    {
-      $match: {
-        status: 'approved',
-        driverAd: { $in: adIds },
-        driverRating: { $gte: 1, $lte: 5 }
-      }
-    },
-    {
-      $group: {
-        _id: '$driverAd',
-        ratingAverage: { $avg: '$driverRating' },
-        reviewCount: { $sum: 1 }
-      }
-    }
-  ])
-
-  return new Map(stats.map((item) => [String(item._id), {
-    ratingAverage: roundRating(item.ratingAverage),
-    reviewCount: item.reviewCount
-  }]))
-}
-
-const applyDriverAdReviewStats = (ad, statsMap) => {
-  const stats = statsMap.get(String(ad._id))
-
-  if (!stats) {
-    return ad
-  }
-
-  const rawAd = ad?.toObject ? ad.toObject() : { ...ad }
-  return {
-    ...rawAd,
-    ...stats
-  }
-}
+const sendServiceError = (res, result) => (
+  res.status(result.statusCode || 400).json({ message: result.error })
+)
 
 const getDriverAds = async (req, res) => {
   try {
-    const { search = '', location, availability } = req.query
-    const normalizedSearch = String(search || '').trim()
-    const normalizedLocation = String(location || '').trim()
-    const query = { visibility: 'active' }
-
-    if (availability && availability !== 'all') {
-      query.availability = availability
-    }
-
-    if (normalizedLocation && normalizedLocation !== 'all') {
-      query.serviceLocation = new RegExp(escapeRegex(normalizedLocation), 'i')
-    }
-
-    if (normalizedSearch) {
-      const regex = new RegExp(escapeRegex(normalizedSearch), 'i')
-      const matchingDriverIds = await User.find({
-        $or: [
-          { fullName: regex },
-          { username: regex },
-          { email: regex },
-          { city: regex }
-        ]
-      }).distinct('_id')
-
-      query.$or = [
-        { title: regex },
-        { tagline: regex },
-        { serviceLocation: regex },
-        { languages: regex },
-        { specialties: regex },
-        { driver: { $in: matchingDriverIds } }
-      ]
-    }
-
-    const ads = await DriverAd.find(query)
-      .populate('driver', driverSummaryFields)
-      .sort({ availability: 1, createdAt: -1 })
-
-    const reviewStatsMap = await buildDriverAdReviewStatsMap(ads)
-
-    res.json({
-      ads: ads.map((ad) => serializeDriverAd(applyDriverAdReviewStats(ad, reviewStatsMap)))
-    })
+    const ads = await listPublicDriverAds(req.query)
+    res.json({ ads })
   } catch (error) {
     sendServerError(res, error, 'Failed to load driver advertisements')
   }
@@ -162,140 +23,82 @@ const getDriverAds = async (req, res) => {
 
 const getDriverAdById = async (req, res) => {
   try {
-    const ad = await DriverAd.findById(req.params.id).populate('driver', driverSummaryFields)
+    const result = await getPublicDriverAdById(req.params.id)
 
-    if (!ad || ad.visibility !== 'active') {
-      return res.status(404).json({ message: 'Driver advertisement not found' })
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    const reviewStatsMap = await buildDriverAdReviewStatsMap([ad])
-
-    res.json(serializeDriverAd(applyDriverAdReviewStats(ad, reviewStatsMap)))
+    return res.json(result.ad)
   } catch (error) {
-    sendServerError(res, error, 'Failed to load driver advertisement')
+    return sendServerError(res, error, 'Failed to load driver advertisement')
   }
 }
 
 const getMyDriverAds = async (req, res) => {
   try {
-    const { search = '', availability, visibility } = req.query
-    const normalizedSearch = String(search || '').trim()
-    const query = { driver: req.user._id }
-
-    if (availability && availability !== 'all') {
-      query.availability = availability
-    }
-
-    if (visibility && visibility !== 'all') {
-      query.visibility = visibility
-    }
-
-    if (normalizedSearch) {
-      const regex = new RegExp(escapeRegex(normalizedSearch), 'i')
-      query.$or = [
-        { title: regex },
-        { tagline: regex },
-        { serviceLocation: regex },
-        { languages: regex },
-        { specialties: regex }
-      ]
-    }
-
-    const ads = await DriverAd.find(query)
-      .populate('driver', driverSummaryFields)
-      .sort({ updatedAt: -1 })
-
-    const reviewStatsMap = await buildDriverAdReviewStatsMap(ads)
-
-    res.json({
-      ads: ads.map((ad) => serializeDriverAd(applyDriverAdReviewStats(ad, reviewStatsMap))),
-      stats: buildStats(ads)
+    const result = await listDriverAdsForDriver({
+      driverId: req.user._id,
+      ...req.query
     })
+
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to load your driver advertisements')
+    return sendServerError(res, error, 'Failed to load your driver advertisements')
   }
 }
 
 const createDriverAd = async (req, res) => {
   try {
-    const existingAd = await DriverAd.findOne({ driver: req.user._id }).select('_id')
-
-    if (existingAd) {
-      return res.status(400).json({ message: 'You already have a driver advertisement. Update the existing ad instead.' })
-    }
-
-    const { payload, error } = getDriverAdPayload(req.body, req.file, null, req.user)
-
-    if (error) {
-      return res.status(400).json({ message: error })
-    }
-
-    const ad = await DriverAd.create({
-      ...payload,
-      driver: req.user._id
+    const result = await createDriverAdService({
+      user: req.user,
+      body: req.body,
+      file: req.file
     })
 
-    const createdAd = await DriverAd.findById(ad._id).populate('driver', driverSummaryFields)
+    if (result.error) {
+      return sendServiceError(res, result)
+    }
 
-    res.status(201).json({
-      message: 'Driver advertisement created successfully',
-      ad: serializeDriverAd(createdAd)
-    })
+    return res.status(201).json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to create driver advertisement')
+    return sendServerError(res, error, 'Failed to create driver advertisement')
   }
 }
 
 const updateDriverAd = async (req, res) => {
   try {
-    const ad = await DriverAd.findOne({ _id: req.params.id, driver: req.user._id })
-
-    if (!ad) {
-      return res.status(404).json({ message: 'Driver advertisement not found' })
-    }
-
-    const { payload, error } = getDriverAdPayload(req.body, req.file, ad, req.user)
-
-    if (error) {
-      return res.status(400).json({ message: error })
-    }
-
-    Object.assign(ad, payload)
-    await ad.save()
-
-    const updatedAd = await DriverAd.findById(ad._id).populate('driver', driverSummaryFields)
-
-    res.json({
-      message: 'Driver advertisement updated successfully',
-      ad: serializeDriverAd(updatedAd)
+    const result = await updateDriverAdService({
+      adId: req.params.id,
+      user: req.user,
+      body: req.body,
+      file: req.file
     })
+
+    if (result.error) {
+      return sendServiceError(res, result)
+    }
+
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to update driver advertisement')
+    return sendServerError(res, error, 'Failed to update driver advertisement')
   }
 }
 
 const deleteDriverAd = async (req, res) => {
   try {
-    const ad = await DriverAd.findOne({ _id: req.params.id, driver: req.user._id })
-
-    if (!ad) {
-      return res.status(404).json({ message: 'Driver advertisement not found' })
-    }
-
-    const activeBooking = await Booking.findOne({
-      driverAd: ad._id,
-      bookingStatus: { $in: ['pending', 'confirmed'] }
+    const result = await deleteDriverAdService({
+      adId: req.params.id,
+      driverId: req.user._id
     })
 
-    if (activeBooking) {
-      return res.status(400).json({ message: 'This advertisement still has active booking requests' })
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    await ad.deleteOne()
-
-    res.json({ message: 'Driver advertisement deleted' })
+    return res.json({ message: result.message })
   } catch (error) {
-    sendServerError(res, error, 'Failed to delete driver advertisement')
+    return sendServerError(res, error, 'Failed to delete driver advertisement')
   }
 }
 

@@ -32,7 +32,7 @@ export default function SignUp() {
     }
 
     if (nextRole === 'customer') {
-      return '/dashboard';
+      return '/';
     }
 
     return getProfilePathForRole(nextRole);

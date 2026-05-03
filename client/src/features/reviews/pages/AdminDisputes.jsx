@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { FaPaperPlane, FaSearch, FaTimes, FaUserCircle } from 'react-icons/fa'
 import Sidebar from '../../../components/layout/Sidebar'
 import { formatDate, getBadgeClass } from '../../../utils/formatters'
+import { openProtectedFile } from '../../../utils/protectedFiles'
 import { getAdminComplaints, updateComplaintStatus } from '../reviewApi'
 
 const statusOptions = [
@@ -23,6 +24,8 @@ function labelize(value) {
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase())
 }
+
+const hasProtectedFile = (file = {}) => Boolean(file?.filePath && !/^\/?uploads\//i.test(file.filePath))
 
 export default function AdminDisputes() {
   const [complaints, setComplaints] = useState([])
@@ -106,6 +109,17 @@ export default function AdminDisputes() {
       setError(err.response?.data?.message || 'Failed to update complaint')
     } finally {
       setBusyAction('')
+    }
+  }
+
+  const viewAttachment = async (complaint) => {
+    setMessage('')
+    setError('')
+
+    try {
+      await openProtectedFile(`/complaints/${complaint._id}/attachment`)
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to open attachment')
     }
   }
 
@@ -239,6 +253,18 @@ export default function AdminDisputes() {
                   </div>
                 </div>
                 <p>{selectedComplaint.description}</p>
+                {(selectedComplaint.attachment || hasProtectedFile(selectedComplaint.attachmentFile)) && (
+                  <div className="pill-row">
+                    {selectedComplaint.attachment && (
+                      <span className="badge badge-info">{selectedComplaint.attachment}</span>
+                    )}
+                    {hasProtectedFile(selectedComplaint.attachmentFile) && (
+                      <button className="btn btn-outline btn-sm" type="button" onClick={() => viewAttachment(selectedComplaint)}>
+                        View Attachment
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="form-group">

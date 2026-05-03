@@ -41,6 +41,8 @@ const documentMetadataSchema = new mongoose.Schema({
   fileName: { type: String, default: '' },
   filePath: { type: String, default: '' },
   reference: { type: String, default: '' },
+  mimeType: { type: String, default: '' },
+  size: { type: Number, default: 0 },
   status: { type: String, enum: DOCUMENT_STATUSES, default: 'not_uploaded' },
   rejectionReason: { type: String, default: '' },
   uploadedAt: { type: Date, default: null },

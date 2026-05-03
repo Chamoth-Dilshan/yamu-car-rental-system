@@ -1,5 +1,6 @@
 const User = require('../users/user.model');
 const { sendServerError } = require('../../utils/errorResponses');
+const { sendProtectedUpload } = require('../../utils/fileHelpers');
 const { addNotificationToUser, appendNotification } = require('../../utils/notificationHelpers');
 const { buildUserAuditSnapshot, logAuditEvent, getRoleHistoryTimeline } = require('../../utils/auditHelpers');
 const {
@@ -234,6 +235,40 @@ const getUserRoleHistory = async (req, res) => {
     res.json({ items });
   } catch (error) {
     sendServerError(res, error, 'Failed to load role history');
+  }
+};
+
+const getUserProviderDocument = async (req, res) => {
+  try {
+    const { id, roleKey, documentKey } = req.params;
+
+    if (!['driver', 'staff'].includes(roleKey)) {
+      return res.status(400).json({ message: 'Unsupported provider role' });
+    }
+
+    const documentKeys = getProviderRequirementConfig(roleKey).documents.map(({ key }) => key);
+    if (!documentKeys.includes(documentKey)) {
+      return res.status(400).json({ message: 'Unsupported provider document' });
+    }
+
+    const user = await User.findById(id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const pendingApplication = getLatestPendingProviderApplication(user, roleKey);
+    const pendingApplicationDocument = pendingApplication?.applicationData?.documents?.[documentKey];
+    const profile = roleKey === 'driver' ? user.driverProfile : user.staffProfile;
+    const profileDocument = profile?.documents?.[documentKey];
+    const document = pendingApplicationDocument?.filePath ? pendingApplicationDocument : profileDocument;
+
+    if (!document?.filePath) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    return sendProtectedUpload(res, document);
+  } catch (error) {
+    return sendServerError(res, error, 'Failed to load provider document');
   }
 };
 
@@ -761,4 +796,4 @@ const restoreUser = async (req, res) => {
   }
 };
 
-module.exports = { getAllUsers, getUserRoleHistory, updateUser, reviewProviderApplication, deactivateUser, restoreUser };
+module.exports = { getAllUsers, getUserRoleHistory, getUserProviderDocument, updateUser, reviewProviderApplication, deactivateUser, restoreUser };
