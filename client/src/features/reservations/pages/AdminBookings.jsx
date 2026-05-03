@@ -86,7 +86,7 @@ export default function AdminBookings() {
         <div className="form-header">
           <h2>Manage Vehicle Bookings</h2>
           <p style={{ color: 'var(--text-light)' }}>
-            Admin can manage only vehicle reservations here. Driver booking requests stay under the driver profile workspace.
+            Admin can monitor vehicle reservations here. Store staff handle confirmation and trip completion.
           </p>
         </div>
 
@@ -179,36 +179,6 @@ export default function AdminBookings() {
                       <td><span className={`badge ${getBadgeClass(booking.bookingStatus)}`}>{booking.bookingStatus}</span></td>
                       <td>
                         <div className="table-actions">
-                          {booking.bookingStatus === 'pending' && (
-                            <button
-                              className="btn btn-primary btn-sm"
-                              type="button"
-                              disabled={busyAction === `confirm-${booking._id}`}
-                              onClick={() => updateBooking(
-                                booking._id,
-                                { bookingStatus: 'confirmed' },
-                                'Vehicle booking confirmed',
-                                `confirm-${booking._id}`
-                              )}
-                            >
-                              {busyAction === `confirm-${booking._id}` ? 'Saving...' : 'Confirm'}
-                            </button>
-                          )}
-                          {booking.bookingStatus === 'confirmed' && (
-                            <button
-                              className="btn btn-secondary btn-sm"
-                              type="button"
-                              disabled={busyAction === `complete-${booking._id}`}
-                              onClick={() => updateBooking(
-                                booking._id,
-                                { bookingStatus: 'completed' },
-                                'Vehicle booking marked as completed',
-                                `complete-${booking._id}`
-                              )}
-                            >
-                              {busyAction === `complete-${booking._id}` ? 'Saving...' : 'Complete'}
-                            </button>
-                          )}
                           {booking.bookingStatus === 'completed' && booking.paymentStatus !== 'paid' && (
                             <button className="btn btn-outline btn-sm" type="button" disabled>
                               Awaiting Payment
