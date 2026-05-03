@@ -13,9 +13,9 @@ const {
 } = require('../../utils/roleHelpers')
 const {
   BOOKING_STATUSES,
-  serializeBooking,
-  validateDateRange
+  serializeBooking
 } = require('../../utils/reservationHelpers')
+const { validateBookingDateRange } = require('./booking.validation')
 
 const bookingPopulate = [
   { path: 'customer', select: 'fullName email phone city profilePic' },
@@ -128,7 +128,7 @@ const listCustomerBookings = async ({
 
 const createVehicleBooking = async ({ customer, body }) => {
   const { vehicleId, pickupLocation = '', destination = '', notes = '', startDate, endDate } = body
-  const dateRange = validateDateRange(startDate, endDate)
+  const dateRange = validateBookingDateRange({ startDate, endDate })
 
   if (dateRange.error) {
     return { error: dateRange.error, statusCode: 400 }
@@ -226,7 +226,7 @@ const createVehicleBooking = async ({ customer, body }) => {
 
 const createDriverBooking = async ({ customer, body }) => {
   const { driverAdId, pickupLocation = '', destination = '', notes = '', startDate, endDate } = body
-  const dateRange = validateDateRange(startDate, endDate)
+  const dateRange = validateBookingDateRange({ startDate, endDate })
 
   if (dateRange.error) {
     return { error: dateRange.error, statusCode: 400 }

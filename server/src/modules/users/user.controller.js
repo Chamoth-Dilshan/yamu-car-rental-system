@@ -1,804 +1,261 @@
-const User = require('./user.model');
-const { sendServerError } = require('../../utils/errorResponses');
-const { buildUserAuditSnapshot, logAuditEvent, getRoleHistoryTimeline } = require('../../utils/auditHelpers');
+const { sendServerError } = require('../../utils/errorResponses')
 const {
-  addNotificationToAdmins,
-  appendNotification,
-  getUnreadNotificationCount,
-  serializeNotification
-} = require('../../utils/notificationHelpers');
-const {
-  getFileMetadataFromUpload,
-  getFilesByField,
   removeUploadedFiles,
   sendProtectedUpload
-} = require('../../utils/fileHelpers');
+} = require('../../utils/fileHelpers')
 const {
-  PROVIDER_ROLE_KEYS,
-  buildRoleAssignment,
-  canManageRoleProfile,
-  canUseRole,
-  createProviderApplication,
-  getLatestPendingProviderApplication,
-  getProviderRequirementConfig,
-  getRoleAssignment,
-  serializeUser,
-  syncUserRoles,
-} = require('../../utils/roleHelpers');
-const {
-  hasDocumentFile,
-  mergeDriverDocuments,
-  mergeStaffDocuments,
-  normalizeEmergencyContact,
-  normalizeDriverDocuments,
-  normalizePreferredLanguage,
-  normalizeStaffDocuments,
-  parseDate,
-  setDocumentCollectionStatus,
-  trimValue,
-  validateEmailAddress,
-  validateOptionalPhone,
-  validateRequiredTextFields,
-  validatePasswordStrength,
-  validateUsernameValue
-} = require('../../utils/profileHelpers');
+  getProfile: getProfileService,
+  getMyRoleHistory: getMyRoleHistoryService,
+  updateProfile: updateProfileService,
+  updateDriverProfile: updateDriverProfileService,
+  updateStaffProfile: updateStaffProfileService,
+  updateAdminProfile: updateAdminProfileService,
+  applyForProviderRole: applyForProviderRoleService,
+  withdrawProviderApplication: withdrawProviderApplicationService,
+  getProviderDocument,
+  getNotifications: getNotificationsService,
+  markNotificationRead: markNotificationReadService,
+  markAllNotificationsRead: markAllNotificationsReadService
+} = require('./user.service')
+const { parseStructuredBody } = require('./user.validation')
 
-const RESTRICTED_PROFILE_FIELDS = [
-  'role',
-  'roles',
-  'activeRole',
-  'primaryRole',
-  'accountStatus',
-  'verificationStatus',
-  'isSystemAdmin',
-  'permissions',
-  'providerApplications',
-  'emailVerified',
-  'authProvider',
-  'googleId'
-];
+const sendServiceError = (res, result) => (
+  res.status(result.statusCode || 400).json({ message: result.error })
+)
 
-const roleLabel = (value) => ({
-  customer: 'User',
-  staff: 'Store',
-  driver: 'Driver',
-  admin: 'Admin'
-}[value] || value.charAt(0).toUpperCase() + value.slice(1));
-
-const ensureUniqueIdentityFields = async (userId, email, username) => {
-  const emailValidation = validateEmailAddress(email);
-  if (emailValidation.error) {
-    throw new Error(emailValidation.error);
+const handleProfileError = (res, error, fallbackMessage) => {
+  if (error.code === 11000 || error.message === 'Email or username is already in use') {
+    return res.status(400).json({ message: 'Email or username is already in use' })
   }
 
-  const usernameValidation = validateUsernameValue(username);
-  if (usernameValidation.error) {
-    throw new Error(usernameValidation.error);
+  if (
+    error.message?.includes('must be a valid email address')
+    || error.message?.includes('must be 3-30 characters')
+    || error.message?.includes('is required')
+  ) {
+    return res.status(400).json({ message: error.message })
   }
 
-  const existing = await User.findOne({
-    _id: { $ne: userId },
-    $or: [{ email: emailValidation.value }, { username: usernameValidation.value }]
-  });
-
-  if (existing) {
-    throw new Error('Email or username is already in use');
-  }
-
-  return {
-    normalizedEmail: emailValidation.value,
-    normalizedUsername: usernameValidation.value
-  };
-};
-
-const getPlainObject = (value) => (value?.toObject ? value.toObject() : (value || {}));
-
-const parseStructuredBody = (req) => {
-  if (req.body?.payload === undefined) {
-    return { payload: req.body || {} };
-  }
-
-  if (typeof req.body.payload === 'object') {
-    return { payload: req.body.payload || {} };
-  }
-
-  try {
-    return { payload: JSON.parse(req.body.payload || '{}') };
-  } catch {
-    return { error: 'Invalid JSON payload' };
-  }
-};
-
-const getProviderDocumentKeys = (roleKey) => (
-  getProviderRequirementConfig(roleKey).documents.map(({ key }) => key)
-);
-
-const mergeUploadedDocumentFiles = (roleKey, payload = {}, files = {}, uploadDir = '') => {
-  const filesByField = getFilesByField(files);
-  const documentKeys = getProviderDocumentKeys(roleKey);
-  const uploadedDocuments = documentKeys.reduce((acc, documentKey) => {
-    const file = filesByField[documentKey];
-
-    if (!file) {
-      return acc;
-    }
-
-    return {
-      ...acc,
-      [documentKey]: getFileMetadataFromUpload(file, uploadDir)
-    };
-  }, {});
-
-  if (!Object.keys(uploadedDocuments).length) {
-    return payload;
-  }
-
-  return {
-    ...payload,
-    documents: {
-      ...(payload.documents || {}),
-      ...uploadedDocuments
-    }
-  };
-};
-
-const getProviderDocumentMetadata = (user, roleKey, documentKey) => {
-  if (!PROVIDER_ROLE_KEYS.includes(roleKey) || !getProviderDocumentKeys(roleKey).includes(documentKey)) {
-    return null;
-  }
-
-  const profile = roleKey === 'driver' ? user.driverProfile : user.staffProfile;
-  const profileDocument = profile?.documents?.[documentKey];
-
-  if (profileDocument?.filePath) {
-    return profileDocument;
-  }
-
-  const applicationDocument = getLatestPendingProviderApplication(user, roleKey)?.applicationData?.documents?.[documentKey];
-  return applicationDocument?.filePath ? applicationDocument : profileDocument;
-};
-
-const buildDriverProfilePayload = (payload = {}, currentProfile = {}) => {
-  const current = getPlainObject(currentProfile);
-
-  return {
-    drivingLicenseNumber: trimValue(payload.drivingLicenseNumber, current.drivingLicenseNumber || ''),
-    licenseExpiryDate: parseDate(payload.licenseExpiryDate) || null,
-    nicId: trimValue(payload.nicId, current.nicId || ''),
-    serviceArea: trimValue(payload.serviceArea, current.serviceArea || ''),
-    providerDetails: trimValue(payload.providerDetails, current.providerDetails || ''),
-    documents: mergeDriverDocuments(payload.documents || {}, current.documents || {})
-  };
-};
-
-const buildStaffProfilePayload = (payload = {}, currentProfile = {}) => {
-  const current = getPlainObject(currentProfile);
-
-  return {
-    storeName: trimValue(payload.storeName, current.storeName || ''),
-    storeOwner: trimValue(payload.storeOwner, current.storeOwner || ''),
-    businessRegistrationNumber: trimValue(payload.businessRegistrationNumber, current.businessRegistrationNumber || ''),
-    storeAddress: trimValue(payload.storeAddress, current.storeAddress || ''),
-    storeContactNumber: trimValue(payload.storeContactNumber, current.storeContactNumber || ''),
-    storeEmail: trimValue(payload.storeEmail, current.storeEmail || ''),
-    documents: mergeStaffDocuments(payload.documents || {}, current.documents || {})
-  };
-};
-
-const validateProviderApplicationData = (roleKey, applicationData = {}) => {
-  const { fields, documents } = getProviderRequirementConfig(roleKey);
-  const missingField = fields.find(({ key }) => !trimValue(applicationData[key], ''));
-
-  if (missingField) {
-    return { valid: false, message: `Missing required field: ${missingField.label}` };
-  }
-
-  const nextDocuments = applicationData.documents || {};
-  const missingDocument = documents.find(({ key }) => !hasDocumentFile(nextDocuments?.[key] || {}));
-
-  if (missingDocument) {
-    return { valid: false, message: `Missing required document metadata: ${missingDocument.label}` };
-  }
-
-  return { valid: true };
-};
+  return sendServerError(res, error, fallbackMessage)
+}
 
 const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('-password');
+    const result = await getProfileService(req.user._id)
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    syncUserRoles(user);
-    res.json(serializeUser(user));
+    return res.json(result.user)
   } catch (error) {
-    sendServerError(res, error, 'Failed to load profile');
+    return sendServerError(res, error, 'Failed to load profile')
   }
-};
+}
 
 const getMyRoleHistory = async (req, res) => {
   try {
-    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 50);
-    const items = await getRoleHistoryTimeline(req.user._id, limit);
+    const result = await getMyRoleHistoryService({
+      userId: req.user._id,
+      limit: req.query.limit
+    })
 
-    res.json({ items });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to load role history');
+    return sendServerError(res, error, 'Failed to load role history')
   }
-};
+}
 
 const updateProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const result = await updateProfileService({
+      userId: req.user._id,
+      body: req.body,
+      file: req.file
+    })
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    const restrictedField = RESTRICTED_PROFILE_FIELDS.find((field) => Object.prototype.hasOwnProperty.call(req.body, field));
-    if (restrictedField) {
-      return res.status(400).json({ message: 'Role and account status fields cannot be updated from profile settings' });
-    }
-
-    const nextEmail = req.body.email || user.email;
-    const nextUsername = req.body.username || user.username || nextEmail;
-    const missingIdentityField = validateRequiredTextFields([
-      ['Full name', req.body.fullName ?? user.fullName],
-      ['Email', nextEmail],
-      ['Username', nextUsername]
-    ]);
-
-    if (missingIdentityField) {
-      return res.status(400).json({ message: `${missingIdentityField} is required` });
-    }
-
-    const { normalizedEmail, normalizedUsername } = await ensureUniqueIdentityFields(
-      user._id,
-      nextEmail,
-      nextUsername
-    );
-
-    const phoneValidation = validateOptionalPhone(req.body.phone);
-    if (phoneValidation.error) {
-      return res.status(400).json({ message: phoneValidation.error });
-    }
-
-    const emergencyPhoneValidation = validateOptionalPhone(req.body.emergencyContactPhone, {
-      label: 'Emergency contact phone'
-    });
-    if (emergencyPhoneValidation.error) {
-      return res.status(400).json({ message: emergencyPhoneValidation.error });
-    }
-
-    if (req.body.confirmPassword && !req.body.password) {
-      return res.status(400).json({ message: 'New password is required to confirm password' });
-    }
-
-    if (req.body.password) {
-      const passwordError = validatePasswordStrength(req.body.password);
-      if (passwordError) {
-        return res.status(400).json({ message: passwordError });
-      }
-
-      if (!req.body.currentPassword) {
-        return res.status(400).json({ message: 'Current password is required to set a new password' });
-      }
-
-      if (!(await user.matchPassword(req.body.currentPassword))) {
-        return res.status(400).json({ message: 'Current password is incorrect' });
-      }
-
-      if (!req.body.confirmPassword) {
-        return res.status(400).json({ message: 'Confirm password is required' });
-      }
-
-      if (req.body.password !== req.body.confirmPassword) {
-        return res.status(400).json({ message: 'Passwords do not match' });
-      }
-
-      if (await user.matchPassword(req.body.password)) {
-        return res.status(400).json({ message: 'New password must be different from the current password' });
-      }
-    }
-
-    const beforeSnapshot = buildUserAuditSnapshot(user);
-    user.fullName = trimValue(req.body.fullName, user.fullName);
-    user.email = normalizedEmail;
-    user.username = normalizedUsername;
-    user.phone = phoneValidation.value;
-    user.address = trimValue(req.body.address, '');
-    user.city = trimValue(req.body.city, '');
-    user.dob = trimValue(req.body.dob, '');
-    user.bio = trimValue(req.body.bio, '');
-    user.preferredLanguage = normalizePreferredLanguage(req.body.preferredLanguage, user.preferredLanguage || 'English');
-    user.emergencyContact = normalizeEmergencyContact({
-      name: req.body.emergencyContactName,
-      phone: emergencyPhoneValidation.value,
-      relationship: req.body.emergencyContactRelationship
-    });
-
-    if (req.file) {
-      user.profilePic = `profiles/${req.file.filename}`;
-    }
-
-    if (req.body.password) {
-      user.password = req.body.password;
-    }
-
-    await user.save();
-    await logAuditEvent({
-      actorUserId: user._id,
-      targetUserId: user._id,
-      actionType: 'user.profile.updated',
-      beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user)
-    });
-
-    res.json(serializeUser(user));
+    return res.json(result.user)
   } catch (error) {
-    if (error.code === 11000 || error.message === 'Email or username is already in use') {
-      return res.status(400).json({ message: 'Email or username is already in use' });
-    }
-
-    if (
-      error.message?.includes('must be a valid email address')
-      || error.message?.includes('must be 3-30 characters')
-      || error.message?.includes('is required')
-    ) {
-      return res.status(400).json({ message: error.message });
-    }
-
-    sendServerError(res, error, 'Failed to update profile');
+    return handleProfileError(res, error, 'Failed to update profile')
   }
-};
+}
 
 const updateDriverProfile = async (req, res) => {
   try {
-    const parsedBody = parseStructuredBody(req);
+    const parsedBody = parseStructuredBody(req.body)
     if (parsedBody.error) {
-      removeUploadedFiles(req.files);
-      return res.status(400).json({ message: parsedBody.error });
+      removeUploadedFiles(req.files)
+      return res.status(400).json({ message: parsedBody.error })
     }
 
-    const user = await User.findById(req.user._id);
+    const result = await updateDriverProfileService({
+      userId: req.user._id,
+      payload: parsedBody.payload,
+      files: req.files,
+      uploadDir: req.uploadDir
+    })
 
-    if (!user) {
-      removeUploadedFiles(req.files);
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    const roleAssignment = getRoleAssignment(user, 'driver');
-    if (!canManageRoleProfile(roleAssignment)) {
-      removeUploadedFiles(req.files);
-      return res.status(403).json({ message: 'Driver onboarding is available only for assigned driver applicants or roles' });
-    }
-
-    const beforeSnapshot = buildUserAuditSnapshot(user);
-    const documentKeys = getProviderRequirementConfig('driver').documents.map(({ key }) => key);
-    const driverPayload = mergeUploadedDocumentFiles('driver', parsedBody.payload, req.files, req.uploadDir);
-    user.driverProfile = {
-      ...getPlainObject(user.driverProfile),
-      ...buildDriverProfilePayload(driverPayload, user.driverProfile)
-    };
-
-    const pendingApplication = getLatestPendingProviderApplication(user, 'driver');
-    if (pendingApplication?.status === 'pending') {
-      user.driverProfile.documents = setDocumentCollectionStatus(user.driverProfile.documents, documentKeys, { status: 'pending' });
-      pendingApplication.applicationData = {
-        ...pendingApplication.applicationData,
-        ...getPlainObject(user.driverProfile),
-        documents: setDocumentCollectionStatus(
-          normalizeDriverDocuments(getPlainObject(user.driverProfile)?.documents || {}),
-          documentKeys,
-          { status: 'pending' }
-        )
-      };
-      pendingApplication.submittedAt = new Date();
-    }
-
-    await user.save({ validateModifiedOnly: true });
-    await logAuditEvent({
-      actorUserId: user._id,
-      targetUserId: user._id,
-      actionType: 'user.driver_profile.updated',
-      beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user)
-    });
-    res.json({
-      message: 'Driver profile updated',
-      driverProfile: user.driverProfile,
-      user: serializeUser(user)
-    });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to update driver profile');
+    return sendServerError(res, error, 'Failed to update driver profile')
   }
-};
+}
 
 const updateStaffProfile = async (req, res) => {
   try {
-    const parsedBody = parseStructuredBody(req);
+    const parsedBody = parseStructuredBody(req.body)
     if (parsedBody.error) {
-      removeUploadedFiles(req.files);
-      return res.status(400).json({ message: parsedBody.error });
+      removeUploadedFiles(req.files)
+      return res.status(400).json({ message: parsedBody.error })
     }
 
-    const user = await User.findById(req.user._id);
+    const result = await updateStaffProfileService({
+      userId: req.user._id,
+      payload: parsedBody.payload,
+      files: req.files,
+      uploadDir: req.uploadDir
+    })
 
-    if (!user) {
-      removeUploadedFiles(req.files);
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    const roleAssignment = getRoleAssignment(user, 'staff');
-    if (!canManageRoleProfile(roleAssignment)) {
-      removeUploadedFiles(req.files);
-      return res.status(403).json({ message: 'Store onboarding is available only for assigned store applicants or roles' });
-    }
-
-    const beforeSnapshot = buildUserAuditSnapshot(user);
-    const documentKeys = getProviderRequirementConfig('staff').documents.map(({ key }) => key);
-    const staffPayload = mergeUploadedDocumentFiles('staff', parsedBody.payload, req.files, req.uploadDir);
-    user.staffProfile = {
-      ...getPlainObject(user.staffProfile),
-      ...buildStaffProfilePayload(staffPayload, user.staffProfile)
-    };
-
-    const pendingApplication = getLatestPendingProviderApplication(user, 'staff');
-    if (pendingApplication?.status === 'pending') {
-      user.staffProfile.documents = setDocumentCollectionStatus(user.staffProfile.documents, documentKeys, { status: 'pending' });
-      pendingApplication.applicationData = {
-        ...pendingApplication.applicationData,
-        ...getPlainObject(user.staffProfile),
-        documents: setDocumentCollectionStatus(
-          normalizeStaffDocuments(getPlainObject(user.staffProfile)?.documents || {}),
-          documentKeys,
-          { status: 'pending' }
-        )
-      };
-      pendingApplication.submittedAt = new Date();
-    }
-
-    await user.save({ validateModifiedOnly: true });
-    await logAuditEvent({
-      actorUserId: user._id,
-      targetUserId: user._id,
-      actionType: 'user.staff_profile.updated',
-      beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user)
-    });
-    res.json({
-      message: 'Store profile updated',
-      staffProfile: user.staffProfile,
-      user: serializeUser(user)
-    });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to update store profile');
+    return sendServerError(res, error, 'Failed to update store profile')
   }
-};
+}
 
 const updateAdminProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const result = await updateAdminProfileService({
+      userId: req.user._id,
+      body: req.body
+    })
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    const roleAssignment = getRoleAssignment(user, 'admin');
-    if (!canUseRole(roleAssignment)) {
-      return res.status(403).json({ message: 'Admin profile access is restricted to admin users' });
-    }
-
-    const beforeSnapshot = buildUserAuditSnapshot(user);
-    user.adminProfile = {
-      ...user.adminProfile,
-      accessScope: trimValue(req.body.accessScope, ''),
-      controlNotes: trimValue(req.body.controlNotes, '')
-    };
-
-    await user.save({ validateModifiedOnly: true });
-    await logAuditEvent({
-      actorUserId: user._id,
-      targetUserId: user._id,
-      actionType: 'user.admin_profile.updated',
-      beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user)
-    });
-    res.json({
-      message: 'Admin profile updated',
-      adminProfile: user.adminProfile,
-      user: serializeUser(user)
-    });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to update admin profile');
+    return sendServerError(res, error, 'Failed to update admin profile')
   }
-};
+}
 
 const applyForProviderRole = async (req, res) => {
   try {
-    const { roleKey } = req.params;
-    const parsedBody = parseStructuredBody(req);
+    const parsedBody = parseStructuredBody(req.body)
     if (parsedBody.error) {
-      removeUploadedFiles(req.files);
-      return res.status(400).json({ message: parsedBody.error });
+      removeUploadedFiles(req.files)
+      return res.status(400).json({ message: parsedBody.error })
     }
 
-    const user = await User.findById(req.user._id);
+    const result = await applyForProviderRoleService({
+      userId: req.user._id,
+      roleKey: req.params.roleKey,
+      payload: parsedBody.payload,
+      files: req.files,
+      uploadDir: req.uploadDir
+    })
 
-    if (!user) {
-      removeUploadedFiles(req.files);
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    if (!PROVIDER_ROLE_KEYS.includes(roleKey)) {
-      removeUploadedFiles(req.files);
-      return res.status(400).json({ message: 'Unsupported provider role application' });
-    }
-
-    if (!canUseRole(getRoleAssignment(user, 'customer'))) {
-      removeUploadedFiles(req.files);
-      return res.status(403).json({ message: 'Only accounts with active user access can apply for provider roles' });
-    }
-
-    const roleAssignment = getRoleAssignment(user, roleKey);
-    if (roleAssignment && canUseRole(roleAssignment)) {
-      removeUploadedFiles(req.files);
-      return res.status(400).json({ message: `Your ${roleKey} role is already approved` });
-    }
-
-    if (roleAssignment && ['suspended', 'deactivated'].includes(roleAssignment.roleStatus)) {
-      removeUploadedFiles(req.files);
-      return res.status(403).json({ message: `Your ${roleKey} access is currently restricted. Contact an administrator for help.` });
-    }
-
-    if (getLatestPendingProviderApplication(user, roleKey)) {
-      removeUploadedFiles(req.files);
-      return res.status(400).json({ message: `A ${roleKey} application is already pending review` });
-    }
-
-    const providerPayload = mergeUploadedDocumentFiles(roleKey, parsedBody.payload, req.files, req.uploadDir);
-    const applicationData = roleKey === 'driver'
-      ? buildDriverProfilePayload(providerPayload, user.driverProfile)
-      : buildStaffProfilePayload(providerPayload, user.staffProfile);
-    const documentKeys = getProviderRequirementConfig(roleKey).documents.map(({ key }) => key);
-
-    const validation = validateProviderApplicationData(roleKey, applicationData);
-    if (!validation.valid) {
-      removeUploadedFiles(req.files);
-      return res.status(400).json({ message: validation.message });
-    }
-
-    const nextApplicationData = {
-      ...applicationData,
-      documents: setDocumentCollectionStatus(applicationData.documents, documentKeys, { status: 'pending' })
-    };
-
-    if (roleKey === 'driver') {
-      user.driverProfile = {
-        ...getPlainObject(user.driverProfile),
-        ...nextApplicationData
-      };
-    }
-
-    if (roleKey === 'staff') {
-      user.staffProfile = {
-        ...getPlainObject(user.staffProfile),
-        ...nextApplicationData
-      };
-    }
-
-    if (!roleAssignment) {
-      user.roles.push(buildRoleAssignment(roleKey, {
-        roleStatus: 'pending',
-        verificationStatus: 'pending',
-        isPrimary: false
-      }));
-    } else {
-      roleAssignment.roleStatus = 'pending';
-      roleAssignment.verificationStatus = 'pending';
-    }
-
-    const beforeSnapshot = buildUserAuditSnapshot(user);
-    createProviderApplication(user, roleKey, nextApplicationData);
-    syncUserRoles(user);
-    appendNotification(user, {
-      type: 'role',
-      title: `${roleLabel(roleKey)} application submitted`,
-      message: `Your ${roleKey} application was sent for admin review. We will notify you once it is reviewed.`,
-      link: '/apply-roles'
-    });
-    await user.save();
-    await logAuditEvent({
-      actorUserId: user._id,
-      targetUserId: user._id,
-      actionType: 'user.provider_application.submitted',
-      beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user),
-      reason: roleKey
-    });
-
-    await addNotificationToAdmins({
-      type: 'role',
-      title: 'Provider application submitted',
-      message: `${user.fullName} submitted a ${roleKey} application for review.`,
-      link: '/admin/pending-approvals'
-    });
-
-    res.json({
-      message: `${roleKey} application submitted for admin review`,
-      user: serializeUser(user)
-    });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to submit provider application');
+    return sendServerError(res, error, 'Failed to submit provider application')
   }
-};
+}
 
 const withdrawProviderApplication = async (req, res) => {
   try {
-    const { roleKey } = req.params;
-    const user = await User.findById(req.user._id);
+    const result = await withdrawProviderApplicationService({
+      userId: req.user._id,
+      roleKey: req.params.roleKey
+    })
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    if (!PROVIDER_ROLE_KEYS.includes(roleKey)) {
-      return res.status(400).json({ message: 'Unsupported provider role application' });
-    }
-
-    const application = getLatestPendingProviderApplication(user, roleKey);
-    if (!application || application.status !== 'pending') {
-      return res.status(404).json({ message: 'No pending application found for this role' });
-    }
-
-    const beforeSnapshot = buildUserAuditSnapshot(user);
-    application.status = 'withdrawn';
-    application.reviewedAt = null;
-    application.reviewedBy = null;
-    application.rejectionReason = '';
-
-    user.roles = (user.roles || []).filter((role) => {
-      if (role.roleKey !== roleKey) {
-        return true;
-      }
-
-      return canUseRole(role);
-    });
-
-    syncUserRoles(user);
-    appendNotification(user, {
-      type: 'role',
-      title: 'Application withdrawn',
-      message: `Your ${roleKey} application has been withdrawn.`,
-      link: '/apply-roles'
-    });
-    await user.save();
-    await logAuditEvent({
-      actorUserId: user._id,
-      targetUserId: user._id,
-      actionType: 'user.provider_application.withdrawn',
-      beforeSnapshot,
-      afterSnapshot: buildUserAuditSnapshot(user),
-      reason: roleKey
-    });
-
-    await addNotificationToAdmins({
-      type: 'role',
-      title: 'Provider application withdrawn',
-      message: `${user.fullName} withdrew a pending ${roleKey} application.`,
-      link: '/admin/pending-approvals'
-    });
-
-    res.json({
-      message: `${roleKey} application withdrawn`,
-      user: serializeUser(user)
-    });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to withdraw provider application');
+    return sendServerError(res, error, 'Failed to withdraw provider application')
   }
-};
+}
 
 const getNotifications = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select('notifications');
+    const result = await getNotificationsService(req.user._id)
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    const notifications = [...(user.notifications || [])]
-      .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
-      .map(serializeNotification);
-
-    res.json({
-      notifications,
-      unreadCount: getUnreadNotificationCount(user)
-    });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to load notifications');
+    return sendServerError(res, error, 'Failed to load notifications')
   }
-};
+}
 
 const getMyProviderDocument = async (req, res) => {
   try {
-    const { roleKey, documentKey } = req.params;
-    const user = await User.findById(req.user._id).select('-password');
+    const result = await getProviderDocument({
+      userId: req.user._id,
+      roleKey: req.params.roleKey,
+      documentKey: req.params.documentKey
+    })
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    const document = getProviderDocumentMetadata(user, roleKey, documentKey);
-    if (!document?.filePath) {
-      return res.status(404).json({ message: 'Document not found' });
-    }
-
-    return sendProtectedUpload(res, document);
+    return sendProtectedUpload(res, result.document)
   } catch (error) {
-    return sendServerError(res, error, 'Failed to load document');
+    return sendServerError(res, error, 'Failed to load document')
   }
-};
+}
 
 const markNotificationRead = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const result = await markNotificationReadService({
+      userId: req.user._id,
+      notificationId: req.params.notificationId
+    })
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    const notification = (user.notifications || []).id(req.params.notificationId);
-
-    if (!notification) {
-      return res.status(404).json({ message: 'Notification not found' });
-    }
-
-    notification.isRead = true;
-    notification.readAt = new Date();
-    await user.save({ validateModifiedOnly: true });
-
-    const notifications = [...(user.notifications || [])]
-      .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
-      .map(serializeNotification);
-
-    res.json({
-      notifications,
-      unreadCount: getUnreadNotificationCount(user)
-    });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to update notification');
+    return sendServerError(res, error, 'Failed to update notification')
   }
-};
+}
 
 const markAllNotificationsRead = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    const result = await markAllNotificationsReadService(req.user._id)
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
-    (user.notifications || []).forEach((notification) => {
-      notification.isRead = true;
-      notification.readAt = notification.readAt || new Date();
-    });
-
-    await user.save({ validateModifiedOnly: true });
-
-    const notifications = [...(user.notifications || [])]
-      .sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0))
-      .map(serializeNotification);
-
-    res.json({
-      notifications,
-      unreadCount: 0
-    });
+    return res.json(result)
   } catch (error) {
-    sendServerError(res, error, 'Failed to update notifications');
+    return sendServerError(res, error, 'Failed to update notifications')
   }
-};
+}
 
 module.exports = {
   getProfile,
@@ -813,4 +270,4 @@ module.exports = {
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead
-};
+}

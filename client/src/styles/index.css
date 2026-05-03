@@ -67,6 +67,14 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-light);
 }
+input.field-invalid, select.field-invalid, textarea.field-invalid {
+  border-color: var(--danger);
+  background: rgba(239,68,68,0.04);
+}
+input.field-invalid:focus, select.field-invalid:focus, textarea.field-invalid:focus {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.14);
+}
 
 .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
 .app-shell {
