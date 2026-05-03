@@ -3,10 +3,8 @@ const { addNotificationToUser, appendNotification } = require('../../utils/notif
 const { buildUserAuditSnapshot, logAuditEvent, getRoleHistoryTimeline } = require('../../utils/auditHelpers')
 const {
   ACCOUNT_STATUSES,
-  ROLE_KEYS,
   buildRoleAssignment,
   canUseRole,
-  getLatestApprovedProviderApplication,
   getLatestPendingProviderApplication,
   getPrimaryRole,
   getProviderRequirementConfig,
@@ -17,17 +15,21 @@ const {
   validateManagedUserState
 } = require('../../utils/roleHelpers')
 const {
-  hasDocumentFile,
   normalizeDriverDocuments,
+  normalizeSriLankanNic,
   normalizeStaffDocuments,
   setDocumentCollectionStatus,
   trimValue,
   validateEmailAddress,
+  validateSriLankanNic,
   validateRequiredTextFields,
   validateUsernameValue
 } = require('../../utils/profileHelpers')
-
-const MANAGEABLE_ROLE_KEYS = [...ROLE_KEYS]
+const {
+  buildManageableRoles,
+  validateProviderApplicationSnapshot,
+  validateProviderRoleAssignmentChange
+} = require('./admin.validation')
 
 const roleLabel = (value) => ({
   customer: 'User',
@@ -62,113 +64,6 @@ const ensureUniqueIdentityFields = async (userId, email, username) => {
   return {
     normalizedEmail: emailValidation.value,
     normalizedUsername: usernameValidation.value
-  }
-}
-
-const buildManageableRoles = (incomingRoles = []) => {
-  const nextRoles = []
-
-  incomingRoles.forEach((role) => {
-    if (!MANAGEABLE_ROLE_KEYS.includes(role.roleKey)) {
-      return
-    }
-
-    const normalizedRole = normalizeRoleAssignment(role)
-    if (!normalizedRole || nextRoles.some((item) => item.roleKey === normalizedRole.roleKey)) {
-      return
-    }
-
-    nextRoles.push(normalizedRole)
-  })
-
-  if (!nextRoles.some((role) => role.roleKey === 'customer')) {
-    nextRoles.unshift(buildRoleAssignment('customer', { isPrimary: true }))
-  }
-
-  return nextRoles
-}
-
-const validateProviderRoleAssignmentChange = (user, nextRoles = [], currentRoles = []) => {
-  for (const roleKey of ['driver', 'staff']) {
-    const nextRole = nextRoles.find((role) => role.roleKey === roleKey)
-    if (!nextRole) {
-      continue
-    }
-
-    const currentRole = currentRoles.find((role) => role.roleKey === roleKey)
-    const latestPendingApplication = getLatestPendingProviderApplication(user, roleKey)
-    const latestApprovedApplication = getLatestApprovedProviderApplication(user, roleKey)
-    const roleBecameUsable = canUseRole(nextRole) && !canUseRole(currentRole)
-    const roleStateChangedWhilePending = latestPendingApplication
-      && (
-        !currentRole
-        || currentRole.roleStatus !== nextRole.roleStatus
-        || currentRole.verificationStatus !== nextRole.verificationStatus
-      )
-
-    if (roleStateChangedWhilePending) {
-      return {
-        valid: false,
-        message: `Use the provider review workflow to approve or reject the pending ${roleKey} application`
-      }
-    }
-
-    if (roleBecameUsable && !latestApprovedApplication) {
-      return {
-        valid: false,
-        message: `${roleKey} cannot become active until an approved application exists`
-      }
-    }
-  }
-
-  return { valid: true }
-}
-
-const buildProviderApplicationAssessment = (roleKey, applicationData = {}, user = {}) => {
-  const config = getProviderRequirementConfig(roleKey)
-  const checks = [
-    {
-      key: 'accountStatus',
-      label: 'Account is active',
-      complete: user.accountStatus === 'active',
-      blocking: true
-    },
-    ...config.fields.map(({ key, label }) => ({
-      key,
-      label,
-      complete: Boolean(trimValue(applicationData[key], '')),
-      blocking: true
-    })),
-    ...config.documents.map(({ key, label }) => ({
-      key,
-      label,
-      complete: hasDocumentFile(applicationData?.documents?.[key] || {}),
-      blocking: true
-    }))
-  ]
-  const missingItems = checks.filter((item) => item.blocking && !item.complete).map((item) => item.label)
-
-  return {
-    checks,
-    missingItems,
-    valid: missingItems.length === 0
-  }
-}
-
-const validateProviderApplicationSnapshot = (roleKey, applicationData = {}, user = {}) => {
-  const assessment = buildProviderApplicationAssessment(roleKey, applicationData, user)
-
-  if (!assessment.valid) {
-    return {
-      valid: false,
-      message: `Cannot approve ${roleKey} application. Missing required items: ${assessment.missingItems.join(', ')}`,
-      missingItems: assessment.missingItems
-    }
-  }
-
-  return {
-    valid: true,
-    assessment
   }
 }
 
@@ -298,9 +193,15 @@ const updateUser = async ({ targetUserId, actorUserId, body }) => {
 
   if (body.driverProfile && typeof body.driverProfile === 'object') {
     const currentDriverProfile = toPlain(user.driverProfile) || {}
+    const nicId = normalizeSriLankanNic(trimValue(body.driverProfile.nicId, currentDriverProfile.nicId || ''))
+    const nicValidation = validateSriLankanNic(nicId, { required: false })
+    if (nicValidation.error) {
+      return { error: nicValidation.error, statusCode: 400 }
+    }
+
     user.driverProfile = {
       ...currentDriverProfile,
-      nicId: trimValue(body.driverProfile.nicId, currentDriverProfile.nicId || '')
+      nicId
     }
   }
 

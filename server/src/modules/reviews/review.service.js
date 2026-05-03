@@ -1,6 +1,7 @@
 const Review = require('./review.model')
 const Booking = require('../reservations/booking.model')
 const DriverAd = require('../drivers/driverAd.model')
+const User = require('../users/user.model')
 const Vehicle = require('../vehicles/vehicle.model')
 const { serializeBooking } = require('../../utils/reservationHelpers')
 const { addNotificationToAdmins } = require('../../utils/notificationHelpers')
@@ -49,6 +50,17 @@ const ratingDistributionTemplate = () => ({
 const toPlain = (value) => (value?.toObject ? value.toObject() : value)
 
 const roundRating = (value) => Number((Number(value || 0)).toFixed(1))
+
+const activeProviderRoleQuery = (roleKey) => ({
+  accountStatus: 'active',
+  roles: {
+    $elemMatch: {
+      roleKey,
+      roleStatus: 'active',
+      verificationStatus: 'verified'
+    }
+  }
+})
 
 const getDriverFromBooking = (booking) => booking.driver || booking.driverAd?.driver || null
 
@@ -463,15 +475,19 @@ const updateReviewStatus = async ({ reviewId, adminId, body }) => {
 }
 
 const getAdminAnalytics = async () => {
-  const [approvedReviews, allReviews] = await Promise.all([
+  const [approvedReviews, allReviews, activeDrivers, activeStores] = await Promise.all([
     Review.find({ status: 'approved' }).populate(reviewPopulate).sort({ createdAt: -1 }),
-    Review.find().select('status')
+    Review.find().select('status'),
+    User.countDocuments(activeProviderRoleQuery('driver')),
+    User.countDocuments(activeProviderRoleQuery('staff'))
   ])
 
   const summary = buildReviewSummary(approvedReviews)
 
   return {
     ...summary,
+    activeDrivers,
+    activeStores,
     totalReviews: allReviews.length,
     pendingReviews: allReviews.filter((review) => review.status === 'pending').length,
     rejectedReviews: allReviews.filter((review) => review.status === 'rejected').length,

@@ -11,12 +11,18 @@ import { openProtectedFile } from '../../../utils/protectedFiles';
 import { formatRoleLabel, getProfilePathForRole } from '../../../utils/roles';
 import {
   hasDocumentMetadata,
+  isValidLicenseExpiryDate,
+  isValidSriLankanDrivingLicenseNumber,
+  isValidSriLankanNic,
   validateDocumentFile,
   validateEmail,
+  validateLicenseExpiryDate,
   validateOptionalPhone,
   validatePasswordStrength,
   validateProfileImage,
   validateRequiredText,
+  validateSriLankanDrivingLicenseNumber,
+  validateSriLankanNic,
   validateUsername
 } from '../../../utils/validation';
 
@@ -91,6 +97,7 @@ const providerApplicationRequirements = {
   driver: {
     fields: [
       ['drivingLicenseNumber', 'Driving license number'],
+      ['licenseExpiryDate', 'License expiry date'],
       ['nicId', 'NIC / ID'],
       ['serviceArea', 'Service area']
     ],
@@ -390,6 +397,24 @@ export default function Profile() {
       }
     });
 
+    if (roleKey === 'driver') {
+      const drivingLicenseError = validateSriLankanDrivingLicenseNumber(payload.drivingLicenseNumber);
+      const licenseExpiryError = validateLicenseExpiryDate(payload.licenseExpiryDate);
+      const nicError = validateSriLankanNic(payload.nicId);
+
+      if (drivingLicenseError) {
+        nextErrors.drivingLicenseNumber = drivingLicenseError;
+      }
+
+      if (licenseExpiryError) {
+        nextErrors.licenseExpiryDate = licenseExpiryError;
+      }
+
+      if (nicError) {
+        nextErrors.nicId = nicError;
+      }
+    }
+
     if (roleKey === 'staff') {
       const storeEmailError = validateEmail(payload.storeEmail, 'Store email');
       if (storeEmailError && !nextErrors.storeEmail) {
@@ -496,9 +521,19 @@ export default function Profile() {
   };
 
   const saveRoleProfile = async (endpoint, payload, successMessage, actionKey) => {
+    const validationErrors = validateProviderApplicationForm(actionKey, payload);
+
+    if (Object.keys(validationErrors).length) {
+      setMessage('');
+      setError('');
+      setProviderErrors((current) => ({ ...current, [actionKey]: validationErrors }));
+      return;
+    }
+
     setBusyAction(actionKey);
     setMessage('');
     setError('');
+    setProviderErrors((current) => ({ ...current, [actionKey]: {} }));
 
     try {
       const res = await API.put(endpoint, buildProviderFormData(payload, getProviderDocumentFiles(actionKey)), {
@@ -583,9 +618,9 @@ export default function Profile() {
     return nextRoles;
   }, [user]);
   const driverReadiness = calculateCompletionPercent([
-    driverProfile.drivingLicenseNumber,
-    driverProfile.licenseExpiryDate,
-    driverProfile.nicId,
+    isValidSriLankanDrivingLicenseNumber(driverProfile.drivingLicenseNumber),
+    isValidLicenseExpiryDate(driverProfile.licenseExpiryDate),
+    isValidSriLankanNic(driverProfile.nicId),
     driverProfile.serviceArea,
     driverProfile.providerDetails,
     hasDocumentReference(driverProfile.documents.nicDocument),
@@ -609,15 +644,16 @@ export default function Profile() {
       : activeRoleKey === 'admin'
         ? 'admin'
         : 'user';
-  const pathSection = location.pathname.startsWith('/profile/')
+  const rawPathSection = location.pathname.startsWith('/profile/')
     ? location.pathname.split('/')[2] || ''
     : '';
+  const pathSection = rawPathSection === 'driverapplication' ? 'driver' : rawPathSection;
   const selectedProfileSection = ['user', 'driver', 'store', 'admin'].includes(pathSection)
     ? pathSection
     : defaultProfileSection;
   const profileTabs = [
     ...(activeRoleKey === 'customer' ? [{ key: 'user', to: '/profile/user', label: 'User Profile' }] : []),
-    ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driver', label: 'Driver Profile' }] : []),
+    ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driverapplication', label: 'Driver Application' }] : []),
     ...(activeRoleKey === 'staff' || hasUsableCustomerRole ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
     ...(activeRoleKey === 'admin' ? [{ key: 'admin', to: '/profile/admin', label: 'Admin Profile' }] : [])
   ];
@@ -626,7 +662,7 @@ export default function Profile() {
     ? selectedProfileSection
     : defaultProfileSection;
   const selectedProfileLabel = resolvedProfileSection === 'driver'
-    ? 'Driver Profile'
+    ? 'Driver Application'
     : resolvedProfileSection === 'store'
       ? 'Store Profile'
       : resolvedProfileSection === 'admin'
@@ -639,6 +675,7 @@ export default function Profile() {
   const showDriverProfile = ['customer', 'driver'].includes(activeRoleKey) && resolvedProfileSection === 'driver';
   const showStaffProfile = (activeRoleKey === 'staff' || hasUsableCustomerRole) && resolvedProfileSection === 'store';
   const showAdminProfile = activeRoleKey === 'admin' && resolvedProfileSection === 'admin';
+  const showProfileHero = resolvedProfileSection !== 'driver';
   const showRoleSwitcher = activeRoleKey !== 'admin';
   const visibleProfileCompletion = resolvedProfileSection === 'driver'
     ? driverReadiness
@@ -925,87 +962,89 @@ export default function Profile() {
     <div className="dashboard-layout page-content profile-page">
       <Sidebar />
       <main className="dashboard-content">
-        <section className="form-card profile-hero-card">
-          <div className="profile-hero-main">
-            <div className="profile-hero-identity">
-              <img className="profile-hero-avatar" src={avatarSrc} alt={user?.fullName} />
-              <div className="profile-hero-copy">
-                <span className="profile-hero-kicker">{selectedProfileLabel}</span>
-                <h2>{profileHeroName}</h2>
-                <p>{user?.email}</p>
-                <div className="profile-hero-meta">
-                  <span className="badge badge-info">Active role: {roleLabel(user?.activeRole || 'customer')}</span>
-                  <span className="badge badge-success">Primary role: {roleLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
-                  <span className={getBadgeClass(getStatusTone(user?.accountStatus))}>Account: {formatStatusLabel(user?.accountStatus)}</span>
+        {showProfileHero && (
+          <section className="form-card profile-hero-card">
+            <div className="profile-hero-main">
+              <div className="profile-hero-identity">
+                <img className="profile-hero-avatar" src={avatarSrc} alt={user?.fullName} />
+                <div className="profile-hero-copy">
+                  <span className="profile-hero-kicker">{selectedProfileLabel}</span>
+                  <h2>{profileHeroName}</h2>
+                  <p>{user?.email}</p>
+                  <div className="profile-hero-meta">
+                    <span className="badge badge-info">Active role: {roleLabel(user?.activeRole || 'customer')}</span>
+                    <span className="badge badge-success">Primary role: {roleLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
+                    <span className={getBadgeClass(getStatusTone(user?.accountStatus))}>Account: {formatStatusLabel(user?.accountStatus)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="profile-hero-aside">
-              <div className="profile-progress-card">
-                <div className="profile-progress-header">
-                  <strong>{visibleProfileCompletion}%</strong>
-                  <span>profile completion</span>
+              <div className="profile-hero-aside">
+                <div className="profile-progress-card">
+                  <div className="profile-progress-header">
+                    <strong>{visibleProfileCompletion}%</strong>
+                    <span>profile completion</span>
+                  </div>
+                  <div className="account-progress-track">
+                    <div className="account-progress-fill" style={{ width: `${visibleProfileCompletion}%` }} />
+                  </div>
+                  <p>{pendingApplicationsCount} pending role request(s) and {unreadManagedNotificationsCount} unread workflow notification(s).</p>
                 </div>
-                <div className="account-progress-track">
-                  <div className="account-progress-fill" style={{ width: `${visibleProfileCompletion}%` }} />
-                </div>
-                <p>{pendingApplicationsCount} pending role request(s) and {unreadManagedNotificationsCount} unread workflow notification(s).</p>
-              </div>
 
-              {showRoleSwitcher && (
-                <div className="profile-hero-actions">
-                  {showRoleSwitcher && (
-                    <div className={`profile-role-switcher${isRoleMenuOpen ? ' open' : ''}`} ref={roleMenuRef}>
-                      <button
-                        className="btn btn-outline btn-sm profile-role-trigger"
-                        type="button"
-                        onClick={() => setIsRoleMenuOpen((prev) => !prev)}
-                        aria-haspopup="menu"
-                        aria-expanded={isRoleMenuOpen}
-                        disabled={Boolean(switchingRole)}
-                      >
-                        <span>{switchingRole ? 'Switching...' : 'Switch Roles'}</span>
-                        <span className="profile-role-trigger-icon" aria-hidden="true">v</span>
-                      </button>
+                {showRoleSwitcher && (
+                  <div className="profile-hero-actions">
+                    {showRoleSwitcher && (
+                      <div className={`profile-role-switcher${isRoleMenuOpen ? ' open' : ''}`} ref={roleMenuRef}>
+                        <button
+                          className="btn btn-outline btn-sm profile-role-trigger"
+                          type="button"
+                          onClick={() => setIsRoleMenuOpen((prev) => !prev)}
+                          aria-haspopup="menu"
+                          aria-expanded={isRoleMenuOpen}
+                          disabled={Boolean(switchingRole)}
+                        >
+                          <span>{switchingRole ? 'Switching...' : 'Switch Roles'}</span>
+                          <span className="profile-role-trigger-icon" aria-hidden="true">v</span>
+                        </button>
 
-                      <div className="profile-role-menu" role="menu" aria-label="Available roles">
-                        {switchableRoles.length > 0 ? switchableRoles.map((roleItem) => {
-                          const isCurrentRole = roleItem.roleKey === activeRoleKey;
-                          const isSwitchingThisRole = switchingRole === roleItem.roleKey;
+                        <div className="profile-role-menu" role="menu" aria-label="Available roles">
+                          {switchableRoles.length > 0 ? switchableRoles.map((roleItem) => {
+                            const isCurrentRole = roleItem.roleKey === activeRoleKey;
+                            const isSwitchingThisRole = switchingRole === roleItem.roleKey;
 
-                          return (
-                            <button
-                              key={roleItem.roleKey}
-                              className={`profile-role-menu-item${isCurrentRole ? ' active' : ''}`}
-                              type="button"
-                              role="menuitem"
-                              onClick={() => handleRoleSwitch(roleItem.roleKey)}
-                              disabled={isCurrentRole || Boolean(switchingRole)}
-                            >
-                              <span>{roleLabel(roleItem.roleKey)}</span>
-                              <small>
-                                {isCurrentRole
-                                  ? 'Current role'
-                                  : isSwitchingThisRole
-                                    ? 'Switching now...'
-                                    : roleItem.isPrimary
-                                      ? 'Primary role'
-                                      : 'Available to switch'}
-                              </small>
-                            </button>
-                          );
-                        }) : (
-                          <div className="profile-role-menu-empty">No verified roles available to switch.</div>
-                        )}
+                            return (
+                              <button
+                                key={roleItem.roleKey}
+                                className={`profile-role-menu-item${isCurrentRole ? ' active' : ''}`}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => handleRoleSwitch(roleItem.roleKey)}
+                                disabled={isCurrentRole || Boolean(switchingRole)}
+                              >
+                                <span>{roleLabel(roleItem.roleKey)}</span>
+                                <small>
+                                  {isCurrentRole
+                                    ? 'Current role'
+                                    : isSwitchingThisRole
+                                      ? 'Switching now...'
+                                      : roleItem.isPrimary
+                                        ? 'Primary role'
+                                        : 'Available to switch'}
+                                </small>
+                              </button>
+                            );
+                          }) : (
+                            <div className="profile-role-menu-empty">No verified roles available to switch.</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {(driverApplication?.status === 'pending' || staffApplication?.status === 'pending') && (
           <div className="alert alert-info">
@@ -1198,8 +1237,8 @@ export default function Profile() {
           <div id="driver-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
             <div className="profile-section-heading">
               <div>
-                <h3>Driver Profile</h3>
-                <p>Maintain the driver profile, review application state, and manage the next action from one card.</p>
+                <h3>Driver Application</h3>
+                <p>Maintain driver details, review application state, and manage the next action from one card.</p>
               </div>
               <span className={getBadgeClass(driverOnboardingState.tone)}>{driverOnboardingState.stateLabel}</span>
             </div>
@@ -1241,7 +1280,7 @@ export default function Profile() {
             )}
             <form onSubmit={(e) => {
               e.preventDefault();
-              saveRoleProfile('/users/driver-profile', driverProfile, 'Driver profile updated successfully', 'driver');
+              saveRoleProfile('/users/driver-profile', driverProfile, 'Driver application updated successfully', 'driver');
             }}
             >
               <div className="form-row">
@@ -1249,6 +1288,9 @@ export default function Profile() {
                   <label>Driving License Number</label>
                   <input
                     className={getInvalidFieldClass(providerErrors.driver?.drivingLicenseNumber)}
+                    inputMode="numeric"
+                    maxLength="10"
+                    placeholder="e.g. 2000096271"
                     value={driverProfile.drivingLicenseNumber}
                     onChange={(e) => updateDriverProfileField('drivingLicenseNumber', e.target.value)}
                   />
@@ -1256,7 +1298,13 @@ export default function Profile() {
                 </div>
                 <div className="form-group">
                   <label>License Expiry Date</label>
-                  <input type="date" value={driverProfile.licenseExpiryDate} onChange={(e) => updateDriverProfileField('licenseExpiryDate', e.target.value)} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.driver?.licenseExpiryDate)}
+                    type="date"
+                    value={driverProfile.licenseExpiryDate}
+                    onChange={(e) => updateDriverProfileField('licenseExpiryDate', e.target.value)}
+                  />
+                  {renderProviderFieldError('driver', 'licenseExpiryDate')}
                 </div>
               </div>
               <div className="form-row">
@@ -1264,6 +1312,9 @@ export default function Profile() {
                   <label>NIC / ID</label>
                   <input
                     className={getInvalidFieldClass(providerErrors.driver?.nicId)}
+                    autoCapitalize="characters"
+                    maxLength="12"
+                    placeholder="e.g. 901234567V or 199012345678"
                     value={driverProfile.nicId}
                     onChange={(e) => updateDriverProfileField('nicId', e.target.value)}
                   />
@@ -1312,7 +1363,7 @@ export default function Profile() {
               <div className="profile-form-actions">
                 {driverRole && (
                   <button className="btn btn-secondary" type="submit" disabled={busyAction === 'driver' || driverProfileBlocked}>
-                    {busyAction === 'driver' ? 'Saving...' : 'Save Driver Profile'}
+                    {busyAction === 'driver' ? 'Saving...' : 'Save Driver Application'}
                   </button>
                 )}
               </div>
@@ -1334,10 +1385,10 @@ export default function Profile() {
                     : driverApplication?.status === 'pending'
                       ? 'Driver Application Pending'
                       : driverApplication?.status === 'rejected'
-                        ? 'Re-apply for Driver Role'
+                        ? 'Re-submit Driver Application'
                         : driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified'
                           ? 'Driver Role Approved'
-                          : 'Apply for Driver Role'}
+                          : 'Submit Driver Application'}
                 </button>
               </div>
             )}

@@ -12,6 +12,11 @@ const sendServiceError = (res, result) => (
 const getAdminBookings = async (req, res) => {
   try {
     const result = await listAdminBookings(req.query)
+
+    if (result.error) {
+      return sendServiceError(res, result)
+    }
+
     return res.json(result)
   } catch (error) {
     return sendServerError(res, error, 'Failed to load bookings for admin')

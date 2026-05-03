@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
-import { FaCarSide, FaCheckCircle, FaClipboardCheck, FaStar, FaSyncAlt, FaUserTie } from 'react-icons/fa'
+import { FaCarSide, FaCheckCircle, FaClipboardCheck, FaStar, FaStore, FaSyncAlt, FaUserCheck, FaUserTie } from 'react-icons/fa'
 import Sidebar from '../../../components/layout/Sidebar'
 import { getAdminReviewAnalytics, getComplaintStats } from '../reviewApi'
 
 const emptyAnalytics = {
   averageDriverRating: 0,
   averageVehicleRating: 0,
+  activeDrivers: 0,
+  activeStores: 0,
   totalReviews: 0,
   topDrivers: [],
   topVehicles: []
@@ -76,6 +78,8 @@ export default function AdminQualityDashboard() {
   }, [])
 
   const stats = [
+    { label: 'Active Drivers', value: analytics.activeDrivers || 0, icon: <FaUserCheck /> },
+    { label: 'Active Stores', value: analytics.activeStores || 0, icon: <FaStore /> },
     { label: 'Avg Driver Rating', value: `${Number(analytics.averageDriverRating || 0).toFixed(1)}/5`, icon: <FaUserTie /> },
     { label: 'Avg Vehicle Rating', value: `${Number(analytics.averageVehicleRating || 0).toFixed(1)}/5`, icon: <FaCarSide /> },
     { label: 'Total Ratings', value: analytics.totalReviews || 0, icon: <FaClipboardCheck /> },

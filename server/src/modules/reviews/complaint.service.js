@@ -10,6 +10,14 @@ const {
   addNotificationToAdmins,
   addNotificationToUser
 } = require('../../utils/notificationHelpers')
+const {
+  defaultStatusMessages,
+  statusLabelMap,
+  validateComplaintBookingId,
+  validateComplaintId,
+  validateComplaintPayload,
+  validateComplaintStatusPayload
+} = require('./complaint.validation')
 
 const complaintPopulate = [
   { path: 'customer', select: 'fullName email phone profilePic' },
@@ -36,46 +44,7 @@ const bookingPopulate = [
   }
 ]
 
-const categoryMap = {
-  'vehicle issue': 'vehicle',
-  vehicle: 'vehicle',
-  billing: 'billing',
-  service: 'service',
-  other: 'other'
-}
-
-const priorityMap = {
-  low: 'low',
-  medium: 'medium',
-  med: 'medium',
-  high: 'high'
-}
-
-const statusMap = {
-  pending: 'pending',
-  'under review': 'under_review',
-  under_review: 'under_review',
-  solved: 'solved'
-}
-
-const statusLabelMap = {
-  pending: 'Pending',
-  under_review: 'Under Review',
-  solved: 'Solved'
-}
-
-const defaultStatusMessages = {
-  pending: 'We have received your complaint and placed it in the pending queue.',
-  under_review: 'We are reviewing your complaint and will update you after checking the booking details.',
-  solved: 'Your complaint has been marked as solved. Thank you for your patience.'
-}
-
 const toPlain = (value) => (value?.toObject ? value.toObject() : value)
-
-const normalizeMappedValue = (value, map, fallback = '') => {
-  const normalized = String(value || '').trim().toLowerCase()
-  return map[normalized] || fallback
-}
 
 const serializeComplaint = (complaint) => {
   const rawComplaint = toPlain(complaint)
@@ -120,43 +89,26 @@ const cleanupAndReturn = (file, result) => {
 }
 
 const createComplaint = async ({ customer, body, file, uploadDir }) => {
-  const bookingId = body.bookingId || body.booking
-  const booking = await Booking.findOne({ _id: bookingId, customer: customer._id }).populate(bookingPopulate)
+  const validatedComplaint = validateComplaintPayload(body)
+  if (validatedComplaint.error) {
+    return cleanupAndReturn(file, { error: validatedComplaint.error, statusCode: 400 })
+  }
+
+  const booking = await Booking.findOne({ _id: validatedComplaint.bookingId, customer: customer._id }).populate(bookingPopulate)
 
   if (!booking) {
     return cleanupAndReturn(file, { error: 'Booking not found', statusCode: 404 })
-  }
-
-  const subject = String(body.subject || '').trim()
-  const description = String(body.description || '').trim()
-  const category = normalizeMappedValue(body.category, categoryMap)
-  const priority = normalizeMappedValue(body.priority, priorityMap, 'low')
-
-  if (!subject) {
-    return cleanupAndReturn(file, { error: 'Subject is required', statusCode: 400 })
-  }
-
-  if (!description) {
-    return cleanupAndReturn(file, { error: 'Description is required', statusCode: 400 })
-  }
-
-  if (!Complaint.COMPLAINT_CATEGORIES.includes(category)) {
-    return cleanupAndReturn(file, { error: 'Invalid complaint category', statusCode: 400 })
-  }
-
-  if (!Complaint.COMPLAINT_PRIORITIES.includes(priority)) {
-    return cleanupAndReturn(file, { error: 'Invalid complaint priority', statusCode: 400 })
   }
 
   const complaint = await Complaint.create({
     customer: customer._id,
     booking: booking._id,
     bookingNo: booking.bookingNo,
-    subject,
-    category,
-    priority,
-    description,
-    attachment: file ? (file.originalname || file.filename) : String(body.attachment || '').trim(),
+    subject: validatedComplaint.subject,
+    category: validatedComplaint.category,
+    priority: validatedComplaint.priority,
+    description: validatedComplaint.description,
+    attachment: file ? (file.originalname || file.filename) : validatedComplaint.attachment,
     attachmentFile: file ? getFileMetadataFromUpload(file, uploadDir) : {},
     statusHistory: [{
       status: 'pending',
@@ -182,7 +134,12 @@ const createComplaint = async ({ customer, body, file, uploadDir }) => {
 }
 
 const getComplaintAttachment = async ({ complaintId, user }) => {
-  const complaint = await Complaint.findById(complaintId)
+  const complaintIdValidation = validateComplaintId(complaintId)
+  if (complaintIdValidation.error) {
+    return { error: complaintIdValidation.error, statusCode: 400 }
+  }
+
+  const complaint = await Complaint.findById(complaintIdValidation.value)
 
   if (!complaint) {
     return { error: 'Complaint not found', statusCode: 404 }
@@ -214,26 +171,28 @@ const listAdminComplaints = async () => {
 }
 
 const updateComplaintStatus = async ({ complaintId, adminId, body }) => {
-  const status = normalizeMappedValue(body.status, statusMap)
-  if (!Complaint.COMPLAINT_STATUSES.includes(status)) {
-    return { error: 'Invalid complaint status', statusCode: 400 }
+  const complaintIdValidation = validateComplaintId(complaintId)
+  if (complaintIdValidation.error) {
+    return { error: complaintIdValidation.error, statusCode: 400 }
   }
 
-  const complaint = await Complaint.findById(complaintId)
+  const statusValidation = validateComplaintStatusPayload(body)
+  if (statusValidation.error) {
+    return { error: statusValidation.error, statusCode: 400 }
+  }
+
+  const complaint = await Complaint.findById(complaintIdValidation.value)
   if (!complaint) {
     return { error: 'Complaint not found', statusCode: 404 }
   }
 
-  const notificationMessage = String(body.message || body.notificationMessage || defaultStatusMessages[status]).trim()
-  const statusLabel = statusLabelMap[status] || status
-
-  complaint.status = status
-  complaint.latestAdminMessage = notificationMessage
+  complaint.status = statusValidation.status
+  complaint.latestAdminMessage = statusValidation.notificationMessage
   complaint.lastStatusUpdatedBy = adminId
   complaint.lastStatusUpdatedAt = new Date()
   complaint.statusHistory.push({
-    status,
-    message: notificationMessage,
+    status: statusValidation.status,
+    message: statusValidation.notificationMessage,
     updatedBy: adminId,
     updatedAt: new Date()
   })
@@ -241,8 +200,8 @@ const updateComplaintStatus = async ({ complaintId, adminId, body }) => {
 
   await addNotificationToUser(complaint.customer, {
     type: 'complaint',
-    title: `Complaint Update: ${statusLabel}`,
-    message: notificationMessage,
+    title: `Complaint Update: ${statusValidation.statusLabel}`,
+    message: statusValidation.notificationMessage,
     link: '/notifications'
   })
 
@@ -260,7 +219,12 @@ const getComplaintStats = async () => {
 }
 
 const getComplaintContext = async ({ bookingId, customerId }) => {
-  const booking = await Booking.findOne({ _id: bookingId, customer: customerId }).populate(bookingPopulate)
+  const bookingIdValidation = validateComplaintBookingId(bookingId)
+  if (bookingIdValidation.error) {
+    return { error: bookingIdValidation.error, statusCode: 400 }
+  }
+
+  const booking = await Booking.findOne({ _id: bookingIdValidation.value, customer: customerId }).populate(bookingPopulate)
 
   if (!booking) {
     return { error: 'Booking not found', statusCode: 404 }

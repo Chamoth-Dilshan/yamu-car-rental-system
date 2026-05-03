@@ -1,10 +1,14 @@
 const Booking = require('../reservations/booking.model')
 const Payment = require('../payments/payment.model')
 const { addNotificationToUser } = require('../../utils/notificationHelpers')
+const { serializeBooking } = require('../../utils/reservationHelpers')
 const {
-  BOOKING_STATUSES,
-  serializeBooking
-} = require('../../utils/reservationHelpers')
+  escapeRegex,
+  trimValue,
+  validateBookingId,
+  validateBookingStatusPayload,
+  validateListQuery
+} = require('../reservations/booking.validation')
 
 const bookingPopulate = [
   { path: 'customer', select: 'fullName email phone city profilePic' },
@@ -45,18 +49,23 @@ const reconcileStoredPaymentStatus = async (booking) => {
 }
 
 const listAdminBookings = async ({ status, paymentStatus, search = '' } = {}) => {
+  const validatedQuery = validateListQuery({ status, paymentStatus, search }, { allowPaymentStatus: true })
+  if (validatedQuery.error) {
+    return { error: validatedQuery.error, statusCode: 400 }
+  }
+
   const query = { bookingType: 'vehicle' }
 
-  if (status && status !== 'all') {
-    query.bookingStatus = status
+  if (validatedQuery.status) {
+    query.bookingStatus = validatedQuery.status
   }
 
-  if (paymentStatus && paymentStatus !== 'all') {
-    query.paymentStatus = paymentStatus
+  if (validatedQuery.paymentStatus) {
+    query.paymentStatus = validatedQuery.paymentStatus
   }
 
-  if (search) {
-    const regex = new RegExp(search, 'i')
+  if (validatedQuery.search) {
+    const regex = new RegExp(escapeRegex(validatedQuery.search), 'i')
     query.$or = [
       { bookingNo: regex },
       { serviceTitle: regex },
@@ -79,7 +88,23 @@ const listAdminBookings = async ({ status, paymentStatus, search = '' } = {}) =>
 }
 
 const updateAdminBooking = async ({ bookingId, adminId, body }) => {
-  const { bookingStatus, adminNote = '' } = body
+  const bookingIdValidation = validateBookingId(bookingId)
+  if (bookingIdValidation.error) {
+    return { error: bookingIdValidation.error, statusCode: 400 }
+  }
+
+  const hasStatusField = (
+    Object.prototype.hasOwnProperty.call(body, 'bookingStatus')
+    || Object.prototype.hasOwnProperty.call(body, 'status')
+  )
+  const statusValidation = hasStatusField ? validateBookingStatusPayload(body) : null
+
+  if (statusValidation?.error) {
+    return { error: statusValidation.error, statusCode: 400 }
+  }
+
+  const bookingStatus = statusValidation?.bookingStatus
+  const adminNote = trimValue(body.adminNote || body.note)
 
   if (Object.prototype.hasOwnProperty.call(body, 'paymentStatus')) {
     return {
@@ -89,7 +114,7 @@ const updateAdminBooking = async ({ bookingId, adminId, body }) => {
   }
 
   const booking = await Booking.findOne({
-    _id: bookingId,
+    _id: bookingIdValidation.value,
     bookingType: 'vehicle'
   }).populate(bookingPopulate)
 
@@ -100,10 +125,6 @@ const updateAdminBooking = async ({ bookingId, adminId, body }) => {
   await reconcileStoredPaymentStatus(booking)
 
   if (bookingStatus) {
-    if (!BOOKING_STATUSES.includes(bookingStatus)) {
-      return { error: 'Invalid booking status', statusCode: 400 }
-    }
-
     if (bookingStatus !== booking.bookingStatus) {
       if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
         return { error: 'Only pending vehicle bookings can be confirmed', statusCode: 400 }
@@ -133,7 +154,7 @@ const updateAdminBooking = async ({ bookingId, adminId, body }) => {
     booking.bookingStatus = bookingStatus
   }
 
-  booking.adminNote = String(adminNote).trim()
+  booking.adminNote = adminNote
   await booking.save()
 
   const customerNotification = {
@@ -170,8 +191,13 @@ const updateAdminBooking = async ({ bookingId, adminId, body }) => {
 }
 
 const deleteAdminBooking = async ({ bookingId, adminId }) => {
+  const bookingIdValidation = validateBookingId(bookingId)
+  if (bookingIdValidation.error) {
+    return { error: bookingIdValidation.error, statusCode: 400 }
+  }
+
   const booking = await Booking.findOne({
-    _id: bookingId,
+    _id: bookingIdValidation.value,
     bookingType: 'vehicle'
   })
 

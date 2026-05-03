@@ -22,6 +22,7 @@ const PROVIDER_REQUIREMENT_CONFIG = {
   driver: {
     fields: [
       { key: 'drivingLicenseNumber', label: 'Driving license number' },
+      { key: 'licenseExpiryDate', label: 'License expiry date' },
       { key: 'nicId', label: 'NIC / ID' },
       { key: 'serviceArea', label: 'Service area' }
     ],

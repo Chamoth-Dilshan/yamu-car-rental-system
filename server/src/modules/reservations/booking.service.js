@@ -11,11 +11,15 @@ const {
   canUseRole,
   getRoleAssignment
 } = require('../../utils/roleHelpers')
+const { serializeBooking } = require('../../utils/reservationHelpers')
 const {
-  BOOKING_STATUSES,
-  serializeBooking
-} = require('../../utils/reservationHelpers')
-const { validateBookingDateRange } = require('./booking.validation')
+  escapeRegex,
+  validateBookingId,
+  validateBookingStatusPayload,
+  validateDriverBookingPayload,
+  validateListQuery,
+  validateVehicleBookingPayload
+} = require('./booking.validation')
 
 const bookingPopulate = [
   { path: 'customer', select: 'fullName email phone city profilePic' },
@@ -61,7 +65,7 @@ const buildSearchQuery = (search) => {
     return null
   }
 
-  const regex = new RegExp(search, 'i')
+  const regex = new RegExp(escapeRegex(search), 'i')
 
   return {
     $or: [
@@ -103,15 +107,20 @@ const listCustomerBookings = async ({
   paymentStatus,
   search = ''
 } = {}) => {
-  const query = { customer: customerId }
-  const searchQuery = buildSearchQuery(search)
-
-  if (status && status !== 'all') {
-    query.bookingStatus = status
+  const validatedQuery = validateListQuery({ status, paymentStatus, search }, { allowPaymentStatus: true })
+  if (validatedQuery.error) {
+    return { error: validatedQuery.error, statusCode: 400 }
   }
 
-  if (paymentStatus && paymentStatus !== 'all') {
-    query.paymentStatus = paymentStatus
+  const query = { customer: customerId }
+  const searchQuery = buildSearchQuery(validatedQuery.search)
+
+  if (validatedQuery.status) {
+    query.bookingStatus = validatedQuery.status
+  }
+
+  if (validatedQuery.paymentStatus) {
+    query.paymentStatus = validatedQuery.paymentStatus
   }
 
   const bookings = await Booking.find(searchQuery ? { ...query, ...searchQuery } : query)
@@ -127,13 +136,13 @@ const listCustomerBookings = async ({
 }
 
 const createVehicleBooking = async ({ customer, body }) => {
-  const { vehicleId, pickupLocation = '', destination = '', notes = '', startDate, endDate } = body
-  const dateRange = validateBookingDateRange({ startDate, endDate })
+  const validatedBooking = validateVehicleBookingPayload(body)
 
-  if (dateRange.error) {
-    return { error: dateRange.error, statusCode: 400 }
+  if (validatedBooking.error) {
+    return { error: validatedBooking.error, statusCode: 400 }
   }
 
+  const { vehicleId, pickupLocation, destination, notes, dateRange } = validatedBooking
   const vehicle = await Vehicle.findById(vehicleId).populate('owner', 'fullName email phone city profilePic accountStatus roles role staffProfile.storeName')
 
   if (!vehicle || vehicle.status !== 'available') {
@@ -225,13 +234,13 @@ const createVehicleBooking = async ({ customer, body }) => {
 }
 
 const createDriverBooking = async ({ customer, body }) => {
-  const { driverAdId, pickupLocation = '', destination = '', notes = '', startDate, endDate } = body
-  const dateRange = validateBookingDateRange({ startDate, endDate })
+  const validatedBooking = validateDriverBookingPayload(body)
 
-  if (dateRange.error) {
-    return { error: dateRange.error, statusCode: 400 }
+  if (validatedBooking.error) {
+    return { error: validatedBooking.error, statusCode: 400 }
   }
 
+  const { driverAdId, pickupLocation, destination, notes, dateRange } = validatedBooking
   const ad = await DriverAd.findById(driverAdId).populate('driver', 'fullName email phone city profilePic accountStatus roles role')
 
   if (!ad || ad.visibility !== 'active' || ad.availability === 'unavailable') {
@@ -305,7 +314,12 @@ const createDriverBooking = async ({ customer, body }) => {
 }
 
 const cancelCustomerBooking = async ({ bookingId, customer }) => {
-  const booking = await Booking.findOne({ _id: bookingId, customer: customer._id }).populate(bookingPopulate)
+  const bookingIdValidation = validateBookingId(bookingId)
+  if (bookingIdValidation.error) {
+    return { error: bookingIdValidation.error, statusCode: 400 }
+  }
+
+  const booking = await Booking.findOne({ _id: bookingIdValidation.value, customer: customer._id }).populate(bookingPopulate)
 
   if (!booking) {
     return { error: 'Booking not found', statusCode: 404 }
@@ -368,11 +382,16 @@ const rejectCustomerPaymentStatusUpdate = () => ({
 })
 
 const listDriverBookings = async ({ driverId, status, search = '' } = {}) => {
-  const query = { bookingType: 'driver', driver: driverId }
-  const searchQuery = buildSearchQuery(search)
+  const validatedQuery = validateListQuery({ status, search })
+  if (validatedQuery.error) {
+    return { error: validatedQuery.error, statusCode: 400 }
+  }
 
-  if (status && status !== 'all') {
-    query.bookingStatus = status
+  const query = { bookingType: 'driver', driver: driverId }
+  const searchQuery = buildSearchQuery(validatedQuery.search)
+
+  if (validatedQuery.status) {
+    query.bookingStatus = validatedQuery.status
   }
 
   const bookings = await Booking.find(searchQuery ? { ...query, ...searchQuery } : query)
@@ -393,16 +412,22 @@ const updateDriverBookingStatus = async ({
   bookingStatus,
   driverResponseNote = ''
 }) => {
-  if (!BOOKING_STATUSES.includes(bookingStatus)) {
-    return { error: 'Invalid booking status', statusCode: 400 }
+  const bookingIdValidation = validateBookingId(bookingId)
+  if (bookingIdValidation.error) {
+    return { error: bookingIdValidation.error, statusCode: 400 }
   }
 
-  if (!['confirmed', 'completed', 'cancelled'].includes(bookingStatus)) {
+  const statusValidation = validateBookingStatusPayload({ bookingStatus, driverResponseNote })
+  if (statusValidation.error) {
+    return { error: statusValidation.error, statusCode: 400 }
+  }
+
+  if (!['confirmed', 'completed', 'cancelled'].includes(statusValidation.bookingStatus)) {
     return { error: 'Only the assigned provider can confirm, complete, or cancel requests', statusCode: 400 }
   }
 
   const booking = await Booking.findOne({
-    _id: bookingId,
+    _id: bookingIdValidation.value,
     bookingType: 'driver',
     driver: driverId
   }).populate(bookingPopulate)
@@ -413,35 +438,35 @@ const updateDriverBookingStatus = async ({
 
   await reconcileStoredPaymentStatus(booking)
 
-  if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
+  if (statusValidation.bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
     return { error: 'Only pending driver requests can be confirmed', statusCode: 400 }
   }
 
-  if (bookingStatus === 'completed' && booking.bookingStatus !== 'confirmed') {
+  if (statusValidation.bookingStatus === 'completed' && booking.bookingStatus !== 'confirmed') {
     return { error: 'Only confirmed driver requests can be completed', statusCode: 400 }
   }
 
-  if (bookingStatus === 'cancelled' && !['pending', 'confirmed'].includes(booking.bookingStatus)) {
+  if (statusValidation.bookingStatus === 'cancelled' && !['pending', 'confirmed'].includes(booking.bookingStatus)) {
     return { error: 'Only pending or confirmed driver requests can be cancelled', statusCode: 400 }
   }
 
-  booking.bookingStatus = bookingStatus
-  booking.driverResponseNote = String(driverResponseNote).trim()
+  booking.bookingStatus = statusValidation.bookingStatus
+  booking.driverResponseNote = statusValidation.driverResponseNote
   await booking.save()
 
   const customerNotification = {
     type: 'booking',
     title: 'Driver updated your trip request',
-    message: `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
+    message: `Booking ${booking.bookingNo} is now ${statusValidation.bookingStatus}.`,
     link: '/bookings'
   }
 
-  if (bookingStatus === 'confirmed') {
+  if (statusValidation.bookingStatus === 'confirmed') {
     customerNotification.title = 'Driver request accepted'
     customerNotification.message = 'Your driver request has been accepted. Payment will be available after the trip is completed.'
   }
 
-  if (bookingStatus === 'completed') {
+  if (statusValidation.bookingStatus === 'completed') {
     customerNotification.title = 'Trip completed'
     customerNotification.message = `Booking ${booking.bookingNo} is completed. You can now complete payment.`
   }
@@ -450,7 +475,7 @@ const updateDriverBookingStatus = async ({
     addNotificationToUser(driverId, {
       type: 'booking',
       title: 'Booking request updated',
-      message: `You marked booking ${booking.bookingNo} as ${bookingStatus}.`,
+      message: `You marked booking ${booking.bookingNo} as ${statusValidation.bookingStatus}.`,
       link: '/driver/bookings'
     }),
     addNotificationToUser(booking.customer?._id || booking.customer, customerNotification)
@@ -468,19 +493,24 @@ const listStaffVehicleBookings = async ({
   paymentStatus,
   search = ''
 } = {}) => {
+  const validatedQuery = validateListQuery({ status, paymentStatus, search }, { allowPaymentStatus: true })
+  if (validatedQuery.error) {
+    return { error: validatedQuery.error, statusCode: 400 }
+  }
+
   const ownedVehicleIds = await Vehicle.find({ owner: staffId }).distinct('_id')
   const query = {
     bookingType: 'vehicle',
     vehicle: { $in: ownedVehicleIds }
   }
-  const searchQuery = buildSearchQuery(search)
+  const searchQuery = buildSearchQuery(validatedQuery.search)
 
-  if (status && status !== 'all') {
-    query.bookingStatus = status
+  if (validatedQuery.status) {
+    query.bookingStatus = validatedQuery.status
   }
 
-  if (paymentStatus && paymentStatus !== 'all') {
-    query.paymentStatus = paymentStatus
+  if (validatedQuery.paymentStatus) {
+    query.paymentStatus = validatedQuery.paymentStatus
   }
 
   const bookings = await Booking.find(searchQuery ? { ...query, ...searchQuery } : query)
@@ -500,17 +530,23 @@ const updateStaffVehicleBookingStatus = async ({
   staffId,
   bookingStatus
 }) => {
-  if (!BOOKING_STATUSES.includes(bookingStatus)) {
-    return { error: 'Invalid booking status', statusCode: 400 }
+  const bookingIdValidation = validateBookingId(bookingId)
+  if (bookingIdValidation.error) {
+    return { error: bookingIdValidation.error, statusCode: 400 }
   }
 
-  if (!['confirmed', 'completed', 'closed', 'cancelled'].includes(bookingStatus)) {
+  const statusValidation = validateBookingStatusPayload({ bookingStatus })
+  if (statusValidation.error) {
+    return { error: statusValidation.error, statusCode: 400 }
+  }
+
+  if (!['confirmed', 'completed', 'closed', 'cancelled'].includes(statusValidation.bookingStatus)) {
     return { error: 'Stores can only confirm, complete, close, or cancel requests', statusCode: 400 }
   }
 
   const ownedVehicleIds = await Vehicle.find({ owner: staffId }).distinct('_id')
   const booking = await Booking.findOne({
-    _id: bookingId,
+    _id: bookingIdValidation.value,
     bookingType: 'vehicle',
     vehicle: { $in: ownedVehicleIds }
   }).populate(bookingPopulate)
@@ -521,46 +557,46 @@ const updateStaffVehicleBookingStatus = async ({
 
   await reconcileStoredPaymentStatus(booking)
 
-  if (bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
+  if (statusValidation.bookingStatus === 'confirmed' && booking.bookingStatus !== 'pending') {
     return { error: 'Only pending vehicle bookings can be confirmed', statusCode: 400 }
   }
 
-  if (bookingStatus === 'completed' && booking.bookingStatus !== 'confirmed') {
+  if (statusValidation.bookingStatus === 'completed' && booking.bookingStatus !== 'confirmed') {
     return { error: 'Only confirmed vehicle bookings can be completed', statusCode: 400 }
   }
 
-  if (bookingStatus === 'cancelled' && !['pending', 'confirmed'].includes(booking.bookingStatus)) {
+  if (statusValidation.bookingStatus === 'cancelled' && !['pending', 'confirmed'].includes(booking.bookingStatus)) {
     return { error: 'Only pending or confirmed vehicle bookings can be cancelled', statusCode: 400 }
   }
 
-  if (bookingStatus === 'closed' && !['completed', 'cancelled'].includes(booking.bookingStatus)) {
+  if (statusValidation.bookingStatus === 'closed' && !['completed', 'cancelled'].includes(booking.bookingStatus)) {
     return { error: 'Only completed or cancelled vehicle bookings can be closed', statusCode: 400 }
   }
 
   if (
-    bookingStatus === 'closed'
+    statusValidation.bookingStatus === 'closed'
     && booking.bookingStatus === 'completed'
     && booking.paymentStatus !== 'paid'
   ) {
     return { error: 'Completed vehicle bookings can be closed only after payment is paid', statusCode: 400 }
   }
 
-  booking.bookingStatus = bookingStatus
+  booking.bookingStatus = statusValidation.bookingStatus
   await booking.save()
 
   const customerNotification = {
     type: 'booking',
     title: 'Store updated your vehicle booking',
-    message: `Booking ${booking.bookingNo} is now ${bookingStatus}.`,
+    message: `Booking ${booking.bookingNo} is now ${statusValidation.bookingStatus}.`,
     link: '/bookings'
   }
 
-  if (bookingStatus === 'confirmed') {
+  if (statusValidation.bookingStatus === 'confirmed') {
     customerNotification.title = 'Reservation accepted'
     customerNotification.message = 'Your reservation has been accepted. Payment will be available after the trip is completed.'
   }
 
-  if (bookingStatus === 'completed') {
+  if (statusValidation.bookingStatus === 'completed') {
     customerNotification.title = 'Trip completed'
     customerNotification.message = `Booking ${booking.bookingNo} is completed. You can now complete payment.`
   }
@@ -569,7 +605,7 @@ const updateStaffVehicleBookingStatus = async ({
     addNotificationToUser(staffId, {
       type: 'booking',
       title: 'Vehicle booking updated',
-      message: `You marked booking ${booking.bookingNo} as ${bookingStatus}.`,
+      message: `You marked booking ${booking.bookingNo} as ${statusValidation.bookingStatus}.`,
       link: '/staff/bookings'
     }),
     addNotificationToUser(booking.customer?._id || booking.customer, customerNotification)

@@ -24,12 +24,13 @@ const {
   syncUserRoles
 } = require('../../utils/roleHelpers')
 const {
-  hasDocumentFile,
   mergeDriverDocuments,
   mergeStaffDocuments,
   normalizeEmergencyContact,
   normalizeDriverDocuments,
   normalizePreferredLanguage,
+  normalizeSriLankanDrivingLicenseNumber,
+  normalizeSriLankanNic,
   normalizeStaffDocuments,
   parseDate,
   setDocumentCollectionStatus,
@@ -40,7 +41,11 @@ const {
   validatePasswordStrength,
   validateUsernameValue
 } = require('../../utils/profileHelpers')
-const { validateRestrictedProfileFields } = require('./user.validation')
+const {
+  validateDriverApplicationStandards,
+  validateProviderApplicationData,
+  validateRestrictedProfileFields
+} = require('./user.validation')
 
 const roleLabel = (value) => ({
   customer: 'User',
@@ -130,9 +135,11 @@ const buildDriverProfilePayload = (payload = {}, currentProfile = {}) => {
   const current = getPlainObject(currentProfile)
 
   return {
-    drivingLicenseNumber: trimValue(payload.drivingLicenseNumber, current.drivingLicenseNumber || ''),
+    drivingLicenseNumber: normalizeSriLankanDrivingLicenseNumber(
+      trimValue(payload.drivingLicenseNumber, current.drivingLicenseNumber || '')
+    ),
     licenseExpiryDate: parseDate(payload.licenseExpiryDate) || null,
-    nicId: trimValue(payload.nicId, current.nicId || ''),
+    nicId: normalizeSriLankanNic(trimValue(payload.nicId, current.nicId || '')),
     serviceArea: trimValue(payload.serviceArea, current.serviceArea || ''),
     providerDetails: trimValue(payload.providerDetails, current.providerDetails || ''),
     documents: mergeDriverDocuments(payload.documents || {}, current.documents || {})
@@ -151,24 +158,6 @@ const buildStaffProfilePayload = (payload = {}, currentProfile = {}) => {
     storeEmail: trimValue(payload.storeEmail, current.storeEmail || ''),
     documents: mergeStaffDocuments(payload.documents || {}, current.documents || {})
   }
-}
-
-const validateProviderApplicationData = (roleKey, applicationData = {}) => {
-  const { fields, documents } = getProviderRequirementConfig(roleKey)
-  const missingField = fields.find(({ key }) => !trimValue(applicationData[key], ''))
-
-  if (missingField) {
-    return { valid: false, message: `Missing required field: ${missingField.label}` }
-  }
-
-  const nextDocuments = applicationData.documents || {}
-  const missingDocument = documents.find(({ key }) => !hasDocumentFile(nextDocuments?.[key] || {}))
-
-  if (missingDocument) {
-    return { valid: false, message: `Missing required document metadata: ${missingDocument.label}` }
-  }
-
-  return { valid: true }
 }
 
 const serializeNotifications = (user) => ({
@@ -328,13 +317,24 @@ const updateDriverProfile = async ({ userId, payload, files, uploadDir }) => {
   const beforeSnapshot = buildUserAuditSnapshot(user)
   const documentKeys = getProviderRequirementConfig('driver').documents.map(({ key }) => key)
   const driverPayload = mergeUploadedDocumentFiles('driver', payload, files, uploadDir)
+  const nextDriverProfile = buildDriverProfilePayload(driverPayload, user.driverProfile)
+  const profileValidation = validateDriverApplicationStandards(nextDriverProfile, { required: false })
+  if (!profileValidation.valid) {
+    return cleanupFilesAndReturn(files, { error: profileValidation.message, statusCode: 400 })
+  }
+
   user.driverProfile = {
     ...getPlainObject(user.driverProfile),
-    ...buildDriverProfilePayload(driverPayload, user.driverProfile)
+    ...nextDriverProfile
   }
 
   const pendingApplication = getLatestPendingProviderApplication(user, 'driver')
   if (pendingApplication?.status === 'pending') {
+    const pendingValidation = validateProviderApplicationData('driver', user.driverProfile)
+    if (!pendingValidation.valid) {
+      return cleanupFilesAndReturn(files, { error: pendingValidation.message, statusCode: 400 })
+    }
+
     user.driverProfile.documents = setDocumentCollectionStatus(user.driverProfile.documents, documentKeys, { status: 'pending' })
     pendingApplication.applicationData = {
       ...pendingApplication.applicationData,

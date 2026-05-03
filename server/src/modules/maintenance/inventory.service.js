@@ -1,11 +1,12 @@
 const Inventory = require('./inventory.model')
+const {
+  buildInventoryPayload,
+  escapeRegex,
+  validateInventoryItemId,
+  validateInventorySearch
+} = require('./inventory.validation')
 
 const LOW_STOCK_THRESHOLD = 10
-
-const toNumber = (value, fallback = 0) => {
-  const numberValue = Number(value)
-  return Number.isFinite(numberValue) ? numberValue : fallback
-}
 
 const serializeInventoryItem = (item) => {
   const rawItem = item?.toObject ? item.toObject() : { ...item }
@@ -29,40 +30,12 @@ const buildInventoryStats = (items) => ({
   inventoryValue: items.reduce((total, item) => total + (Number(item.quantity || 0) * Number(item.price || 0)), 0)
 })
 
-const buildInventoryPayload = (body) => {
-  const itemName = String(body.itemName || body.itemname || '').trim()
-  const quantity = toNumber(body.quantity)
-  const price = toNumber(body.price)
-  const description = String(body.description || '').trim()
-
-  if (!itemName) {
-    return { error: 'Inventory item name is required' }
-  }
-
-  if (quantity < 0) {
-    return { error: 'Inventory quantity cannot be negative' }
-  }
-
-  if (price < 0) {
-    return { error: 'Inventory price cannot be negative' }
-  }
-
-  return {
-    payload: {
-      itemName,
-      quantity,
-      price,
-      description
-    }
-  }
-}
-
 const buildSearchQuery = (search) => {
   if (!search) {
     return null
   }
 
-  const regex = new RegExp(search, 'i')
+  const regex = new RegExp(escapeRegex(search), 'i')
 
   return {
     $or: [
@@ -73,8 +46,9 @@ const buildSearchQuery = (search) => {
 }
 
 const listInventoryItems = async ({ ownerId, search = '' } = {}) => {
+  const validatedQuery = validateInventorySearch(search)
   const query = { owner: ownerId }
-  const searchQuery = buildSearchQuery(search)
+  const searchQuery = buildSearchQuery(validatedQuery.search)
   const items = await Inventory.find(searchQuery ? { ...query, ...searchQuery } : query)
     .sort({ updatedAt: -1 })
 
@@ -85,7 +59,12 @@ const listInventoryItems = async ({ ownerId, search = '' } = {}) => {
 }
 
 const getInventoryItemById = async ({ itemId, ownerId }) => {
-  const item = await Inventory.findOne({ _id: itemId, owner: ownerId })
+  const itemIdValidation = validateInventoryItemId(itemId)
+  if (itemIdValidation.error) {
+    return { error: itemIdValidation.error, statusCode: 400 }
+  }
+
+  const item = await Inventory.findOne({ _id: itemIdValidation.value, owner: ownerId })
 
   if (!item) {
     return { error: 'Inventory item not found', statusCode: 404 }
@@ -113,7 +92,12 @@ const createInventoryItem = async ({ ownerId, body }) => {
 }
 
 const updateInventoryItem = async ({ itemId, ownerId, body }) => {
-  const item = await Inventory.findOne({ _id: itemId, owner: ownerId })
+  const itemIdValidation = validateInventoryItemId(itemId)
+  if (itemIdValidation.error) {
+    return { error: itemIdValidation.error, statusCode: 400 }
+  }
+
+  const item = await Inventory.findOne({ _id: itemIdValidation.value, owner: ownerId })
 
   if (!item) {
     return { error: 'Inventory item not found', statusCode: 404 }
@@ -135,7 +119,12 @@ const updateInventoryItem = async ({ itemId, ownerId, body }) => {
 }
 
 const deleteInventoryItem = async ({ itemId, ownerId }) => {
-  const item = await Inventory.findOne({ _id: itemId, owner: ownerId })
+  const itemIdValidation = validateInventoryItemId(itemId)
+  if (itemIdValidation.error) {
+    return { error: itemIdValidation.error, statusCode: 400 }
+  }
+
+  const item = await Inventory.findOne({ _id: itemIdValidation.value, owner: ownerId })
 
   if (!item) {
     return { error: 'Inventory item not found', statusCode: 404 }
