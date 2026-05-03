@@ -30,93 +30,13 @@ const getMyBookings = async (req, res) => {
 
 const createVehicleBooking = async (req, res) => {
   try {
-    const { vehicleId, pickupLocation = '', destination = '', notes = '', startDate, endDate } = req.body
-    const dateRange = validateDateRange(startDate, endDate)
-
-    if (dateRange.error) {
-      return res.status(400).json({ message: dateRange.error })
-    }
-
-    const vehicle = await Vehicle.findById(vehicleId).populate('owner', 'fullName email phone city profilePic accountStatus roles role staffProfile.storeName')
-
-    if (!vehicle || vehicle.status !== 'available') {
-      return res.status(404).json({ message: 'Selected vehicle is not available for booking' })
-    }
-
-    const activeMaintenance = await Maintenance.exists({
-      vehicle: vehicle._id,
-      status: { $in: Maintenance.ACTIVE_MAINTENANCE_STATUSES }
+    const result = await createVehicleBookingService({
+      customer: req.user,
+      body: req.body
     })
 
-    if (activeMaintenance) {
-      return res.status(400).json({ message: 'Selected vehicle is currently under maintenance' })
-    }
-
-    if (!vehicle.owner) {
-      return res.status(400).json({ message: 'Selected vehicle is not published by a store yet' })
-    }
-
-    if (String(vehicle.owner._id) === String(req.user._id)) {
-      return res.status(400).json({ message: 'You cannot book your own store vehicle listing' })
-    }
-
-    const storeRoleAssignment = getRoleAssignment(vehicle.owner, 'staff')
-    if (vehicle.owner.accountStatus !== 'active' || !canUseRole(storeRoleAssignment)) {
-      return res.status(400).json({ message: 'Selected vehicle store is not currently available' })
-    }
-
-    const conflictingBooking = await Booking.findOne(
-      buildOverlapQuery({ bookingType: 'vehicle', vehicle: vehicle._id }, dateRange.startDate, dateRange.endDate)
-    )
-
-    if (conflictingBooking) {
-      return res.status(400).json({ message: 'The selected vehicle already has an active reservation in that date range' })
-    }
-
-    const booking = await Booking.create({
-      bookingNo: await generateBookingNo('BOOK'),
-      bookingType: 'vehicle',
-      customer: req.user._id,
-      vehicle: vehicle._id,
-      serviceTitle: vehicle.name,
-      vehicleLabel: vehicle.name,
-      pickupLocation: String(pickupLocation).trim(),
-      destination: String(destination).trim(),
-      notes: String(notes).trim(),
-      startDate: dateRange.startDate,
-      endDate: dateRange.endDate,
-      dailyRate: vehicle.pricePerDay,
-      billableDays: dateRange.billableDays,
-      baseAmount: vehicle.pricePerDay * dateRange.billableDays,
-      serviceFee: 0,
-      totalAmount: vehicle.pricePerDay * dateRange.billableDays
-    })
-
-    const createdBooking = await Booking.findById(booking._id).populate(bookingPopulate)
-    const customerName = createdBooking.customer?.fullName || req.user.fullName
-
-    const notificationTasks = [
-      addNotificationToUser(req.user._id, {
-        type: 'booking',
-        title: 'Vehicle booking created',
-        message: `${vehicle.name} reservation ${booking.bookingNo} was created and is pending review.`,
-        link: '/bookings'
-      }),
-      addNotificationToAdmins({
-        type: 'booking',
-        title: 'New vehicle booking',
-        message: `${customerName} created vehicle booking ${booking.bookingNo} for ${vehicle.name}.`,
-        link: '/admin/bookings'
-      })
-    ]
-
-    if (vehicle.owner) {
-      notificationTasks.push(addNotificationToUser(vehicle.owner, {
-        type: 'booking',
-        title: 'New vehicle booking request',
-        message: `${customerName} created booking ${booking.bookingNo} for ${vehicle.name}.`,
-        link: '/staff/bookings'
-      }))
+    if (result.error) {
+      return sendServiceError(res, result)
     }
 
     return res.status(201).json(result)

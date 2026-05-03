@@ -1,10 +1,12 @@
-export const formatCurrency = (value) => (
-  new Intl.NumberFormat('en-LK', {
-    style: 'currency',
-    currency: 'LKR',
-    maximumFractionDigits: 0
-  }).format(Number(value || 0))
-)
+export const formatCurrency = (amount) => {
+  const parsedAmount = Number(amount);
+  const number = isNaN(parsedAmount) ? 0 : parsedAmount;
+  
+  return `LKR ${number.toLocaleString('en-LK', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+};
 
 export const formatDate = (value) => {
   if (!value) {

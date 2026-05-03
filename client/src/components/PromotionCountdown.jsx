@@ -10,16 +10,12 @@ export default function PromotionCountdown({ endDate }) {
       return;
     }
     
-    // Set expiry to the end of the specified day (23:59:59) for accuracy if it's just a date string
-    const targetObj = new Date(endDate);
+    const dateOnlyString = typeof endDate === 'string' ? endDate.split('T')[0] : new Date(endDate).toISOString().split('T')[0];
+    const targetObj = new Date(`${dateOnlyString}T23:59:59`);
     
     if (isNaN(targetObj.getTime())) {
       setTimeLeft('Invalid date');
       return;
-    }
-
-    if (targetObj.getHours() === 0 && targetObj.getMinutes() === 0) {
-      targetObj.setHours(23, 59, 59, 999);
     }
     const target = targetObj.getTime();
 

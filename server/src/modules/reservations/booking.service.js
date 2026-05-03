@@ -3,6 +3,7 @@ const DriverAd = require('../drivers/driverAd.model')
 const Maintenance = require('../maintenance/maintenance.model')
 const Payment = require('../payments/payment.model')
 const Vehicle = require('../vehicles/vehicle.model')
+const PricingEngine = require('../../../services/pricingEngine')
 const {
   addNotificationToAdmins,
   addNotificationToUser
@@ -127,7 +128,7 @@ const listCustomerBookings = async ({
 }
 
 const createVehicleBooking = async ({ customer, body }) => {
-  const { vehicleId, pickupLocation = '', destination = '', notes = '', startDate, endDate } = body
+  const { vehicleId, pickupLocation = '', destination = '', notes = '', startDate, endDate, promoCode } = body
   const dateRange = validateDateRange(startDate, endDate)
 
   if (dateRange.error) {
@@ -170,6 +171,18 @@ const createVehicleBooking = async ({ customer, body }) => {
     return { error: 'The selected vehicle already has an active reservation in that date range', statusCode: 400 }
   }
 
+  const bookingDetails = {
+    basePrice: vehicle.pricePerDay,
+    duration: dateRange.billableDays,
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate,
+    vehicleCategory: vehicle.category || 'any',
+    bookingType: 'vehicle',
+    isFirstBooking: false // First booking check could be implemented here
+  };
+
+  const pricingResult = await PricingEngine.calculatePrice(bookingDetails, promoCode);
+
   const booking = await Booking.create({
     bookingNo: await generateBookingNo('BOOK'),
     bookingType: 'vehicle',
@@ -184,9 +197,11 @@ const createVehicleBooking = async ({ customer, body }) => {
     endDate: dateRange.endDate,
     dailyRate: vehicle.pricePerDay,
     billableDays: dateRange.billableDays,
-    baseAmount: vehicle.pricePerDay * dateRange.billableDays,
+    baseAmount: pricingResult.basePrice,
     serviceFee: 0,
-    totalAmount: vehicle.pricePerDay * dateRange.billableDays
+    discountAmount: pricingResult.promoDiscount || 0,
+    promoCode: pricingResult.appliedPromotion ? pricingResult.appliedPromotion.code : null,
+    totalAmount: pricingResult.finalPrice
   })
 
   const createdBooking = await Booking.findById(booking._id).populate(bookingPopulate)

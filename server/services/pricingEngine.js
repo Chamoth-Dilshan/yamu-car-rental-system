@@ -45,8 +45,8 @@ class PricingEngine {
 
     const now = new Date();
     // 24 hour buffer to account for users in local timezones creating promos without a time component
-    const timezoneBufferFuture = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-    const timezoneBufferPast = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const timezoneBufferFuture = now;
+    const timezoneBufferPast = now;
 
     // 1. Fetch active pricing rules and sort by priority (descending)
     const activeRules = await PricingRule.find({ 

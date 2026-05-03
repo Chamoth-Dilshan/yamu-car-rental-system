@@ -3,7 +3,7 @@ import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from '../../components/layout/Sidebar';
 import PromotionCountdown from '../../components/PromotionCountdown';
-import { formatCurrency } from '../../utils/formatCurrency';
+import { formatCurrency } from '../../utils/formatters';
 
 export default function PromotionsAdmin() {
   const [promotions, setPromotions] = useState([]);

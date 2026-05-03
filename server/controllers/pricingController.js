@@ -63,7 +63,7 @@ exports.getPromotions = async (req, res) => {
 
 exports.getAvailablePromotions = async (req, res) => {
   try {
-    const { amount, bookingType, vehicleCategory } = req.query;
+    const { basePrice, bookingType, vehicleCategory } = req.query;
     const currentDate = new Date();
     
     const query = {
@@ -72,7 +72,7 @@ exports.getAvailablePromotions = async (req, res) => {
       endDate: { $gte: currentDate }
     };
 
-    if (amount) query.minBookingAmount = { $lte: Number(amount) };
+    if (basePrice) query.minBookingAmount = { $lte: Number(basePrice) };
     if (bookingType) query.bookingType = { $in: ['any', bookingType] };
     if (vehicleCategory) query.vehicleCategory = { $in: ['any', vehicleCategory] };
 
