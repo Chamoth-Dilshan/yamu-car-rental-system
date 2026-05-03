@@ -1472,9 +1472,17 @@ const seed = async () => {
     )
 
     const bookings = await Booking.insertMany([...vehicleBookings, ...driverBookings])
-    const eligiblePaymentBookings = bookings.filter((booking, index) => (
-      ['completed', 'closed'].includes(booking.bookingStatus) && index % 7 !== 0
-    ))
+    const eligiblePaymentBookings = bookings.filter((booking, index) => {
+      if (booking.bookingStatus === 'closed') {
+        return true
+      }
+
+      if (booking.bookingStatus === 'completed') {
+        return index % 4 !== 0
+      }
+
+      return false
+    })
     const paymentPlans = eligiblePaymentBookings.map((booking, index) => {
       const customer = activeCustomerUsers.find((user) => String(user._id) === String(booking.customer))
       const customerCards = cardsByCustomer.get(String(booking.customer)) || []
