@@ -7,7 +7,9 @@ const normalizeUsernameCandidate = (value = '') => {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-  return normalized.slice(0, 30);
+  const candidate = normalized.slice(0, 30);
+
+  return candidate.length >= 3 ? candidate : '';
 };
 
 const buildUsernameBase = ({ email = '', fullName = '' } = {}) => {
@@ -25,7 +27,8 @@ const generateUniqueUsername = async ({ email, fullName } = {}) => {
 
   while (await User.exists({ username: candidate })) {
     suffix += 1;
-    candidate = `${base}${suffix}`;
+    const suffixValue = String(suffix);
+    candidate = `${base.slice(0, 30 - suffixValue.length)}${suffixValue}`;
   }
 
   return candidate;

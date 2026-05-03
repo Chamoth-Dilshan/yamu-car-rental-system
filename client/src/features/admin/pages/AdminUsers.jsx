@@ -4,6 +4,7 @@ import API from '../../../api/axios';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
 import { formatDateTime } from '../../../utils/formatters';
+import { validateEmail, validateRequiredText, validateUsername } from '../../../utils/validation';
 
 const manageableRoles = ['customer', 'driver', 'staff', 'admin'];
 const roleDisplayMap = {
@@ -486,6 +487,15 @@ export default function AdminUsers() {
     }));
   };
 
+  const validateAdminEditableUser = (user) => (
+    validateRequiredText(user.fullName, 'Full name')
+    || validateUsername(user.username)
+    || validateEmail(user.email)
+    || (accountStatuses.includes(user.accountStatus) ? '' : 'Invalid account status')
+    || (user.roles?.some((role) => role.roleKey === user.primaryRole) ? '' : 'Primary role must be assigned to this user')
+    || (user.roles?.some((role) => role.roleKey === user.activeRole) ? '' : 'Active role must be assigned to this user')
+  );
+
   const toggleAssignedRole = (userId, roleKey) => {
     setUsers((prev) => prev.map((user) => {
       if (user._id !== userId) {
@@ -527,6 +537,14 @@ export default function AdminUsers() {
   };
 
   const saveUser = async (user, destination = `/admin/users/${user._id}`) => {
+    const validationError = validateAdminEditableUser(user);
+
+    if (validationError) {
+      setMessage('');
+      setError(validationError);
+      return null;
+    }
+
     setBusyAction(`save-${user._id}`);
     setMessage('');
     setError('');
@@ -563,6 +581,10 @@ export default function AdminUsers() {
   };
 
   const reviewApplication = async (userId, roleKey, action) => {
+    if (action === 'approve' && !window.confirm(`Approve this ${roleKey} application?`)) {
+      return;
+    }
+
     let reason = '';
     if (action === 'reject') {
       const promptValue = window.prompt(`Reason for rejecting ${roleKey} application:`);
@@ -1430,7 +1452,7 @@ export default function AdminUsers() {
             <div className="form-row">
               <div className="form-group">
                 <label>Email</label>
-                <input value={selectedUser.email} onChange={(e) => updateField(selectedUser._id, 'email', e.target.value)} />
+                <input type="email" value={selectedUser.email} onChange={(e) => updateField(selectedUser._id, 'email', e.target.value)} />
               </div>
               <div className="form-group">
                 <label>NIC</label>

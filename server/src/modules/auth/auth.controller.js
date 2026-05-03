@@ -16,7 +16,27 @@ const {
   serializeUser,
   syncUserRoles
 } = require('../../utils/roleHelpers');
-const { validatePasswordStrength } = require('../../utils/profileHelpers');
+const {
+  trimValue,
+  validateEmailAddress,
+  validateOptionalPhone,
+  validatePasswordStrength,
+  validateUsernameValue
+} = require('../../utils/profileHelpers');
+
+const RESTRICTED_SIGNUP_FIELDS = [
+  'role',
+  'roles',
+  'activeRole',
+  'primaryRole',
+  'accountStatus',
+  'verificationStatus',
+  'isSystemAdmin',
+  'permissions',
+  'emailVerified',
+  'authProvider',
+  'googleId'
+];
 
 const buildActiveCustomerRole = () => buildRoleAssignment('customer', {
   roleStatus: 'active',
@@ -62,10 +82,30 @@ const respondWithAuthSession = async (res, user) => {
 
 const register = async (req, res) => {
   try {
-    const { fullName, email, password, username, phone, address, city } = req.body;
+    const { fullName, email, password, confirmPassword, username, phone, address, city } = req.body;
+    const restrictedField = RESTRICTED_SIGNUP_FIELDS.find((field) => Object.prototype.hasOwnProperty.call(req.body, field));
 
-    if (!fullName || !username || !email || !password) {
-      return res.status(400).json({ message: 'Full name, username, email, and password are required' });
+    if (restrictedField) {
+      return res.status(400).json({ message: 'Role and account status fields cannot be set during registration' });
+    }
+
+    const normalizedFullName = trimValue(fullName, '');
+    if (!normalizedFullName) {
+      return res.status(400).json({ message: 'Full name is required' });
+    }
+
+    const emailValidation = validateEmailAddress(email);
+    if (emailValidation.error) {
+      return res.status(400).json({ message: emailValidation.error });
+    }
+
+    const usernameValidation = validateUsernameValue(username);
+    if (usernameValidation.error) {
+      return res.status(400).json({ message: usernameValidation.error });
+    }
+
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required' });
     }
 
     const passwordError = validatePasswordStrength(password);
@@ -73,16 +113,22 @@ const register = async (req, res) => {
       return res.status(400).json({ message: passwordError });
     }
 
-    const normalizedEmail = String(email).trim().toLowerCase();
-    const normalizedUsername = String(username).trim().toLowerCase();
+    if (!confirmPassword) {
+      return res.status(400).json({ message: 'Confirm password is required' });
+    }
 
-    if (!normalizedUsername) {
-      return res.status(400).json({ message: 'Username is required' });
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
+    }
+
+    const phoneValidation = validateOptionalPhone(phone);
+    if (phoneValidation.error) {
+      return res.status(400).json({ message: phoneValidation.error });
     }
 
     const [existingUsername, existingEmail] = await Promise.all([
-      User.findOne({ username: normalizedUsername }).select('_id'),
-      User.findOne({ email: normalizedEmail }).select('_id')
+      User.findOne({ username: usernameValidation.value }).select('_id'),
+      User.findOne({ email: emailValidation.value }).select('_id')
     ]);
 
     if (existingUsername) {
@@ -94,13 +140,13 @@ const register = async (req, res) => {
     }
 
     await User.create({
-      username: normalizedUsername,
-      fullName: String(fullName).trim(),
-      email: normalizedEmail,
+      username: usernameValidation.value,
+      fullName: normalizedFullName,
+      email: emailValidation.value,
       password,
-      phone: phone || '',
-      address: address || '',
-      city: city || '',
+      phone: phoneValidation.value,
+      address: trimValue(address, ''),
+      city: trimValue(city, ''),
       role: 'customer',
       accountStatus: 'active',
       verificationStatus: 'verified',
@@ -132,6 +178,14 @@ const login = async (req, res) => {
     const { email, password } = req.body;
 
     const identifier = String(email || '').trim().toLowerCase();
+    if (!identifier) {
+      return res.status(400).json({ message: 'Email or username is required' });
+    }
+
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required' });
+    }
+
     const user = await User.findOne({
       $or: [{ email: identifier }, { username: identifier }]
     });

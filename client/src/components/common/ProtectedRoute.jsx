@@ -13,9 +13,17 @@ export default function ProtectedRoute({ children, roles, permissions, requireAl
     return <Navigate to="/signin" replace />;
   }
 
-  const fallbackProfilePath = getProfilePathForRole(user.activeRole || user.role);
+  if (user.accountStatus && user.accountStatus !== 'active') {
+    return <Navigate to="/signin" replace />;
+  }
 
-  if (roles && !roles.includes(user.activeRole || user.role)) {
+  const activeRole = user.activeRole || user.role;
+  const activeRoleAssignment = (user.roles || []).find((role) => role.roleKey === activeRole);
+  const activeRoleIsUsable = activeRoleAssignment?.roleStatus === 'active'
+    && activeRoleAssignment?.verificationStatus === 'verified';
+  const fallbackProfilePath = getProfilePathForRole(activeRole);
+
+  if (roles && (!roles.includes(activeRole) || !activeRoleIsUsable)) {
     return <Navigate to={fallbackProfilePath} replace />;
   }
 

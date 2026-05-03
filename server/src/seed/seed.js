@@ -8,6 +8,12 @@ const DriverAd = require('../modules/drivers/driverAd.model')
 const Booking = require('../modules/reservations/booking.model')
 const Payment = require('../modules/payments/payment.model')
 const PaymentMethod = require('../modules/payments/paymentMethod.model')
+const UserPaymentCard = require('../modules/payments/userPaymentCard.model')
+const Review = require('../modules/reviews/review.model')
+const Complaint = require('../modules/reviews/complaint.model')
+const Inventory = require('../modules/maintenance/inventory.model')
+const Maintenance = require('../modules/maintenance/maintenance.model')
+const AuditLog = require('../modules/admin/auditLog.model')
 const { buildRoleAssignment } = require('../utils/roleHelpers')
 
 const DEFAULT_PASSWORD = '12345'
@@ -316,6 +322,86 @@ const VEHICLE_CATALOG = [
   }
 ]
 
+const INVENTORY_CATALOG = [
+  {
+    itemName: 'Engine Oil 5W-30',
+    price: 4200,
+    description: 'Synthetic oil stock for routine service intervals.'
+  },
+  {
+    itemName: 'Oil Filter',
+    price: 1850,
+    description: 'Replacement filters for compact and mid-size vehicles.'
+  },
+  {
+    itemName: 'Brake Pads Set',
+    price: 14800,
+    description: 'Front brake pad kits for scheduled brake service.'
+  },
+  {
+    itemName: 'Air Filter',
+    price: 3200,
+    description: 'Cabin and engine air filter stock for service work.'
+  },
+  {
+    itemName: 'Wiper Blade Pair',
+    price: 2600,
+    description: 'All-weather wiper replacements for fleet vehicles.'
+  },
+  {
+    itemName: 'Coolant Bottle',
+    price: 2900,
+    description: 'Coolant bottles for inspection and repair jobs.'
+  },
+  {
+    itemName: 'Tyre Repair Kit',
+    price: 5200,
+    description: 'Emergency repair kits and valve replacements.'
+  },
+  {
+    itemName: 'Battery Terminal Set',
+    price: 1800,
+    description: 'Electrical consumables for battery maintenance.'
+  }
+]
+
+const MAINTENANCE_NOTES = [
+  'Oil and filter replacement completed',
+  'Brake inspection and pad replacement',
+  'Cabin cleaning and AC filter replacement',
+  'Tyre pressure check and alignment',
+  'Battery terminals cleaned and tightened',
+  'Coolant topped up after inspection',
+  'Wiper blades replaced before rain season',
+  'Diagnostic scan and road test completed'
+]
+
+const REVIEW_FEEDBACK = [
+  'Clean vehicle, clear handover, and a smooth booking experience.',
+  'The provider was punctual and communication was easy throughout the trip.',
+  'Good value for the booking amount and the service matched the listing.',
+  'Comfortable ride with helpful support before pickup.',
+  'The reservation was handled professionally from confirmation to return.',
+  'Driver knew the routes well and kept the trip on schedule.',
+  'Vehicle condition was solid and the checkout flow was straightforward.',
+  'The service was reliable for a family day trip.'
+]
+
+const COMPLAINT_SUBJECTS = [
+  'Late handover follow-up',
+  'Billing clarification required',
+  'Vehicle cleanliness concern',
+  'Driver communication issue',
+  'Refund status check',
+  'Route change dispute'
+]
+
+const CARD_BRANDS = [
+  { brand: 'Visa', prefix: '4' },
+  { brand: 'Mastercard', prefix: '5' },
+  { brand: 'Card', prefix: '6' }
+]
+
 const getPositiveInt = (value, fallback) => {
   const numeric = Number.parseInt(value, 10)
   return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback
@@ -325,15 +411,25 @@ const buildSeedTargets = () => {
   const requestedUsers = getPositiveInt(process.env.SEED_USER_COUNT, 200)
   const requestedVehicles = getPositiveInt(process.env.SEED_VEHICLE_COUNT, 100)
   const requestedDrivers = getPositiveInt(process.env.SEED_DRIVER_COUNT, 50)
+  const requestedVehicleBookings = getPositiveInt(process.env.SEED_VEHICLE_BOOKING_COUNT, 32)
+  const requestedDriverBookings = getPositiveInt(process.env.SEED_DRIVER_BOOKING_COUNT, 20)
+  const requestedCards = getPositiveInt(process.env.SEED_SAVED_CARD_COUNT, 40)
+  const requestedMaintenanceRecords = getPositiveInt(process.env.SEED_MAINTENANCE_RECORD_COUNT, 28)
+  const requestedReviews = getPositiveInt(process.env.SEED_REVIEW_COUNT, 24)
+  const requestedComplaints = getPositiveInt(process.env.SEED_COMPLAINT_COUNT, 14)
+  const inventoryItemsPerStaff = getPositiveInt(process.env.SEED_INVENTORY_ITEMS_PER_STAFF, 6)
   const staffCount = Math.max(1, Math.ceil(requestedVehicles / 5))
-  const minimumUsers = 1 + staffCount + requestedDrivers
+  const minimumActiveCustomers = Math.max(1, Math.min(12, Math.ceil((requestedVehicleBookings + requestedDriverBookings) / 4)))
+  const minimumUsers = 1 + staffCount + requestedDrivers + minimumActiveCustomers
   const totalUsers = Math.max(requestedUsers, minimumUsers)
   const availableCustomerSlots = Math.max(0, totalUsers - 1 - staffCount - requestedDrivers)
-  const pendingDriverApplicantCount = Math.min(6, availableCustomerSlots)
-  const pendingStaffApplicantCount = Math.min(4, Math.max(0, availableCustomerSlots - pendingDriverApplicantCount))
-  const pendingAccountCount = Math.min(3, Math.max(0, availableCustomerSlots - pendingDriverApplicantCount - pendingStaffApplicantCount))
-  const suspendedAccountCount = Math.min(3, Math.max(0, availableCustomerSlots - pendingDriverApplicantCount - pendingStaffApplicantCount - pendingAccountCount))
-  const deactivatedAccountCount = Math.min(3, Math.max(0, availableCustomerSlots - pendingDriverApplicantCount - pendingStaffApplicantCount - pendingAccountCount - suspendedAccountCount))
+  const reservedActiveCustomerCount = Math.min(availableCustomerSlots, minimumActiveCustomers)
+  const nonActiveCustomerSlots = Math.max(0, availableCustomerSlots - reservedActiveCustomerCount)
+  const pendingDriverApplicantCount = Math.min(6, nonActiveCustomerSlots)
+  const pendingStaffApplicantCount = Math.min(4, Math.max(0, nonActiveCustomerSlots - pendingDriverApplicantCount))
+  const pendingAccountCount = Math.min(3, Math.max(0, nonActiveCustomerSlots - pendingDriverApplicantCount - pendingStaffApplicantCount))
+  const suspendedAccountCount = Math.min(3, Math.max(0, nonActiveCustomerSlots - pendingDriverApplicantCount - pendingStaffApplicantCount - pendingAccountCount))
+  const deactivatedAccountCount = Math.min(3, Math.max(0, nonActiveCustomerSlots - pendingDriverApplicantCount - pendingStaffApplicantCount - pendingAccountCount - suspendedAccountCount))
   const activeCustomerCount = Math.max(
     0,
     availableCustomerSlots
@@ -355,7 +451,14 @@ const buildSeedTargets = () => {
     pendingAccountCount,
     suspendedAccountCount,
     deactivatedAccountCount,
-    activeCustomerCount
+    activeCustomerCount,
+    vehicleBookingCount: requestedVehicleBookings,
+    driverBookingCount: requestedDriverBookings,
+    savedCardCount: requestedCards,
+    maintenanceRecordCount: requestedMaintenanceRecords,
+    reviewCount: requestedReviews,
+    complaintCount: requestedComplaints,
+    inventoryItemsPerStaff
   }
 }
 
@@ -389,9 +492,11 @@ const buildVehicleImageLinks = (name, theme) => ([
   `https://placehold.co/1200x800/${theme.primary}/${theme.accent}?text=${encodeURIComponent(`${name} | Interior`)}`,
 ])
 
-const buildDocumentMetadata = (reference, uploadedAt, reviewedAt) => ({
+const buildApprovedDocumentMetadata = (reference, fileLabel, uploadedAt, reviewedAt) => ({
+  fileName: `${fileLabel}.pdf`,
+  filePath: `/uploads/seed/${fileLabel}.pdf`,
   reference,
-  status: 'verified',
+  status: 'approved',
   uploadedAt,
   reviewedAt
 })
@@ -432,6 +537,86 @@ const buildSeedNotification = (type, title, message, link, createdAt, isRead = f
   readAt: isRead ? createdAt : null,
   createdAt
 })
+
+const buildBookingSnapshot = (booking) => ({
+  bookingNo: booking.bookingNo,
+  bookingType: booking.bookingType,
+  serviceName: booking.serviceTitle || booking.vehicleLabel || '',
+  vehicleOrDriverName: booking.vehicleLabel || booking.serviceTitle || '',
+  startDate: booking.startDate,
+  endDate: booking.endDate
+})
+
+const buildCustomerSnapshot = (customer) => ({
+  fullName: customer.fullName || '',
+  email: customer.email || '',
+  phone: customer.phone || ''
+})
+
+const buildCardSnapshot = (card) => {
+  if (!card) {
+    return {
+      cardholderName: 'Seed Customer',
+      brand: 'Visa',
+      last4: '4242',
+      maskedNumber: '**** **** **** 4242',
+      expiryMonth: '12',
+      expiryYear: '2029',
+      token: ''
+    }
+  }
+
+  return {
+    cardholderName: card.cardholderName,
+    brand: card.brand,
+    last4: card.last4,
+    maskedNumber: card.maskedNumber,
+    expiryMonth: card.expiryMonth,
+    expiryYear: card.expiryYear,
+    token: card.token
+  }
+}
+
+const createAuditSnapshot = (user) => ({
+  fullName: user.fullName,
+  username: user.username,
+  email: user.email,
+  phone: user.phone || '',
+  address: user.address || '',
+  city: user.city || '',
+  accountStatus: user.accountStatus,
+  activeRole: user.role,
+  primaryRole: user.roles?.find((role) => role.isPrimary)?.roleKey || user.role,
+  roles: (user.roles || []).map((role) => ({
+    roleKey: role.roleKey,
+    roleStatus: role.roleStatus,
+    verificationStatus: role.verificationStatus,
+    isPrimary: Boolean(role.isPrimary)
+  })),
+  providerApplications: (user.providerApplications || []).map((application) => ({
+    roleKey: application.roleKey,
+    status: application.status,
+    submittedAt: application.submittedAt || null,
+    reviewedAt: application.reviewedAt || null,
+    rejectionReason: application.rejectionReason || '',
+    applicationData: application.applicationData || {}
+  }))
+})
+
+const groupByStringId = (items, getKey) => items.reduce((groups, item) => {
+  const key = String(getKey(item) || '')
+
+  if (!key) {
+    return groups
+  }
+
+  if (!groups.has(key)) {
+    groups.set(key, [])
+  }
+
+  groups.get(key).push(item)
+  return groups
+}, new Map())
 
 const createAdminUser = () => ({
   username: 'admin',
@@ -500,8 +685,8 @@ const createStaffUser = (index, adminId) => {
       storeContactNumber: buildPhoneNumber(sequence + 500, '1'),
       storeEmail: email,
       documents: {
-        businessRegistrationDocument: buildDocumentMetadata(`BRDOC-${pad(sequence, 4)}`, submittedAt, reviewedAt),
-        proofOfAddressDocument: buildDocumentMetadata(`STFADDR-${pad(sequence, 4)}`, submittedAt, reviewedAt)
+        businessRegistrationDocument: buildApprovedDocumentMetadata(`BRDOC-${pad(sequence, 4)}`, `staff-br-${pad(sequence, 2)}`, submittedAt, reviewedAt),
+        proofOfAddressDocument: buildApprovedDocumentMetadata(`STFADDR-${pad(sequence, 4)}`, `staff-address-${pad(sequence, 2)}`, submittedAt, reviewedAt)
       }
     },
     providerApplications: [
@@ -558,9 +743,9 @@ const createDriverUser = (index, adminId) => {
       serviceArea,
       providerDetails: `${pick(DRIVER_SPECIALTIES, index)} with reliable local route knowledge and customer-focused service.`,
       documents: {
-        nicDocument: buildDocumentMetadata(`NIC-${pad(sequence, 4)}`, submittedAt, reviewedAt),
-        drivingLicenseDocument: buildDocumentMetadata(`LIC-${pad(sequence, 4)}`, submittedAt, reviewedAt),
-        proofOfAddressDocument: buildDocumentMetadata(`DRVADDR-${pad(sequence, 4)}`, submittedAt, reviewedAt)
+        nicDocument: buildApprovedDocumentMetadata(`NIC-${pad(sequence, 4)}`, `driver-nic-${pad(sequence, 2)}`, submittedAt, reviewedAt),
+        drivingLicenseDocument: buildApprovedDocumentMetadata(`LIC-${pad(sequence, 4)}`, `driver-license-${pad(sequence, 2)}`, submittedAt, reviewedAt),
+        proofOfAddressDocument: buildApprovedDocumentMetadata(`DRVADDR-${pad(sequence, 4)}`, `driver-address-${pad(sequence, 2)}`, submittedAt, reviewedAt)
       }
     },
     providerApplications: [
@@ -830,8 +1015,210 @@ const createDriverAdRecord = (index, driver) => {
     description: `${driver.fullName} is available for ${specialty.toLowerCase()} and private reservations around ${driver.city}.`,
     photo: driver.profilePic,
     completedTrips: 8 + (index * 3),
-    ratingAverage: Number((4.4 + ((index % 6) * 0.1)).toFixed(1)),
-    reviewCount: 4 + index
+    ratingAverage: 0,
+    reviewCount: 0
+  }
+}
+
+const createInventoryRecord = (index, owner) => {
+  const template = INVENTORY_CATALOG[index % INVENTORY_CATALOG.length]
+  const quantity = index % 7 === 0 ? 4 + (index % 4) : 14 + ((index * 3) % 36)
+
+  return {
+    owner: owner._id,
+    itemName: template.itemName,
+    quantity,
+    price: template.price + ((index % 3) * 250),
+    description: template.description
+  }
+}
+
+const createMaintenanceRecord = (index, vehicle, inventoryItem) => {
+  const status = vehicle.status === 'maintenance'
+    ? pick(['scheduled', 'in_progress'], index)
+    : pick(['scheduled', 'in_progress', 'completed', 'cancelled'], index, 1)
+  const count = status === 'cancelled' ? 0 : 1 + (index % 3)
+  const inventoryConsumed = Boolean(inventoryItem && count > 0 && status !== 'cancelled')
+  const previousVehicleStatus = vehicle.status === 'maintenance' ? 'available' : vehicle.status
+
+  return {
+    owner: vehicle.owner,
+    vehicle: vehicle._id,
+    vehicleName: `${vehicle.name} (${vehicle.vehicleCode})`,
+    type: pick(['Routine Service', 'Repair', 'Inspection', 'Other'], index),
+    count,
+    addedThings: pick(MAINTENANCE_NOTES, index),
+    inventoryItem: inventoryItem?._id || null,
+    inventoryItemName: inventoryItem?.itemName || '',
+    inventoryConsumed,
+    status,
+    totalCost: (inventoryItem ? inventoryItem.price * count : 0) + 3500 + (index * 425),
+    previousVehicleStatus
+  }
+}
+
+const createPaymentCardRecord = (index, customer, isDefault = false) => {
+  const cardBrand = pick(CARD_BRANDS, index)
+  const last4 = pad(4200 + index, 4).slice(-4)
+  const status = index % 13 === 0 && !isDefault ? 'expired' : 'active'
+  const expiryYear = status === 'expired' ? '2024' : String(2028 + (index % 4))
+  const expiryMonth = pad(1 + (index % 12))
+
+  return {
+    customer: customer._id,
+    type: 'card',
+    cardholderName: customer.fullName,
+    brand: cardBrand.brand,
+    last4,
+    maskedNumber: `**** **** **** ${last4}`,
+    expiryMonth,
+    expiryYear,
+    token: `card_tok_seed_${pad(index + 1, 5)}`,
+    isDefault,
+    status
+  }
+}
+
+const createPaymentRecord = (index, booking, customer, card, admin) => {
+  const outcome = pick([
+    { method: 'saved_card', status: 'paid' },
+    { method: 'bank_transfer', status: 'processing' },
+    { method: 'card', status: 'paid' },
+    { method: 'cash', status: 'processing' },
+    { method: 'admin_manual', status: 'paid' },
+    { method: 'saved_card', status: 'refunded' },
+    { method: 'card', status: 'failed' },
+    { method: 'cash', status: 'cancelled' }
+  ], index)
+  const method = outcome.method === 'saved_card' && !card ? 'card' : outcome.method
+  const paidLike = ['paid', 'refunded'].includes(outcome.status)
+  const paymentDate = new Date(Date.UTC(2026, 4, 2 + (index % 20), 6 + (index % 8), 15))
+  const payment = {
+    paymentNo: `PAY-SEED-${pad(index + 1, 5)}`,
+    booking: booking._id,
+    customer: customer._id,
+    amount: booking.totalAmount,
+    currency: 'LKR',
+    method,
+    status: outcome.status,
+    paymentMethod: method === 'saved_card' ? card?._id || null : null,
+    transactionId: paidLike ? `TXN-SEED-${pad(index + 1, 6)}` : '',
+    bookingSnapshot: buildBookingSnapshot(booking),
+    customerSnapshot: buildCustomerSnapshot(customer),
+    verifiedBy: ['cash', 'bank_transfer', 'admin_manual'].includes(method) && paidLike ? admin._id : null,
+    verifiedAt: paidLike ? paymentDate : null,
+    adminNote: outcome.status === 'failed' ? 'Seeded failed payment for dashboard testing' : '',
+    failureReason: outcome.status === 'failed' ? 'Card authorization was declined by the test processor.' : '',
+    refund: outcome.status === 'refunded'
+      ? {
+          amount: booking.totalAmount,
+          reason: 'Customer cancellation after payment in seeded data.',
+          refundedBy: admin._id,
+          refundedAt: new Date(paymentDate.getTime() + (1000 * 60 * 60 * 24))
+        }
+      : undefined
+  }
+
+  if (['card', 'saved_card'].includes(method)) {
+    payment.cardSnapshot = buildCardSnapshot(card)
+  }
+
+  if (method === 'bank_transfer') {
+    payment.bankTransfer = {
+      accountName: customer.fullName,
+      bankName: pick(['Bank of Ceylon', 'Commercial Bank', 'Sampath Bank', 'HNB'], index),
+      referenceNo: `BANK-${pad(index + 1, 5)}`,
+      depositedAt: paymentDate,
+      note: 'Seeded transfer awaiting verification'
+    }
+  }
+
+  if (method === 'cash' || method === 'admin_manual') {
+    payment.cash = {
+      payerName: customer.fullName,
+      collectedBy: method === 'admin_manual' ? admin.fullName : '',
+      note: method === 'cash' ? 'Seeded cash payment awaiting collection check' : 'Seeded admin manual payment'
+    }
+  }
+
+  return {
+    payment,
+    bookingPaymentStatus: outcome.status === 'refunded'
+      ? 'refunded'
+      : outcome.status === 'paid'
+        ? 'paid'
+        : 'pending'
+  }
+}
+
+const createReviewRecord = (index, booking, customer, admin) => {
+  const status = pick(['approved', 'approved', 'approved', 'pending', 'rejected'], index)
+  const reviewedAt = status === 'pending' ? null : new Date(Date.UTC(2026, 4, 5 + (index % 18), 7, 30))
+  const baseRating = 5 - (index % 3)
+
+  return {
+    booking: booking._id,
+    bookingNo: booking.bookingNo,
+    bookingType: booking.bookingType,
+    customer: customer._id,
+    driver: booking.driver || null,
+    vehicle: booking.vehicle || null,
+    driverAd: booking.driverAd || null,
+    passengerName: customer.fullName,
+    driverName: booking.bookingType === 'driver' ? booking.serviceTitle : '',
+    vehicleName: booking.bookingType === 'vehicle' ? booking.vehicleLabel : '',
+    vehicleRating: booking.bookingType === 'vehicle' ? baseRating : null,
+    driverRating: booking.bookingType === 'driver' ? baseRating : null,
+    feedback: pick(REVIEW_FEEDBACK, index),
+    status,
+    reviewedBy: status === 'pending' ? null : admin._id,
+    reviewedAt,
+    rejectionReason: status === 'rejected' ? 'Seeded rejected review used for moderation workflow testing.' : ''
+  }
+}
+
+const createComplaintRecord = (index, booking, customer, admin) => {
+  const status = pick(['pending', 'under_review', 'solved'], index)
+  const createdAt = new Date(Date.UTC(2026, 4, 1 + (index % 22), 9, 0))
+  const statusHistory = [{
+    status: 'pending',
+    message: 'Complaint submitted by customer',
+    updatedBy: customer._id,
+    updatedAt: createdAt
+  }]
+
+  if (status !== 'pending') {
+    statusHistory.push({
+      status: 'under_review',
+      message: 'Support team is reviewing the booking details.',
+      updatedBy: admin._id,
+      updatedAt: new Date(createdAt.getTime() + (1000 * 60 * 60 * 6))
+    })
+  }
+
+  if (status === 'solved') {
+    statusHistory.push({
+      status: 'solved',
+      message: 'Issue resolved in seeded support workflow.',
+      updatedBy: admin._id,
+      updatedAt: new Date(createdAt.getTime() + (1000 * 60 * 60 * 24))
+    })
+  }
+
+  return {
+    customer: customer._id,
+    booking: booking._id,
+    bookingNo: booking.bookingNo,
+    subject: pick(COMPLAINT_SUBJECTS, index),
+    category: pick(['vehicle', 'billing', 'service', 'other'], index),
+    priority: pick(['low', 'medium', 'high'], index, 1),
+    description: `Seeded complaint for ${booking.bookingNo}. This record keeps the dispute dashboard populated for testing.`,
+    attachment: index % 5 === 0 ? `/uploads/seed/complaint-${pad(index + 1, 2)}.pdf` : '',
+    status,
+    latestAdminMessage: status === 'pending' ? '' : statusHistory[statusHistory.length - 1].message,
+    lastStatusUpdatedBy: status === 'pending' ? null : admin._id,
+    lastStatusUpdatedAt: status === 'pending' ? null : statusHistory[statusHistory.length - 1].updatedAt,
+    statusHistory
   }
 }
 
@@ -839,7 +1226,7 @@ const createVehicleBookingRecord = (index, customer, vehicle) => {
   const billableDays = 1 + (index % 4)
   const startDate = new Date(Date.UTC(2026, 2, 5 + index))
   const endDate = new Date(Date.UTC(2026, 2, 5 + index + billableDays - 1))
-  const bookingStatus = pick(['pending', 'confirmed', 'completed', 'cancelled'], index)
+  const bookingStatus = pick(['pending', 'confirmed', 'completed', 'completed', 'closed', 'cancelled'], index)
   const baseAmount = vehicle.pricePerDay * billableDays
 
   return {
@@ -866,7 +1253,9 @@ const createVehicleBookingRecord = (index, customer, vehicle) => {
     serviceFee: 0,
     totalAmount: baseAmount,
     paymentStatus: 'pending',
-    bookingStatus
+    bookingStatus,
+    adminNote: bookingStatus === 'cancelled' ? 'Seeded cancellation for admin workflow testing.' : '',
+    driverResponseNote: ''
   }
 }
 
@@ -874,7 +1263,7 @@ const createDriverBookingRecord = (index, customer, driver, ad) => {
   const billableDays = 1 + (index % 3)
   const startDate = new Date(Date.UTC(2026, 3, 10 + index))
   const endDate = new Date(Date.UTC(2026, 3, 10 + index + billableDays - 1))
-  const bookingStatus = pick(['pending', 'confirmed', 'completed', 'cancelled'], index, 2)
+  const bookingStatus = pick(['pending', 'confirmed', 'completed', 'completed', 'closed', 'cancelled'], index, 2)
   const baseAmount = ad.dailyRate * billableDays
 
   return {
@@ -902,7 +1291,13 @@ const createDriverBookingRecord = (index, customer, driver, ad) => {
     serviceFee: 0,
     totalAmount: baseAmount,
     paymentStatus: 'pending',
-    bookingStatus
+    bookingStatus,
+    adminNote: '',
+    driverResponseNote: bookingStatus === 'cancelled'
+      ? 'Schedule conflict in seeded driver workflow.'
+      : bookingStatus === 'confirmed'
+        ? 'Driver confirmed this seeded request.'
+        : ''
   }
 }
 
@@ -922,6 +1317,12 @@ const seed = async () => {
 
     await Payment.deleteMany({})
     await PaymentMethod.deleteMany({})
+    await UserPaymentCard.deleteMany({})
+    await Review.deleteMany({})
+    await Complaint.deleteMany({})
+    await Maintenance.deleteMany({})
+    await Inventory.deleteMany({})
+    await AuditLog.deleteMany({})
     await Booking.deleteMany({})
     await DriverAd.deleteMany({})
     await Vehicle.deleteMany({})
@@ -937,14 +1338,22 @@ const seed = async () => {
       Array.from({ length: targets.driverCount }, (_, index) => createDriverUser(index, admin._id))
     )
 
-    const customerUsers = await User.create([
-      ...Array.from({ length: targets.activeCustomerCount }, (_, index) => createCustomerUser(index)),
-      ...Array.from({ length: targets.pendingDriverApplicantCount }, (_, index) => createPendingDriverApplicantUser(index)),
-      ...Array.from({ length: targets.pendingStaffApplicantCount }, (_, index) => createPendingStaffApplicantUser(index)),
+    const activeCustomerPayloads = Array.from({ length: targets.activeCustomerCount }, (_, index) => createCustomerUser(index))
+    const pendingDriverPayloads = Array.from({ length: targets.pendingDriverApplicantCount }, (_, index) => createPendingDriverApplicantUser(index))
+    const pendingStaffPayloads = Array.from({ length: targets.pendingStaffApplicantCount }, (_, index) => createPendingStaffApplicantUser(index))
+    const restrictedCustomerPayloads = [
       ...Array.from({ length: targets.pendingAccountCount }, (_, index) => createRestrictedCustomerUser(index, 'pending')),
       ...Array.from({ length: targets.suspendedAccountCount }, (_, index) => createRestrictedCustomerUser(index, 'suspended')),
       ...Array.from({ length: targets.deactivatedAccountCount }, (_, index) => createRestrictedCustomerUser(index, 'deactivated'))
+    ]
+
+    const customerUsers = await User.create([
+      ...activeCustomerPayloads,
+      ...pendingDriverPayloads,
+      ...pendingStaffPayloads,
+      ...restrictedCustomerPayloads
     ])
+    const activeCustomerUsers = customerUsers.slice(0, activeCustomerPayloads.length)
 
     const vehicles = await Vehicle.insertMany(
       Array.from({ length: targets.vehicleCount }, (_, index) => createVehicleRecord(index, staffUsers[index % staffUsers.length]))
@@ -954,23 +1363,228 @@ const seed = async () => {
       driverUsers.map((driver, index) => createDriverAdRecord(index, driver))
     )
 
+    const inventoryItems = await Inventory.insertMany(
+      staffUsers.flatMap((staffUser, staffIndex) => (
+        Array.from(
+          { length: targets.inventoryItemsPerStaff },
+          (_, itemIndex) => createInventoryRecord((staffIndex * targets.inventoryItemsPerStaff) + itemIndex, staffUser)
+        )
+      ))
+    )
+    const inventoryByOwner = groupByStringId(inventoryItems, (item) => item.owner)
+
+    const paymentCards = activeCustomerUsers.length
+      ? await UserPaymentCard.insertMany(
+          Array.from(
+            { length: Math.min(targets.savedCardCount, activeCustomerUsers.length * 2) },
+            (_, index) => {
+              const customer = activeCustomerUsers[index % activeCustomerUsers.length]
+              const isDefault = index < activeCustomerUsers.length
+              return createPaymentCardRecord(index, customer, isDefault)
+            }
+          )
+        )
+      : []
+    const cardsByCustomer = groupByStringId(paymentCards, (card) => card.customer)
+
     const vehicleBookings = Array.from(
-      { length: Math.min(18, customerUsers.length, vehicles.length) },
-      (_, index) => createVehicleBookingRecord(index, customerUsers[index], vehicles[index])
+      { length: activeCustomerUsers.length && vehicles.length ? targets.vehicleBookingCount : 0 },
+      (_, index) => createVehicleBookingRecord(index, activeCustomerUsers[index % activeCustomerUsers.length], vehicles[index % vehicles.length])
     )
 
     const driverBookings = Array.from(
-      { length: Math.min(12, customerUsers.length, driverUsers.length, driverAds.length) },
-      (_, index) => createDriverBookingRecord(index, customerUsers[index], driverUsers[index], driverAds[index])
+      { length: activeCustomerUsers.length && driverUsers.length && driverAds.length ? targets.driverBookingCount : 0 },
+      (_, index) => createDriverBookingRecord(
+        index,
+        activeCustomerUsers[(index + 3) % activeCustomerUsers.length],
+        driverUsers[index % driverUsers.length],
+        driverAds[index % driverAds.length]
+      )
     )
 
-    await Booking.insertMany([...vehicleBookings, ...driverBookings])
+    const bookings = await Booking.insertMany([...vehicleBookings, ...driverBookings])
+    const eligiblePaymentBookings = bookings.filter((booking, index) => (
+      ['completed', 'closed'].includes(booking.bookingStatus) && index % 7 !== 0
+    ))
+    const paymentPlans = eligiblePaymentBookings.map((booking, index) => {
+      const customer = activeCustomerUsers.find((user) => String(user._id) === String(booking.customer))
+      const customerCards = cardsByCustomer.get(String(booking.customer)) || []
+      const defaultCard = customerCards.find((card) => card.isDefault && card.status === 'active')
+        || customerCards.find((card) => card.status === 'active')
+
+      return createPaymentRecord(index, booking, customer, defaultCard, admin)
+    })
+    const payments = paymentPlans.length
+      ? await Payment.insertMany(paymentPlans.map((plan) => plan.payment))
+      : []
+
+    if (paymentPlans.length) {
+      await Promise.all(paymentPlans.map((plan) => (
+        Booking.updateOne(
+          { _id: plan.payment.booking },
+          { $set: { paymentStatus: plan.bookingPaymentStatus } }
+        )
+      )))
+    }
+
+    const paidReviewableBookings = await Booking.find({
+      _id: { $in: paymentPlans
+        .filter((plan) => plan.bookingPaymentStatus === 'paid')
+        .map((plan) => plan.payment.booking) }
+    })
+    const paidReviewableById = new Map(paidReviewableBookings.map((booking) => [String(booking._id), booking]))
+    const reviewSourceBookings = paymentPlans
+      .filter((plan) => plan.bookingPaymentStatus === 'paid')
+      .map((plan) => paidReviewableById.get(String(plan.payment.booking)))
+      .filter(Boolean)
+      .slice(0, targets.reviewCount)
+    const reviews = reviewSourceBookings.length
+      ? await Review.insertMany(reviewSourceBookings.map((booking, index) => {
+          const customer = activeCustomerUsers.find((user) => String(user._id) === String(booking.customer))
+          return createReviewRecord(index, booking, customer, admin)
+        }))
+      : []
+
+    const approvedReviews = reviews.filter((review) => review.status === 'approved')
+    const vehicleReviewGroups = groupByStringId(
+      approvedReviews.filter((review) => review.vehicle && review.vehicleRating),
+      (review) => review.vehicle
+    )
+    const driverAdReviewGroups = groupByStringId(
+      approvedReviews.filter((review) => review.driverAd && review.driverRating),
+      (review) => review.driverAd
+    )
+
+    await Promise.all([
+      ...[...vehicleReviewGroups.entries()].map(([vehicleId, vehicleReviews]) => (
+        Vehicle.updateOne(
+          { _id: vehicleId },
+          {
+            $set: {
+              ratingAverage: Number((vehicleReviews.reduce((total, review) => total + Number(review.vehicleRating || 0), 0) / vehicleReviews.length).toFixed(1)),
+              reviewCount: vehicleReviews.length
+            }
+          }
+        )
+      )),
+      ...[...driverAdReviewGroups.entries()].map(([driverAdId, adReviews]) => (
+        DriverAd.updateOne(
+          { _id: driverAdId },
+          {
+            $set: {
+              ratingAverage: Number((adReviews.reduce((total, review) => total + Number(review.driverRating || 0), 0) / adReviews.length).toFixed(1)),
+              reviewCount: adReviews.length
+            }
+          }
+        )
+      ))
+    ])
+
+    const complaintSourceBookings = bookings.slice(0, targets.complaintCount)
+    const complaints = complaintSourceBookings.length
+      ? await Complaint.insertMany(complaintSourceBookings.map((booking, index) => {
+          const customer = activeCustomerUsers.find((user) => String(user._id) === String(booking.customer))
+          return createComplaintRecord(index, booking, customer, admin)
+        }))
+      : []
+
+    const maintenanceCandidateVehicles = [
+      ...vehicles.filter((vehicle) => vehicle.status === 'maintenance'),
+      ...vehicles.filter((vehicle) => vehicle.status !== 'maintenance')
+    ]
+    const maintenanceSourceVehicles = maintenanceCandidateVehicles.slice(0, Math.min(targets.maintenanceRecordCount, vehicles.length))
+    const maintenanceRecords = maintenanceSourceVehicles.map((vehicle, index) => {
+      const ownerInventoryItems = inventoryByOwner.get(String(vehicle.owner)) || []
+      const inventoryItem = ownerInventoryItems[index % Math.max(ownerInventoryItems.length, 1)] || null
+      return createMaintenanceRecord(index, vehicle, inventoryItem)
+    })
+    const maintenance = maintenanceRecords.length
+      ? await Maintenance.insertMany(maintenanceRecords)
+      : []
+    const activeMaintenanceVehicleIds = maintenance
+      .filter((record) => Maintenance.ACTIVE_MAINTENANCE_STATUSES.includes(record.status))
+      .map((record) => record.vehicle)
+
+    if (activeMaintenanceVehicleIds.length) {
+      await Vehicle.updateMany(
+        { _id: { $in: activeMaintenanceVehicleIds } },
+        { $set: { status: 'maintenance' } }
+      )
+    }
+
+    const consumedInventoryById = maintenance.reduce((consumed, record) => {
+      if (record.inventoryConsumed && record.inventoryItem && record.count > 0) {
+        const key = String(record.inventoryItem)
+        consumed.set(key, (consumed.get(key) || 0) + Number(record.count || 0))
+      }
+
+      return consumed
+    }, new Map())
+
+    if (consumedInventoryById.size) {
+      await Promise.all([...consumedInventoryById.entries()].map(([inventoryItemId, count]) => (
+        Inventory.updateOne(
+          { _id: inventoryItemId },
+          { $inc: { quantity: -count } }
+        )
+      )))
+    }
+
+    const auditLogs = [
+      ...staffUsers.slice(0, 8).map((user) => ({
+        actorUserId: admin._id,
+        targetUserId: user._id,
+        actionType: 'admin.provider_application.approved',
+        beforeSnapshot: {
+          ...createAuditSnapshot(user),
+          roles: [buildRoleAssignment('customer', { isPrimary: true }), buildRoleAssignment('staff')]
+        },
+        afterSnapshot: createAuditSnapshot(user),
+        reason: 'staff'
+      })),
+      ...driverUsers.slice(0, 8).map((user) => ({
+        actorUserId: admin._id,
+        targetUserId: user._id,
+        actionType: 'admin.provider_application.approved',
+        beforeSnapshot: {
+          ...createAuditSnapshot(user),
+          roles: [buildRoleAssignment('customer', { isPrimary: true }), buildRoleAssignment('driver')]
+        },
+        afterSnapshot: createAuditSnapshot(user),
+        reason: 'driver'
+      })),
+      ...customerUsers
+        .filter((user) => user.accountStatus !== 'active')
+        .slice(0, 6)
+        .map((user) => ({
+          actorUserId: admin._id,
+          targetUserId: user._id,
+          actionType: 'admin.account_status.updated',
+          beforeSnapshot: {
+            ...createAuditSnapshot(user),
+            accountStatus: 'active'
+          },
+          afterSnapshot: createAuditSnapshot(user),
+          reason: user.accountStatus
+        }))
+    ]
+
+    if (auditLogs.length) {
+      await AuditLog.insertMany(auditLogs)
+    }
 
     console.log('Seed complete')
     console.log(`Users created: ${1 + staffUsers.length + driverUsers.length + customerUsers.length}`)
     console.log(`Vehicles created: ${vehicles.length}`)
     console.log(`Driver ads created: ${driverAds.length}`)
-    console.log(`Bookings created: ${vehicleBookings.length + driverBookings.length}`)
+    console.log(`Inventory items created: ${inventoryItems.length}`)
+    console.log(`Maintenance records created: ${maintenance.length}`)
+    console.log(`Bookings created: ${bookings.length}`)
+    console.log(`Saved cards created: ${paymentCards.length}`)
+    console.log(`Payments created: ${payments.length}`)
+    console.log(`Reviews created: ${reviews.length}`)
+    console.log(`Complaints created: ${complaints.length}`)
+    console.log(`Audit logs created: ${auditLogs.length}`)
     console.log(`Pending approvals: ${targets.pendingDriverApplicantCount + targets.pendingStaffApplicantCount}`)
     console.log(`Restricted accounts: ${targets.pendingAccountCount + targets.suspendedAccountCount + targets.deactivatedAccountCount}`)
     console.log('Demo credentials:')
