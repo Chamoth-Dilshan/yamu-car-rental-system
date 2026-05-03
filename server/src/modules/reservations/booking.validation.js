@@ -41,8 +41,12 @@ const validateObjectId = (value, label) => {
   return { value: id }
 }
 
-const validateTextField = (value, label, maxLength) => {
+const validateTextField = (value, label, maxLength, { required = false } = {}) => {
   const text = trimValue(value)
+
+  if (required && !text) {
+    return { error: `${label} is required` }
+  }
 
   if (text.length > maxLength) {
     return { error: `${label} must be ${maxLength} characters or fewer` }
@@ -55,13 +59,23 @@ const validateBookingDateRange = ({ startDate, endDate } = {}) => (
   validateDateRange(startDate, endDate)
 )
 
-const validateBookingDetails = (body = {}) => {
-  const pickupLocation = validateTextField(body.pickupLocation, 'Pickup location', MAX_LOCATION_LENGTH)
+const validateBookingDetails = (body = {}, { requireLocations = false } = {}) => {
+  const pickupLocation = validateTextField(
+    body.pickupLocation,
+    'Pickup location',
+    MAX_LOCATION_LENGTH,
+    { required: requireLocations }
+  )
   if (pickupLocation.error) {
     return pickupLocation
   }
 
-  const destination = validateTextField(body.destination, 'Destination', MAX_LOCATION_LENGTH)
+  const destination = validateTextField(
+    body.destination,
+    'Destination',
+    MAX_LOCATION_LENGTH,
+    { required: requireLocations }
+  )
   if (destination.error) {
     return destination
   }
@@ -111,7 +125,7 @@ const validateDriverBookingPayload = (body = {}) => {
     return driverAdId
   }
 
-  const details = validateBookingDetails(body)
+  const details = validateBookingDetails(body, { requireLocations: true })
   if (details.error) {
     return details
   }

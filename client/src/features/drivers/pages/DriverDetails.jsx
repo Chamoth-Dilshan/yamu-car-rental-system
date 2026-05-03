@@ -5,6 +5,7 @@ import API from '../../../api/axios'
 import { useAuth } from '../../../context/AuthContext'
 import { formatCurrency, formatDate, formatList, getBadgeClass } from '../../../utils/formatters'
 import { getMediaImage, getUserAvatar } from '../../../utils/media'
+import { validateRequiredText } from '../../../utils/validation'
 import { getDriverAdReviews } from '../../reviews/reviewApi'
 
 const emptyReviewSummary = {
@@ -43,6 +44,11 @@ function ReviewCard({ review }) {
   )
 }
 
+const parseDateInput = (value) => {
+  const parsed = value ? new Date(`${value}T00:00:00`) : null
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed : null
+}
+
 export default function DriverDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -60,6 +66,7 @@ export default function DriverDetails() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [formErrors, setFormErrors] = useState({})
   const isOwnDriverAd = Boolean(user && ad?.driver?._id && String(ad.driver._id) === String(user._id))
 
   useEffect(() => {
@@ -81,10 +88,50 @@ export default function DriverDetails() {
   const ratingAverage = reviewSummary.reviewCount ? reviewSummary.ratingAverage : (ad?.ratingAverage || 0)
   const reviewCount = reviewSummary.reviewCount || ad?.reviewCount || 0
 
+  const updateFormField = (field, value) => {
+    setForm((prev) => ({ ...prev, [field]: value }))
+    setFormErrors((prev) => {
+      if (!prev[field]) {
+        return prev
+      }
+
+      return { ...prev, [field]: '' }
+    })
+  }
+
+  const validateRequestForm = () => {
+    const nextErrors = {
+      startDate: validateRequiredText(form.startDate, 'Start date'),
+      endDate: validateRequiredText(form.endDate, 'End date'),
+      pickupLocation: validateRequiredText(form.pickupLocation, 'Pickup location'),
+      destination: validateRequiredText(form.destination, 'Destination')
+    }
+
+    const startDate = parseDateInput(form.startDate)
+    const endDate = parseDateInput(form.endDate)
+
+    if (!nextErrors.startDate && !startDate) {
+      nextErrors.startDate = 'Start date must be valid'
+    }
+
+    if (!nextErrors.endDate && !endDate) {
+      nextErrors.endDate = 'End date must be valid'
+    }
+
+    if (!nextErrors.startDate && !nextErrors.endDate && endDate < startDate) {
+      nextErrors.endDate = 'End date must be the same day or after the start date'
+    }
+
+    setFormErrors(nextErrors)
+
+    return !Object.values(nextErrors).some(Boolean)
+  }
+
   const submitRequest = async (event) => {
     event.preventDefault()
     setMessage('')
     setError('')
+    setFormErrors({})
 
     if (!user) {
       navigate('/signin')
@@ -98,6 +145,11 @@ export default function DriverDetails() {
 
     if ((user.activeRole || user.role) !== 'customer') {
       setError('Switch to the user role before requesting a driver.')
+      return
+    }
+
+    if (!validateRequestForm()) {
+      setError('Please complete the required trip details before requesting this driver.')
       return
     }
 
@@ -225,43 +277,59 @@ export default function DriverDetails() {
                     <Link className="btn btn-outline btn-sm" to="/switch-roles">Switch Role</Link>
                   )}
                 </div>
-                <form onSubmit={submitRequest}>
+                <form onSubmit={submitRequest} noValidate>
                   <div className="form-row">
                     <div className="form-group">
                       <label>Start Date</label>
                       <input
+                        className={formErrors.startDate ? 'field-invalid' : undefined}
                         type="date"
                         value={form.startDate}
-                        onChange={(e) => setForm((prev) => ({ ...prev, startDate: e.target.value }))}
+                        onChange={(e) => updateFormField('startDate', e.target.value)}
+                        aria-invalid={Boolean(formErrors.startDate)}
                         required
                       />
+                      {formErrors.startDate && <small className="field-error">{formErrors.startDate}</small>}
                     </div>
                     <div className="form-group">
                       <label>End Date</label>
                       <input
+                        className={formErrors.endDate ? 'field-invalid' : undefined}
                         type="date"
                         value={form.endDate}
-                        onChange={(e) => setForm((prev) => ({ ...prev, endDate: e.target.value }))}
+                        onChange={(e) => updateFormField('endDate', e.target.value)}
+                        aria-invalid={Boolean(formErrors.endDate)}
                         required
                       />
+                      {formErrors.endDate && <small className="field-error">{formErrors.endDate}</small>}
                     </div>
                   </div>
                   <div className="form-row">
                     <div className="form-group">
                       <label>Pickup Location</label>
                       <input
+                        className={formErrors.pickupLocation ? 'field-invalid' : undefined}
                         value={form.pickupLocation}
-                        onChange={(e) => setForm((prev) => ({ ...prev, pickupLocation: e.target.value }))}
+                        onChange={(e) => updateFormField('pickupLocation', e.target.value)}
                         placeholder="Hotel, airport, or meeting point"
+                        aria-invalid={Boolean(formErrors.pickupLocation)}
+                        maxLength="160"
+                        required
                       />
+                      {formErrors.pickupLocation && <small className="field-error">{formErrors.pickupLocation}</small>}
                     </div>
                     <div className="form-group">
                       <label>Destination</label>
                       <input
+                        className={formErrors.destination ? 'field-invalid' : undefined}
                         value={form.destination}
-                        onChange={(e) => setForm((prev) => ({ ...prev, destination: e.target.value }))}
+                        onChange={(e) => updateFormField('destination', e.target.value)}
                         placeholder="Drop-off or destination"
+                        aria-invalid={Boolean(formErrors.destination)}
+                        maxLength="160"
+                        required
                       />
+                      {formErrors.destination && <small className="field-error">{formErrors.destination}</small>}
                     </div>
                   </div>
                   <div className="form-group">
@@ -269,7 +337,7 @@ export default function DriverDetails() {
                     <textarea
                       rows="4"
                       value={form.notes}
-                      onChange={(e) => setForm((prev) => ({ ...prev, notes: e.target.value }))}
+                      onChange={(e) => updateFormField('notes', e.target.value)}
                       placeholder="Share traveller count, luggage, route notes, or any special request"
                     />
                   </div>
