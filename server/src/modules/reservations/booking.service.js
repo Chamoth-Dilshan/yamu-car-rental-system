@@ -240,7 +240,7 @@ const createVehicleBooking = async ({ customer, body }) => {
 }
 
 const createDriverBooking = async ({ customer, body }) => {
-  const { driverAdId, pickupLocation = '', destination = '', notes = '', startDate, endDate } = body
+  const { driverAdId, pickupLocation = '', destination = '', notes = '', startDate, endDate, promoCode } = body
   const dateRange = validateDateRange(startDate, endDate)
 
   if (dateRange.error) {
@@ -274,6 +274,18 @@ const createDriverBooking = async ({ customer, body }) => {
     return { error: 'This driver already has an active booking in that date range', statusCode: 400 }
   }
 
+  const bookingDetails = {
+    basePrice: ad.dailyRate,
+    duration: dateRange.billableDays,
+    startDate: dateRange.startDate,
+    endDate: dateRange.endDate,
+    vehicleCategory: 'any',
+    bookingType: 'driver',
+    isFirstBooking: false
+  };
+
+  const pricingResult = await PricingEngine.calculatePrice(bookingDetails, promoCode);
+
   const booking = await Booking.create({
     bookingNo: await generateBookingNo('DRV'),
     bookingType: 'driver',
@@ -289,9 +301,11 @@ const createDriverBooking = async ({ customer, body }) => {
     endDate: dateRange.endDate,
     dailyRate: ad.dailyRate,
     billableDays: dateRange.billableDays,
-    baseAmount: ad.dailyRate * dateRange.billableDays,
+    baseAmount: pricingResult.basePrice,
     serviceFee: 0,
-    totalAmount: ad.dailyRate * dateRange.billableDays
+    discountAmount: pricingResult.promoDiscount || 0,
+    promoCode: pricingResult.appliedPromotion ? pricingResult.appliedPromotion.code : null,
+    totalAmount: pricingResult.finalPrice
   })
 
   const createdBooking = await Booking.findById(booking._id).populate(bookingPopulate)

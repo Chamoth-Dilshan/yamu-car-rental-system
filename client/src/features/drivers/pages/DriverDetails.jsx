@@ -6,6 +6,7 @@ import { useAuth } from '../../../context/AuthContext'
 import { formatCurrency, formatDate, formatList, getBadgeClass } from '../../../utils/formatters'
 import { getMediaImage, getUserAvatar } from '../../../utils/media'
 import { getDriverAdReviews } from '../../reviews/reviewApi'
+import AvailablePromotions from '../../payments/components/AvailablePromotions'
 
 const emptyReviewSummary = {
   ratingAverage: 0,
@@ -62,6 +63,11 @@ export default function DriverDetails() {
   const [error, setError] = useState('')
   const isOwnDriverAd = Boolean(user && ad?.driver?._id && String(ad.driver._id) === String(user._id))
 
+  const [promoCode, setPromoCode] = useState('')
+  const [priceDetails, setPriceDetails] = useState(null)
+  const [isSimulating, setIsSimulating] = useState(false)
+  const [promoError, setPromoError] = useState('')
+
   useEffect(() => {
     setLoading(true)
     setError('')
@@ -80,6 +86,73 @@ export default function DriverDetails() {
 
   const ratingAverage = reviewSummary.reviewCount ? reviewSummary.ratingAverage : (ad?.ratingAverage || 0)
   const reviewCount = reviewSummary.reviewCount || ad?.reviewCount || 0
+
+  const billableDays = (() => {
+    if (!form.startDate || !form.endDate) {
+      return 0
+    }
+
+    const start = new Date(`${form.startDate}T00:00:00`)
+    const end = new Date(`${form.endDate}T00:00:00`)
+
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
+      return 0
+    }
+
+    return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+  })()
+
+  const totalAmount = billableDays > 0 ? billableDays * Number(ad?.dailyRate || 0) : 0
+
+  useEffect(() => {
+    if (totalAmount <= 0) {
+      setPriceDetails(null);
+      return;
+    }
+
+    let active = true;
+    setIsSimulating(true);
+    setPromoError('');
+
+    API.post('/pricing/simulate', {
+      bookingDetails: {
+        basePrice: ad?.dailyRate || 0,
+        duration: billableDays, 
+        startDate: form.startDate,
+        endDate: form.endDate,
+        vehicleCategory: 'any',
+        bookingType: 'driver',
+        isFirstBooking: false
+      },
+      promoCode
+    })
+      .then(res => {
+        if (!active) return;
+        const result = res.data?.data || res.data;
+        setPriceDetails(result);
+        
+        if (promoCode) {
+          const promoErrorItem = result.pricingAdjustments?.find(item => item.type === 'error');
+          if (promoErrorItem) {
+            setPromoError(promoErrorItem.name);
+          }
+        }
+      })
+      .catch(err => {
+        if (!active) return;
+        console.error('Simulation failed', err);
+        setPromoError('Failed to calculate pricing or apply promo.');
+      })
+      .finally(() => {
+        if (active) setIsSimulating(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [billableDays, promoCode, form.startDate, form.endDate, ad]);
+
+  const finalAmount = priceDetails ? priceDetails.finalPrice : totalAmount;
 
   const submitRequest = async (event) => {
     event.preventDefault()
@@ -106,6 +179,7 @@ export default function DriverDetails() {
     try {
       await API.post('/bookings/driver', {
         driverAdId: ad._id,
+        promoCode,
         ...form
       })
       await refreshNotifications().catch(() => {})
@@ -273,7 +347,35 @@ export default function DriverDetails() {
                       placeholder="Share traveller count, luggage, route notes, or any special request"
                     />
                   </div>
-                  <button className="btn btn-primary" type="submit" disabled={busy || isOwnDriverAd}>
+
+                  {billableDays > 0 && (
+                    <div style={{ marginBottom: '15px' }}>
+                      <AvailablePromotions 
+                        promotions={priceDetails?.availablePromotions || []}
+                        onApplyPromo={setPromoCode} 
+                        appliedPromo={promoCode} 
+                        isSimulating={isSimulating}
+                      />
+                      {promoError && <div className="alert alert-danger" style={{ marginTop: '10px' }}>{promoError}</div>}
+                      
+                      {priceDetails && priceDetails.pricingAdjustments && priceDetails.pricingAdjustments.map((item, index) => {
+                        if (item.type === 'error' || item.impact === 0) return null;
+                        return (
+                          <div key={index} style={{ display: 'flex', justifyContent: 'space-between', color: item.impact < 0 ? 'var(--success-color)' : 'inherit', margin: '10px 0', fontSize: '0.9rem' }}>
+                            <span>{item.name}</span>
+                            <strong>{item.impact < 0 ? '-' : '+'}{formatCurrency(Math.abs(item.impact))}</strong>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  <div className="booking-total" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem', fontSize: '1.1rem' }}>
+                    <span>Total</span>
+                    <strong>{billableDays > 0 ? formatCurrency(finalAmount) : 'Select dates'}</strong>
+                  </div>
+
+                  <button className="btn btn-primary btn-block" type="submit" disabled={busy || isOwnDriverAd}>
                     {busy ? 'Sending...' : 'Request Driver'}
                   </button>
                 </form>
