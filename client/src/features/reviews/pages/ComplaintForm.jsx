@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { FaLifeRing } from 'react-icons/fa'
 import Sidebar from '../../../components/layout/Sidebar'
 import { formatDateTime } from '../../../utils/formatters'
+import { validateDocumentFile } from '../../../utils/validation'
 import { getComplaintContext, submitComplaint } from '../reviewApi'
 
 const categories = [
@@ -26,9 +27,9 @@ export default function ComplaintForm() {
     subject: '',
     category: 'service',
     priority: 'low',
-    description: '',
-    attachment: ''
+    description: ''
   })
+  const [attachmentFile, setAttachmentFile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -62,15 +63,36 @@ export default function ComplaintForm() {
     setForm((current) => ({ ...current, [field]: value }))
   }
 
+  const updateAttachmentFile = (event) => {
+    const file = event.target.files?.[0] || null
+    const validationError = validateDocumentFile(file, 'Attachment')
+
+    if (validationError) {
+      event.target.value = ''
+      setAttachmentFile(null)
+      setError(validationError)
+      return
+    }
+
+    setAttachmentFile(file)
+    setError('')
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setSubmitting(true)
     setError('')
 
     try {
-      await submitComplaint({
-        bookingId,
-        ...form
+      const formData = new FormData()
+      formData.append('bookingId', bookingId)
+      Object.entries(form).forEach(([key, value]) => formData.append(key, value))
+      if (attachmentFile) {
+        formData.append('attachment', attachmentFile)
+      }
+
+      await submitComplaint(formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
       })
 
       navigate('/bookings', {
@@ -154,12 +176,13 @@ export default function ComplaintForm() {
                 </div>
 
                 <div className="form-group">
-                  <label>Attachment Reference</label>
+                  <label>Attachment</label>
                   <input
-                    value={form.attachment}
-                    onChange={(event) => updateField('attachment', event.target.value)}
-                    placeholder="Optional file name, drive link, or reference"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    onChange={updateAttachmentFile}
                   />
+                  {attachmentFile && <small>Selected: {attachmentFile.name}</small>}
                 </div>
 
                 <div className="pill-row">

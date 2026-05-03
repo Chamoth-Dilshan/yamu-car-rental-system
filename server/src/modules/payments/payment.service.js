@@ -780,6 +780,32 @@ const getPaymentReceipt = async ({ paymentId, user }) => {
   }
 }
 
+const getPaymentProof = async ({ paymentId, user }) => {
+  if (!mongoose.isValidObjectId(paymentId)) {
+    return { error: 'Payment not found', statusCode: 404 }
+  }
+
+  const payment = await Payment.findById(paymentId).populate(paymentPopulate)
+
+  if (!payment) {
+    return { error: 'Payment not found', statusCode: 404 }
+  }
+
+  if (!canAccessPayment(payment, user)) {
+    return { error: 'Not authorized to view this payment proof', statusCode: 403 }
+  }
+
+  const proofFile = payment.bankTransfer?.proofFile
+  if (!proofFile?.filePath) {
+    return { error: 'Payment proof not found', statusCode: 404 }
+  }
+
+  return {
+    payment,
+    proofFile
+  }
+}
+
 const buildStats = (payments = []) => ({
   totalPayments: payments.length,
   pendingCount: payments.filter((payment) => payment.status === 'pending').length,
@@ -813,6 +839,7 @@ module.exports = {
   refundPayment,
   buildReceipt,
   getPaymentReceipt,
+  getPaymentProof,
   buildStats,
   isProcessingPaymentMethod
 }

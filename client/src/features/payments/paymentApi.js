@@ -12,8 +12,8 @@ export const deletePaymentMethod = (paymentMethodId) => (
   API.delete(`/payments/methods/${paymentMethodId}`)
 )
 
-export const checkoutPayment = (bookingId, payload) => (
-  API.post(`/payments/checkout/${bookingId}`, payload)
+export const checkoutPayment = (bookingId, payload, config = {}) => (
+  API.post(`/payments/checkout/${bookingId}`, payload, config)
 )
 
 export const getCustomerPayments = (params = {}) => (

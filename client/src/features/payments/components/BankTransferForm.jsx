@@ -1,4 +1,4 @@
-export default function BankTransferForm({ bankTransfer, errors = {}, onChange }) {
+export default function BankTransferForm({ bankTransfer, errors = {}, proofFile = null, onChange, onProofChange }) {
   return (
     <div className="payment-form-grid">
       <div className="payment-info-panel">
@@ -39,6 +39,16 @@ export default function BankTransferForm({ bankTransfer, errors = {}, onChange }
           onChange={(event) => onChange('note', event.target.value)}
           placeholder="Optional transfer note"
         />
+      </div>
+      <div className="form-group">
+        <label>Transfer Proof</label>
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp,application/pdf"
+          onChange={onProofChange}
+        />
+        {proofFile && <small>Selected: {proofFile.name}</small>}
+        {errors.proofFile && <small className="field-error">{errors.proofFile}</small>}
       </div>
     </div>
   )

@@ -2,6 +2,11 @@ const Complaint = require('./complaint.model')
 const Booking = require('../reservations/booking.model')
 const User = require('../users/user.model')
 const { sendServerError } = require('../../utils/errorResponses')
+const {
+  getFileMetadataFromUpload,
+  removeUploadedFiles,
+  sendProtectedUpload
+} = require('../../utils/fileHelpers')
 const { serializeBooking } = require('../../utils/reservationHelpers')
 const {
   addNotificationToAdmins,
@@ -87,6 +92,7 @@ const serializeComplaint = (complaint) => {
     priority: rawComplaint.priority,
     description: rawComplaint.description,
     attachment: rawComplaint.attachment || '',
+    attachmentFile: rawComplaint.attachmentFile || {},
     status: rawComplaint.status,
     statusLabel: statusLabelMap[rawComplaint.status] || rawComplaint.status,
     latestAdminMessage: rawComplaint.latestAdminMessage || '',
@@ -116,6 +122,7 @@ const createComplaint = async (req, res) => {
     const booking = await Booking.findOne({ _id: bookingId, customer: req.user._id }).populate(bookingPopulate)
 
     if (!booking) {
+      removeUploadedFiles([req.file])
       return res.status(404).json({ message: 'Booking not found' })
     }
 
@@ -125,18 +132,22 @@ const createComplaint = async (req, res) => {
     const priority = normalizeMappedValue(req.body.priority, priorityMap, 'low')
 
     if (!subject) {
+      removeUploadedFiles([req.file])
       return res.status(400).json({ message: 'Subject is required' })
     }
 
     if (!description) {
+      removeUploadedFiles([req.file])
       return res.status(400).json({ message: 'Description is required' })
     }
 
     if (!Complaint.COMPLAINT_CATEGORIES.includes(category)) {
+      removeUploadedFiles([req.file])
       return res.status(400).json({ message: 'Invalid complaint category' })
     }
 
     if (!Complaint.COMPLAINT_PRIORITIES.includes(priority)) {
+      removeUploadedFiles([req.file])
       return res.status(400).json({ message: 'Invalid complaint priority' })
     }
 
@@ -148,7 +159,8 @@ const createComplaint = async (req, res) => {
       category,
       priority,
       description,
-      attachment: String(req.body.attachment || '').trim(),
+      attachment: req.file ? (req.file.originalname || req.file.filename) : String(req.body.attachment || '').trim(),
+      attachmentFile: req.file ? getFileMetadataFromUpload(req.file, req.uploadDir) : {},
       statusHistory: [{
         status: 'pending',
         message: 'Complaint submitted by customer',
@@ -172,6 +184,31 @@ const createComplaint = async (req, res) => {
     })
   } catch (error) {
     sendServerError(res, error, 'Failed to submit complaint')
+  }
+}
+
+const getComplaintAttachment = async (req, res) => {
+  try {
+    const complaint = await Complaint.findById(req.params.id)
+
+    if (!complaint) {
+      return res.status(404).json({ message: 'Complaint not found' })
+    }
+
+    const isOwner = String(complaint.customer) === String(req.user._id)
+    const isAdmin = req.user.role === 'admin'
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: 'Not authorized to view this attachment' })
+    }
+
+    if (!complaint.attachmentFile?.filePath) {
+      return res.status(404).json({ message: 'Attachment not found' })
+    }
+
+    return sendProtectedUpload(res, complaint.attachmentFile)
+  } catch (error) {
+    return sendServerError(res, error, 'Failed to load complaint attachment')
   }
 }
 
@@ -272,6 +309,7 @@ const findCustomerName = async (customerId) => {
 
 module.exports = {
   createComplaint,
+  getComplaintAttachment,
   getAdminComplaints,
   updateComplaintStatus,
   getComplaintStats,

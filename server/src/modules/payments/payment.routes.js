@@ -7,6 +7,7 @@ const {
   getDriverPayments,
   getMyPaymentMethods,
   getMyPayments,
+  getProof,
   getReceipt,
   getStaffPayments,
   recordAdminManualPayment,
@@ -20,8 +21,10 @@ const {
   authorize,
   authorizePermissions
 } = require('../../middleware/auth.middleware')
+const upload = require('../../middleware/upload.middleware')
 
 const router = express.Router()
+const { privateDocumentUpload } = upload
 
 router.get('/health', (_req, res) => {
   res.json({
@@ -36,7 +39,14 @@ router.post('/methods', protect, authorize('customer'), createMyPaymentMethod)
 router.put('/methods/:id/default', protect, authorize('customer'), setMyDefaultPaymentMethod)
 router.delete('/methods/:id', protect, authorize('customer'), deleteMyPaymentMethod)
 
-router.post('/checkout/:bookingId', protect, authorize('customer'), checkoutBookingPayment)
+router.post(
+  '/checkout/:bookingId',
+  protect,
+  authorize('customer'),
+  (req, res, next) => { req.uploadDir = `payments/${req.user._id}`; next() },
+  privateDocumentUpload.single('proof'),
+  checkoutBookingPayment
+)
 router.get('/my', protect, authorize('customer'), getMyPayments)
 router.get('/staff', protect, authorize('staff'), getStaffPayments)
 router.get('/driver', protect, authorize('driver'), getDriverPayments)
@@ -46,9 +56,17 @@ router.post('/admin/manual', protect, authorize('admin'), authorizePermissions('
 router.put('/admin/:id/verify', protect, authorize('admin'), authorizePermissions('payments.manage'), verifyAdminPayment)
 router.put('/admin/:id/refund', protect, authorize('admin'), authorizePermissions('payments.manage'), refundAdminPayment)
 
+router.get('/:id/proof', protect, getProof)
 router.get('/:id/receipt', protect, getReceipt)
 
-router.post('/bookings/:bookingId', protect, authorize('customer'), checkoutBookingPayment)
+router.post(
+  '/bookings/:bookingId',
+  protect,
+  authorize('customer'),
+  (req, res, next) => { req.uploadDir = `payments/${req.user._id}`; next() },
+  privateDocumentUpload.single('proof'),
+  checkoutBookingPayment
+)
 router.get('/customer', protect, authorize('customer'), getMyPayments)
 router.get('/admin', protect, authorize('admin'), authorizePermissions('payments.manage'), getAdminPayments)
 router.put('/:id/status', protect, authorize('admin'), authorizePermissions('payments.manage'), updatePaymentStatusLegacy)

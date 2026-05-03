@@ -4,6 +4,7 @@ import API from '../../../api/axios';
 import Sidebar from '../../../components/layout/Sidebar';
 import { useAuth } from '../../../context/AuthContext';
 import { formatDateTime } from '../../../utils/formatters';
+import { openProtectedFile } from '../../../utils/protectedFiles';
 import { validateEmail, validateRequiredText, validateUsername } from '../../../utils/validation';
 
 const manageableRoles = ['customer', 'driver', 'staff', 'admin'];
@@ -116,6 +117,9 @@ const hasContent = (value) => {
 };
 
 const hasDocumentMetadata = (document = {}) => hasContent(document.fileName) || hasContent(document.filePath);
+const hasProtectedDocumentFile = (document = {}) => Boolean(
+  document?.filePath && !/^\/?uploads\//i.test(document.filePath)
+);
 
 const getDocumentDetails = (roleKey, documents = {}) => (
   (providerDocumentKeys[roleKey] || Object.keys(documents || {}))
@@ -245,6 +249,17 @@ export default function AdminUsers() {
   const canEditUsersPermission = hasPermission('users.edit');
   const canReviewRolesPermission = hasPermission('roles.review');
   const canAssignRolesPermission = hasPermission('roles.assign');
+
+  const viewProviderDocument = async (userId, roleKey, documentKey) => {
+    setMessage('');
+    setError('');
+
+    try {
+      await openProtectedFile(`/admin/users/${userId}/documents/${roleKey}/${documentKey}`);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to open provider document');
+    }
+  };
 
   const pendingReviewUsers = users.filter((user) => getPendingApplications(user).length > 0);
   const orderedUsers = [...users].sort((left, right) => {
@@ -741,6 +756,15 @@ export default function AdminUsers() {
                           <small style={{ color: 'var(--text-light)' }}>
                             Uploaded: {new Date(value.uploadedAt).toLocaleDateString()}
                           </small>
+                        )}
+                        {hasProtectedDocumentFile(value) && (
+                          <button
+                            className="btn btn-outline btn-sm"
+                            type="button"
+                            onClick={() => viewProviderDocument(user._id, application.roleKey, key)}
+                          >
+                            View File
+                          </button>
                         )}
                         {value.reviewedAt && (
                           <small style={{ color: 'var(--text-light)' }}>

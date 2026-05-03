@@ -54,7 +54,7 @@ export default function SignIn() {
     }
 
     if (nextRole === 'customer') {
-      return '/dashboard';
+      return '/';
     }
 
     return getProfilePathForRole(nextRole);

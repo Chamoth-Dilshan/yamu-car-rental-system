@@ -4,6 +4,11 @@ const {
 } = require('../../utils/notificationHelpers')
 const { sendServerError } = require('../../utils/errorResponses')
 const {
+  getFileMetadataFromUpload,
+  removeUploadedFiles,
+  sendProtectedUpload
+} = require('../../utils/fileHelpers')
+const {
   validateCheckoutPayload,
   validateAdminManualPayload,
   validatePaymentMethodPayload,
@@ -16,6 +21,7 @@ const {
   createPaymentMethod,
   findCustomerBooking,
   getPaymentReceipt,
+  getPaymentProof,
   listPaymentMethods,
   listPayments,
   removePaymentMethod,
@@ -26,6 +32,22 @@ const {
   verifyPayment,
   buildStats
 } = require('./payment.service')
+
+const parseStructuredBody = (req) => {
+  if (req.body?.payload === undefined) {
+    return { payload: req.body || {} }
+  }
+
+  if (typeof req.body.payload === 'object') {
+    return { payload: req.body.payload || {} }
+  }
+
+  try {
+    return { payload: JSON.parse(req.body.payload || '{}') }
+  } catch {
+    return { error: 'Invalid JSON payload' }
+  }
+}
 
 const getMyPaymentMethods = async (req, res) => {
   try {
@@ -97,19 +119,44 @@ const deleteMyPaymentMethod = async (req, res) => {
 
 const checkoutBookingPayment = async (req, res) => {
   try {
-    const validatedPayment = validateCheckoutPayload(req.body)
+    const parsedBody = parseStructuredBody(req)
+    if (parsedBody.error) {
+      removeUploadedFiles([req.file])
+      return res.status(400).json({ message: parsedBody.error })
+    }
+
+    const validatedPayment = validateCheckoutPayload(parsedBody.payload)
 
     if (validatedPayment.error) {
+      removeUploadedFiles([req.file])
       return res.status(400).json({ message: validatedPayment.error })
     }
 
     if (validatedPayment.method === 'admin_manual') {
+      removeUploadedFiles([req.file])
       return res.status(403).json({ message: 'Admin manual payments cannot be submitted from customer checkout' })
+    }
+
+    if (req.file && validatedPayment.method !== 'bank_transfer') {
+      removeUploadedFiles([req.file])
+      return res.status(400).json({ message: 'Payment proof files are only supported for bank transfers' })
+    }
+
+    if (validatedPayment.method === 'bank_transfer') {
+      if (!req.file) {
+        return res.status(400).json({ message: 'Bank transfer proof file is required' })
+      }
+
+      validatedPayment.bankTransfer = {
+        ...validatedPayment.bankTransfer,
+        proofFile: getFileMetadataFromUpload(req.file, req.uploadDir)
+      }
     }
 
     const booking = await findCustomerBooking(req.params.bookingId, req.user._id)
 
     if (!booking) {
+      removeUploadedFiles([req.file])
       return res.status(404).json({ message: 'Booking not found' })
     }
 
@@ -120,6 +167,7 @@ const checkoutBookingPayment = async (req, res) => {
     })
 
     if (payment.error) {
+      removeUploadedFiles([req.file])
       return res.status(400).json({ message: payment.error })
     }
 
@@ -191,6 +239,23 @@ const getReceipt = async (req, res) => {
     })
   } catch (error) {
     return sendServerError(res, error, 'Failed to load receipt')
+  }
+}
+
+const getProof = async (req, res) => {
+  try {
+    const result = await getPaymentProof({
+      paymentId: req.params.id,
+      user: req.user
+    })
+
+    if (result.error) {
+      return res.status(result.statusCode || 400).json({ message: result.error })
+    }
+
+    return sendProtectedUpload(res, result.proofFile)
+  } catch (error) {
+    return sendServerError(res, error, 'Failed to load payment proof')
   }
 }
 
@@ -394,6 +459,7 @@ module.exports = {
   checkoutBookingPayment,
   getMyPayments,
   getReceipt,
+  getProof,
   getAdminPayments,
   recordAdminManualPayment,
   verifyAdminPayment,

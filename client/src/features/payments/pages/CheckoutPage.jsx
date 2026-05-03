@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import API from '../../../api/axios'
 import Sidebar from '../../../components/layout/Sidebar'
 import { useAuth } from '../../../context/AuthContext'
+import { validateDocumentFile } from '../../../utils/validation'
 import BankTransferForm from '../components/BankTransferForm'
 import CardPaymentForm from '../components/CardPaymentForm'
 import CashPaymentBox from '../components/CashPaymentBox'
@@ -55,7 +56,7 @@ const validateCard = (card) => {
   return errors
 }
 
-const validateBankTransfer = (bankTransfer) => {
+const validateBankTransfer = (bankTransfer, proofFile) => {
   const errors = {}
 
   if (!bankTransfer.accountName.trim()) {
@@ -68,6 +69,14 @@ const validateBankTransfer = (bankTransfer) => {
 
   if (!bankTransfer.referenceNo.trim()) {
     errors.referenceNo = 'Reference number is required.'
+  }
+
+  const proofError = proofFile
+    ? validateDocumentFile(proofFile, 'Bank transfer proof')
+    : 'Bank transfer proof file is required.'
+
+  if (proofError) {
+    errors.proofFile = proofError
   }
 
   return errors
@@ -92,6 +101,7 @@ export default function CheckoutPage() {
   const [setDefaultCard, setSetDefaultCard] = useState(false)
   const [cash, setCash] = useState(emptyCash)
   const [bankTransfer, setBankTransfer] = useState(emptyBankTransfer)
+  const [bankTransferProof, setBankTransferProof] = useState(null)
   const [errors, setErrors] = useState({})
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -194,6 +204,21 @@ export default function CheckoutPage() {
     setErrors((current) => ({ ...current, [field]: '' }))
   }
 
+  const updateBankTransferProof = (event) => {
+    const file = event.target.files?.[0] || null
+    const validationError = validateDocumentFile(file, 'Bank transfer proof')
+
+    if (validationError) {
+      event.target.value = ''
+      setBankTransferProof(null)
+      setErrors((current) => ({ ...current, proofFile: validationError }))
+      return
+    }
+
+    setBankTransferProof(file)
+    setErrors((current) => ({ ...current, proofFile: '' }))
+  }
+
   const buildPayload = () => {
     if (method === 'card') {
       return {
@@ -260,7 +285,7 @@ export default function CheckoutPage() {
     }
 
     if (method === 'bank_transfer') {
-      const bankErrors = validateBankTransfer(bankTransfer)
+      const bankErrors = validateBankTransfer(bankTransfer, bankTransferProof)
       if (Object.keys(bankErrors).length) {
         setErrors(bankErrors)
         return
@@ -270,7 +295,17 @@ export default function CheckoutPage() {
     setBusy(true)
 
     try {
-      const res = await checkoutPayment(booking._id, buildPayload())
+      const payload = buildPayload()
+      const res = method === 'bank_transfer'
+        ? await (() => {
+            const formData = new FormData()
+            formData.append('payload', JSON.stringify(payload))
+            formData.append('proof', bankTransferProof)
+            return checkoutPayment(booking._id, formData, {
+              headers: { 'Content-Type': 'multipart/form-data' }
+            })
+          })()
+        : await checkoutPayment(booking._id, payload)
       await refreshNotifications().catch(() => {})
       const payment = res.data.payment
 
@@ -400,7 +435,9 @@ export default function CheckoutPage() {
               <BankTransferForm
                 bankTransfer={bankTransfer}
                 errors={errors}
+                proofFile={bankTransferProof}
                 onChange={updateBankTransfer}
+                onProofChange={updateBankTransferProof}
               />
             )}
           </section>

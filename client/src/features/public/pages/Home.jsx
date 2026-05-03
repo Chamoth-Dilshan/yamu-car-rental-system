@@ -329,7 +329,6 @@ export default function Home() {
         <div className="container">
           <div className="home-top-rated-header">
             <span className="home-eyebrow home-eyebrow-dark">Top Rated</span>
-            <h2>Top 5 rated drivers and vehicles</h2>
           </div>
 
           <div className="home-top-rated-grid">

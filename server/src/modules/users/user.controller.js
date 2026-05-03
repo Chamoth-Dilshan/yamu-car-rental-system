@@ -8,6 +8,12 @@ const {
   serializeNotification
 } = require('../../utils/notificationHelpers');
 const {
+  getFileMetadataFromUpload,
+  getFilesByField,
+  removeUploadedFiles,
+  sendProtectedUpload
+} = require('../../utils/fileHelpers');
+const {
   PROVIDER_ROLE_KEYS,
   buildRoleAssignment,
   canManageRoleProfile,
@@ -86,6 +92,71 @@ const ensureUniqueIdentityFields = async (userId, email, username) => {
 };
 
 const getPlainObject = (value) => (value?.toObject ? value.toObject() : (value || {}));
+
+const parseStructuredBody = (req) => {
+  if (req.body?.payload === undefined) {
+    return { payload: req.body || {} };
+  }
+
+  if (typeof req.body.payload === 'object') {
+    return { payload: req.body.payload || {} };
+  }
+
+  try {
+    return { payload: JSON.parse(req.body.payload || '{}') };
+  } catch {
+    return { error: 'Invalid JSON payload' };
+  }
+};
+
+const getProviderDocumentKeys = (roleKey) => (
+  getProviderRequirementConfig(roleKey).documents.map(({ key }) => key)
+);
+
+const mergeUploadedDocumentFiles = (roleKey, payload = {}, files = {}, uploadDir = '') => {
+  const filesByField = getFilesByField(files);
+  const documentKeys = getProviderDocumentKeys(roleKey);
+  const uploadedDocuments = documentKeys.reduce((acc, documentKey) => {
+    const file = filesByField[documentKey];
+
+    if (!file) {
+      return acc;
+    }
+
+    return {
+      ...acc,
+      [documentKey]: getFileMetadataFromUpload(file, uploadDir)
+    };
+  }, {});
+
+  if (!Object.keys(uploadedDocuments).length) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    documents: {
+      ...(payload.documents || {}),
+      ...uploadedDocuments
+    }
+  };
+};
+
+const getProviderDocumentMetadata = (user, roleKey, documentKey) => {
+  if (!PROVIDER_ROLE_KEYS.includes(roleKey) || !getProviderDocumentKeys(roleKey).includes(documentKey)) {
+    return null;
+  }
+
+  const profile = roleKey === 'driver' ? user.driverProfile : user.staffProfile;
+  const profileDocument = profile?.documents?.[documentKey];
+
+  if (profileDocument?.filePath) {
+    return profileDocument;
+  }
+
+  const applicationDocument = getLatestPendingProviderApplication(user, roleKey)?.applicationData?.documents?.[documentKey];
+  return applicationDocument?.filePath ? applicationDocument : profileDocument;
+};
 
 const buildDriverProfilePayload = (payload = {}, currentProfile = {}) => {
   const current = getPlainObject(currentProfile);
@@ -285,22 +356,31 @@ const updateProfile = async (req, res) => {
 
 const updateDriverProfile = async (req, res) => {
   try {
+    const parsedBody = parseStructuredBody(req);
+    if (parsedBody.error) {
+      removeUploadedFiles(req.files);
+      return res.status(400).json({ message: parsedBody.error });
+    }
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
+      removeUploadedFiles(req.files);
       return res.status(404).json({ message: 'User not found' });
     }
 
     const roleAssignment = getRoleAssignment(user, 'driver');
     if (!canManageRoleProfile(roleAssignment)) {
+      removeUploadedFiles(req.files);
       return res.status(403).json({ message: 'Driver onboarding is available only for assigned driver applicants or roles' });
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
     const documentKeys = getProviderRequirementConfig('driver').documents.map(({ key }) => key);
+    const driverPayload = mergeUploadedDocumentFiles('driver', parsedBody.payload, req.files, req.uploadDir);
     user.driverProfile = {
       ...getPlainObject(user.driverProfile),
-      ...buildDriverProfilePayload(req.body, user.driverProfile)
+      ...buildDriverProfilePayload(driverPayload, user.driverProfile)
     };
 
     const pendingApplication = getLatestPendingProviderApplication(user, 'driver');
@@ -338,22 +418,31 @@ const updateDriverProfile = async (req, res) => {
 
 const updateStaffProfile = async (req, res) => {
   try {
+    const parsedBody = parseStructuredBody(req);
+    if (parsedBody.error) {
+      removeUploadedFiles(req.files);
+      return res.status(400).json({ message: parsedBody.error });
+    }
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
+      removeUploadedFiles(req.files);
       return res.status(404).json({ message: 'User not found' });
     }
 
     const roleAssignment = getRoleAssignment(user, 'staff');
     if (!canManageRoleProfile(roleAssignment)) {
+      removeUploadedFiles(req.files);
       return res.status(403).json({ message: 'Store onboarding is available only for assigned store applicants or roles' });
     }
 
     const beforeSnapshot = buildUserAuditSnapshot(user);
     const documentKeys = getProviderRequirementConfig('staff').documents.map(({ key }) => key);
+    const staffPayload = mergeUploadedDocumentFiles('staff', parsedBody.payload, req.files, req.uploadDir);
     user.staffProfile = {
       ...getPlainObject(user.staffProfile),
-      ...buildStaffProfilePayload(req.body, user.staffProfile)
+      ...buildStaffProfilePayload(staffPayload, user.staffProfile)
     };
 
     const pendingApplication = getLatestPendingProviderApplication(user, 'staff');
@@ -430,40 +519,54 @@ const updateAdminProfile = async (req, res) => {
 const applyForProviderRole = async (req, res) => {
   try {
     const { roleKey } = req.params;
+    const parsedBody = parseStructuredBody(req);
+    if (parsedBody.error) {
+      removeUploadedFiles(req.files);
+      return res.status(400).json({ message: parsedBody.error });
+    }
+
     const user = await User.findById(req.user._id);
 
     if (!user) {
+      removeUploadedFiles(req.files);
       return res.status(404).json({ message: 'User not found' });
     }
 
     if (!PROVIDER_ROLE_KEYS.includes(roleKey)) {
+      removeUploadedFiles(req.files);
       return res.status(400).json({ message: 'Unsupported provider role application' });
     }
 
     if (!canUseRole(getRoleAssignment(user, 'customer'))) {
+      removeUploadedFiles(req.files);
       return res.status(403).json({ message: 'Only accounts with active user access can apply for provider roles' });
     }
 
     const roleAssignment = getRoleAssignment(user, roleKey);
     if (roleAssignment && canUseRole(roleAssignment)) {
+      removeUploadedFiles(req.files);
       return res.status(400).json({ message: `Your ${roleKey} role is already approved` });
     }
 
     if (roleAssignment && ['suspended', 'deactivated'].includes(roleAssignment.roleStatus)) {
+      removeUploadedFiles(req.files);
       return res.status(403).json({ message: `Your ${roleKey} access is currently restricted. Contact an administrator for help.` });
     }
 
     if (getLatestPendingProviderApplication(user, roleKey)) {
+      removeUploadedFiles(req.files);
       return res.status(400).json({ message: `A ${roleKey} application is already pending review` });
     }
 
+    const providerPayload = mergeUploadedDocumentFiles(roleKey, parsedBody.payload, req.files, req.uploadDir);
     const applicationData = roleKey === 'driver'
-      ? buildDriverProfilePayload(req.body, user.driverProfile)
-      : buildStaffProfilePayload(req.body, user.staffProfile);
+      ? buildDriverProfilePayload(providerPayload, user.driverProfile)
+      : buildStaffProfilePayload(providerPayload, user.staffProfile);
     const documentKeys = getProviderRequirementConfig(roleKey).documents.map(({ key }) => key);
 
     const validation = validateProviderApplicationData(roleKey, applicationData);
     if (!validation.valid) {
+      removeUploadedFiles(req.files);
       return res.status(400).json({ message: validation.message });
     }
 
@@ -618,6 +721,26 @@ const getNotifications = async (req, res) => {
   }
 };
 
+const getMyProviderDocument = async (req, res) => {
+  try {
+    const { roleKey, documentKey } = req.params;
+    const user = await User.findById(req.user._id).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const document = getProviderDocumentMetadata(user, roleKey, documentKey);
+    if (!document?.filePath) {
+      return res.status(404).json({ message: 'Document not found' });
+    }
+
+    return sendProtectedUpload(res, document);
+  } catch (error) {
+    return sendServerError(res, error, 'Failed to load document');
+  }
+};
+
 const markNotificationRead = async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -686,6 +809,7 @@ module.exports = {
   updateAdminProfile,
   applyForProviderRole,
   withdrawProviderApplication,
+  getMyProviderDocument,
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead

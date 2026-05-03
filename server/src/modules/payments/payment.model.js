@@ -42,7 +42,15 @@ const paymentSchema = new mongoose.Schema({
     bankName: { type: String, default: '' },
     referenceNo: { type: String, default: '' },
     depositedAt: { type: Date, default: null },
-    note: { type: String, default: '' }
+    note: { type: String, default: '' },
+    proofFile: {
+      fileName: { type: String, default: '' },
+      filePath: { type: String, default: '' },
+      reference: { type: String, default: '' },
+      mimeType: { type: String, default: '' },
+      size: { type: Number, default: 0 },
+      uploadedAt: { type: Date, default: null }
+    }
   },
   cash: {
     payerName: { type: String, default: '' },

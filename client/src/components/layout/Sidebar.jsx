@@ -102,7 +102,7 @@ export default function Sidebar() {
       <nav className="sidebar-nav">
         {items.map((item) => {
           if (item.section) {
-            return <div key={item.section} className="sidebar-section-label">{item.section}</div>
+            return null
           }
 
           return (
