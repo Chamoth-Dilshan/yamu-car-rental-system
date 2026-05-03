@@ -11,12 +11,18 @@ import { openProtectedFile } from '../../../utils/protectedFiles';
 import { formatRoleLabel, getProfilePathForRole } from '../../../utils/roles';
 import {
   hasDocumentMetadata,
+  isValidLicenseExpiryDate,
+  isValidSriLankanDrivingLicenseNumber,
+  isValidSriLankanNic,
   validateDocumentFile,
   validateEmail,
+  validateLicenseExpiryDate,
   validateOptionalPhone,
   validatePasswordStrength,
   validateProfileImage,
   validateRequiredText,
+  validateSriLankanDrivingLicenseNumber,
+  validateSriLankanNic,
   validateUsername
 } from '../../../utils/validation';
 
@@ -91,6 +97,7 @@ const providerApplicationRequirements = {
   driver: {
     fields: [
       ['drivingLicenseNumber', 'Driving license number'],
+      ['licenseExpiryDate', 'License expiry date'],
       ['nicId', 'NIC / ID'],
       ['serviceArea', 'Service area']
     ],
@@ -170,6 +177,8 @@ export default function Profile() {
   });
   const [driverDocumentFiles, setDriverDocumentFiles] = useState({});
   const [staffDocumentFiles, setStaffDocumentFiles] = useState({});
+  const [profileErrors, setProfileErrors] = useState({});
+  const [providerErrors, setProviderErrors] = useState({ driver: {}, staff: {} });
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busyAction, setBusyAction] = useState('');
@@ -228,6 +237,8 @@ export default function Profile() {
     });
     setDriverDocumentFiles({});
     setStaffDocumentFiles({});
+    setProfileErrors({});
+    setProviderErrors({ driver: {}, staff: {} });
   }, [user]);
 
   useEffect(() => {
@@ -265,67 +276,176 @@ export default function Profile() {
   const activeRoleKey = user?.activeRole || user?.role || 'customer';
   const hasUsableCustomerRole = canUseAssignedRole(customerRole);
 
-  const validateBasicProfileForm = () => {
-    const passwordFieldsTouched = Boolean(profile.password || profile.currentPassword || profile.confirmPassword);
+  const clearProfileFieldError = (field) => {
+    setProfileErrors((current) => {
+      if (!current[field]) {
+        return current;
+      }
 
-    if (passwordFieldsTouched) {
-      return validateRequiredText(profile.fullName, 'Full name')
-        || validateUsername(profile.username)
-        || validateEmail(profile.email)
-        || validateOptionalPhone(profile.phone)
-        || validateOptionalPhone(profile.emergencyContactPhone, 'Emergency contact phone')
-        || validateProfileImage(profileImage)
-        || validateRequiredText(profile.password, 'New password')
-        || validatePasswordStrength(profile.password)
-        || validateRequiredText(profile.currentPassword, 'Current password')
-        || validateRequiredText(profile.confirmPassword, 'Confirm password')
-        || (profile.password === profile.confirmPassword ? '' : 'Passwords do not match');
+      const next = { ...current };
+      delete next[field];
+      return next;
+    });
+  };
+
+  const clearProviderFieldError = (roleKey, field) => {
+    setProviderErrors((current) => {
+      if (!current[roleKey]?.[field]) {
+        return current;
+      }
+
+      const nextRoleErrors = { ...current[roleKey] };
+      delete nextRoleErrors[field];
+      return { ...current, [roleKey]: nextRoleErrors };
+    });
+  };
+
+  const updateProfileField = (field, value) => {
+    setProfile((prev) => ({ ...prev, [field]: value }));
+    clearProfileFieldError(field);
+
+    if (field === 'password') {
+      clearProfileFieldError('confirmPassword');
+    }
+  };
+
+  const updateDriverProfileField = (field, value) => {
+    setDriverProfile((prev) => ({ ...prev, [field]: value }));
+    clearProviderFieldError('driver', field);
+  };
+
+  const updateStaffProfileField = (field, value) => {
+    setStaffProfile((prev) => ({ ...prev, [field]: value }));
+    clearProviderFieldError('staff', field);
+  };
+
+  const renderProfileFieldError = (field) => (
+    profileErrors[field] ? <small className="field-error">{profileErrors[field]}</small> : null
+  );
+
+  const renderProviderFieldError = (roleKey, field) => (
+    providerErrors[roleKey]?.[field] ? <small className="field-error">{providerErrors[roleKey][field]}</small> : null
+  );
+
+  const getInvalidFieldClass = (hasError) => (hasError ? 'field-invalid' : undefined);
+
+  const validateBasicProfileForm = () => {
+    const nextErrors = {};
+    const passwordFieldsTouched = Boolean(profile.password || profile.currentPassword || profile.confirmPassword);
+    const fullNameError = validateRequiredText(profile.fullName, 'Full name');
+    const usernameError = validateUsername(profile.username);
+    const emailError = validateEmail(profile.email);
+    const phoneError = validateOptionalPhone(profile.phone);
+    const emergencyContactPhoneError = validateOptionalPhone(profile.emergencyContactPhone, 'Emergency contact phone');
+    const profileImageError = validateProfileImage(profileImage);
+
+    if (fullNameError) {
+      nextErrors.fullName = fullNameError;
     }
 
-    return validateRequiredText(profile.fullName, 'Full name')
-      || validateUsername(profile.username)
-      || validateEmail(profile.email)
-      || validateOptionalPhone(profile.phone)
-      || validateOptionalPhone(profile.emergencyContactPhone, 'Emergency contact phone')
-      || validateProfileImage(profileImage);
+    if (usernameError) {
+      nextErrors.username = usernameError;
+    }
+
+    if (emailError) {
+      nextErrors.email = emailError;
+    }
+
+    if (phoneError) {
+      nextErrors.phone = phoneError;
+    }
+
+    if (emergencyContactPhoneError) {
+      nextErrors.emergencyContactPhone = emergencyContactPhoneError;
+    }
+
+    if (profileImageError) {
+      nextErrors.profileImage = profileImageError;
+    }
+
+    if (passwordFieldsTouched) {
+      const passwordRequiredError = validateRequiredText(profile.password, 'New password');
+      const passwordStrengthError = passwordRequiredError ? '' : validatePasswordStrength(profile.password);
+      const currentPasswordError = validateRequiredText(profile.currentPassword, 'Current password');
+      const confirmPasswordError = validateRequiredText(profile.confirmPassword, 'Confirm password');
+
+      if (passwordRequiredError || passwordStrengthError) {
+        nextErrors.password = passwordRequiredError || passwordStrengthError;
+      }
+
+      if (currentPasswordError) {
+        nextErrors.currentPassword = currentPasswordError;
+      }
+
+      if (confirmPasswordError) {
+        nextErrors.confirmPassword = confirmPasswordError;
+      } else if (profile.password !== profile.confirmPassword) {
+        nextErrors.confirmPassword = 'Passwords do not match';
+      }
+    }
+
+    return nextErrors;
   };
 
   const validateProviderApplicationForm = (roleKey, payload) => {
+    const nextErrors = {};
     const config = providerApplicationRequirements[roleKey] || { fields: [], documents: [] };
-    const missingField = config.fields.find(([key]) => !String(payload?.[key] || '').trim());
 
-    if (missingField) {
-      return `${missingField[1]} is required`;
+    config.fields.forEach(([key, label]) => {
+      if (!String(payload?.[key] || '').trim()) {
+        nextErrors[key] = `${label} is required`;
+      }
+    });
+
+    if (roleKey === 'driver') {
+      const drivingLicenseError = validateSriLankanDrivingLicenseNumber(payload.drivingLicenseNumber);
+      const licenseExpiryError = validateLicenseExpiryDate(payload.licenseExpiryDate);
+      const nicError = validateSriLankanNic(payload.nicId);
+
+      if (drivingLicenseError) {
+        nextErrors.drivingLicenseNumber = drivingLicenseError;
+      }
+
+      if (licenseExpiryError) {
+        nextErrors.licenseExpiryDate = licenseExpiryError;
+      }
+
+      if (nicError) {
+        nextErrors.nicId = nicError;
+      }
     }
 
     if (roleKey === 'staff') {
       const storeEmailError = validateEmail(payload.storeEmail, 'Store email');
-      if (storeEmailError) {
-        return storeEmailError;
+      if (storeEmailError && !nextErrors.storeEmail) {
+        nextErrors.storeEmail = storeEmailError;
       }
     }
 
-    const missingDocument = config.documents.find(([key]) => !hasDocumentMetadata(payload?.documents?.[key] || {}));
-    if (missingDocument) {
-      return `${missingDocument[1]} metadata is required`;
-    }
+    config.documents.forEach(([key, label]) => {
+      if (!hasDocumentMetadata(payload?.documents?.[key] || {})) {
+        nextErrors[key] = `${label} metadata is required`;
+      }
+    });
 
-    return '';
+    return nextErrors;
   };
 
   const saveBasicProfile = async (event) => {
     event.preventDefault();
-    const validationError = validateBasicProfileForm();
+    const validationErrors = validateBasicProfileForm();
 
-    if (validationError) {
+    if (Object.keys(validationErrors).length) {
       setMessage('');
-      setError(validationError);
+      setError('');
+      setProfileErrors(validationErrors);
       return;
     }
 
     setBusyAction('basic');
     setMessage('');
     setError('');
+    setProfileErrors({});
 
     try {
       const formData = new FormData();
@@ -401,9 +521,19 @@ export default function Profile() {
   };
 
   const saveRoleProfile = async (endpoint, payload, successMessage, actionKey) => {
+    const validationErrors = validateProviderApplicationForm(actionKey, payload);
+
+    if (Object.keys(validationErrors).length) {
+      setMessage('');
+      setError('');
+      setProviderErrors((current) => ({ ...current, [actionKey]: validationErrors }));
+      return;
+    }
+
     setBusyAction(actionKey);
     setMessage('');
     setError('');
+    setProviderErrors((current) => ({ ...current, [actionKey]: {} }));
 
     try {
       const res = await API.put(endpoint, buildProviderFormData(payload, getProviderDocumentFiles(actionKey)), {
@@ -420,17 +550,19 @@ export default function Profile() {
   };
 
   const submitProviderApplication = async (roleKey, payload) => {
-    const validationError = validateProviderApplicationForm(roleKey, payload);
+    const validationErrors = validateProviderApplicationForm(roleKey, payload);
 
-    if (validationError) {
+    if (Object.keys(validationErrors).length) {
       setMessage('');
-      setError(validationError);
+      setError('');
+      setProviderErrors((current) => ({ ...current, [roleKey]: validationErrors }));
       return;
     }
 
     setBusyAction(`apply-${roleKey}`);
     setMessage('');
     setError('');
+    setProviderErrors((current) => ({ ...current, [roleKey]: {} }));
 
     try {
       const res = await API.post(`/users/applications/${roleKey}`, buildProviderFormData(payload, getProviderDocumentFiles(roleKey)), {
@@ -486,9 +618,9 @@ export default function Profile() {
     return nextRoles;
   }, [user]);
   const driverReadiness = calculateCompletionPercent([
-    driverProfile.drivingLicenseNumber,
-    driverProfile.licenseExpiryDate,
-    driverProfile.nicId,
+    isValidSriLankanDrivingLicenseNumber(driverProfile.drivingLicenseNumber),
+    isValidLicenseExpiryDate(driverProfile.licenseExpiryDate),
+    isValidSriLankanNic(driverProfile.nicId),
     driverProfile.serviceArea,
     driverProfile.providerDetails,
     hasDocumentReference(driverProfile.documents.nicDocument),
@@ -512,15 +644,16 @@ export default function Profile() {
       : activeRoleKey === 'admin'
         ? 'admin'
         : 'user';
-  const pathSection = location.pathname.startsWith('/profile/')
+  const rawPathSection = location.pathname.startsWith('/profile/')
     ? location.pathname.split('/')[2] || ''
     : '';
+  const pathSection = rawPathSection === 'driverapplication' ? 'driver' : rawPathSection;
   const selectedProfileSection = ['user', 'driver', 'store', 'admin'].includes(pathSection)
     ? pathSection
     : defaultProfileSection;
   const profileTabs = [
     ...(activeRoleKey === 'customer' ? [{ key: 'user', to: '/profile/user', label: 'User Profile' }] : []),
-    ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driver', label: 'Driver Profile' }] : []),
+    ...(['customer', 'driver'].includes(activeRoleKey) ? [{ key: 'driver', to: '/profile/driverapplication', label: 'Driver Application' }] : []),
     ...(activeRoleKey === 'staff' || hasUsableCustomerRole ? [{ key: 'store', to: '/profile/store', label: 'Store Profile' }] : []),
     ...(activeRoleKey === 'admin' ? [{ key: 'admin', to: '/profile/admin', label: 'Admin Profile' }] : [])
   ];
@@ -529,7 +662,7 @@ export default function Profile() {
     ? selectedProfileSection
     : defaultProfileSection;
   const selectedProfileLabel = resolvedProfileSection === 'driver'
-    ? 'Driver Profile'
+    ? 'Driver Application'
     : resolvedProfileSection === 'store'
       ? 'Store Profile'
       : resolvedProfileSection === 'admin'
@@ -542,6 +675,7 @@ export default function Profile() {
   const showDriverProfile = ['customer', 'driver'].includes(activeRoleKey) && resolvedProfileSection === 'driver';
   const showStaffProfile = (activeRoleKey === 'staff' || hasUsableCustomerRole) && resolvedProfileSection === 'store';
   const showAdminProfile = activeRoleKey === 'admin' && resolvedProfileSection === 'admin';
+  const showProfileHero = resolvedProfileSection !== 'driver';
   const showRoleSwitcher = activeRoleKey !== 'admin';
   const visibleProfileCompletion = resolvedProfileSection === 'driver'
     ? driverReadiness
@@ -710,7 +844,14 @@ export default function Profile() {
     if (validationError) {
       event.target.value = '';
       setMessage('');
-      setError(validationError);
+      setError('');
+      setProviderErrors((current) => ({
+        ...current,
+        [roleKey]: {
+          ...(current[roleKey] || {}),
+          [documentKey]: validationError
+        }
+      }));
       return;
     }
 
@@ -723,6 +864,7 @@ export default function Profile() {
     }
 
     setError('');
+    clearProviderFieldError(roleKey, documentKey);
   };
 
   const hasProtectedDocumentFile = (document = {}) => Boolean(
@@ -748,12 +890,14 @@ export default function Profile() {
       event.target.value = '';
       setProfileImage(null);
       setMessage('');
-      setError(validationError);
+      setError('');
+      setProfileErrors((current) => ({ ...current, profileImage: validationError }));
       return;
     }
 
     setProfileImage(file);
     setError('');
+    clearProfileFieldError('profileImage');
   };
 
   const renderDocumentMeta = (document) => (
@@ -783,10 +927,12 @@ export default function Profile() {
         <div className="form-group">
           <label>{label}</label>
           <input
+            className={getInvalidFieldClass(providerErrors[roleKey]?.[documentKey])}
             type="file"
             accept={providerDocumentAccept}
             onChange={(event) => handleProviderDocumentChange(roleKey, documentKey, label, event)}
           />
+          {renderProviderFieldError(roleKey, documentKey)}
         </div>
         <div className="provider-document-current">
           <strong>{selectedFile?.name || document?.fileName || 'No file selected'}</strong>
@@ -816,87 +962,89 @@ export default function Profile() {
     <div className="dashboard-layout page-content profile-page">
       <Sidebar />
       <main className="dashboard-content">
-        <section className="form-card profile-hero-card">
-          <div className="profile-hero-main">
-            <div className="profile-hero-identity">
-              <img className="profile-hero-avatar" src={avatarSrc} alt={user?.fullName} />
-              <div className="profile-hero-copy">
-                <span className="profile-hero-kicker">{selectedProfileLabel}</span>
-                <h2>{profileHeroName}</h2>
-                <p>{user?.email}</p>
-                <div className="profile-hero-meta">
-                  <span className="badge badge-info">Active role: {roleLabel(user?.activeRole || 'customer')}</span>
-                  <span className="badge badge-success">Primary role: {roleLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
-                  <span className={getBadgeClass(getStatusTone(user?.accountStatus))}>Account: {formatStatusLabel(user?.accountStatus)}</span>
+        {showProfileHero && (
+          <section className="form-card profile-hero-card">
+            <div className="profile-hero-main">
+              <div className="profile-hero-identity">
+                <img className="profile-hero-avatar" src={avatarSrc} alt={user?.fullName} />
+                <div className="profile-hero-copy">
+                  <span className="profile-hero-kicker">{selectedProfileLabel}</span>
+                  <h2>{profileHeroName}</h2>
+                  <p>{user?.email}</p>
+                  <div className="profile-hero-meta">
+                    <span className="badge badge-info">Active role: {roleLabel(user?.activeRole || 'customer')}</span>
+                    <span className="badge badge-success">Primary role: {roleLabel(user?.primaryRole || user?.activeRole || 'customer')}</span>
+                    <span className={getBadgeClass(getStatusTone(user?.accountStatus))}>Account: {formatStatusLabel(user?.accountStatus)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="profile-hero-aside">
-              <div className="profile-progress-card">
-                <div className="profile-progress-header">
-                  <strong>{visibleProfileCompletion}%</strong>
-                  <span>profile completion</span>
+              <div className="profile-hero-aside">
+                <div className="profile-progress-card">
+                  <div className="profile-progress-header">
+                    <strong>{visibleProfileCompletion}%</strong>
+                    <span>profile completion</span>
+                  </div>
+                  <div className="account-progress-track">
+                    <div className="account-progress-fill" style={{ width: `${visibleProfileCompletion}%` }} />
+                  </div>
+                  <p>{pendingApplicationsCount} pending role request(s) and {unreadManagedNotificationsCount} unread workflow notification(s).</p>
                 </div>
-                <div className="account-progress-track">
-                  <div className="account-progress-fill" style={{ width: `${visibleProfileCompletion}%` }} />
-                </div>
-                <p>{pendingApplicationsCount} pending role request(s) and {unreadManagedNotificationsCount} unread workflow notification(s).</p>
-              </div>
 
-              {showRoleSwitcher && (
-                <div className="profile-hero-actions">
-                  {showRoleSwitcher && (
-                    <div className={`profile-role-switcher${isRoleMenuOpen ? ' open' : ''}`} ref={roleMenuRef}>
-                      <button
-                        className="btn btn-outline btn-sm profile-role-trigger"
-                        type="button"
-                        onClick={() => setIsRoleMenuOpen((prev) => !prev)}
-                        aria-haspopup="menu"
-                        aria-expanded={isRoleMenuOpen}
-                        disabled={Boolean(switchingRole)}
-                      >
-                        <span>{switchingRole ? 'Switching...' : 'Switch Roles'}</span>
-                        <span className="profile-role-trigger-icon" aria-hidden="true">v</span>
-                      </button>
+                {showRoleSwitcher && (
+                  <div className="profile-hero-actions">
+                    {showRoleSwitcher && (
+                      <div className={`profile-role-switcher${isRoleMenuOpen ? ' open' : ''}`} ref={roleMenuRef}>
+                        <button
+                          className="btn btn-outline btn-sm profile-role-trigger"
+                          type="button"
+                          onClick={() => setIsRoleMenuOpen((prev) => !prev)}
+                          aria-haspopup="menu"
+                          aria-expanded={isRoleMenuOpen}
+                          disabled={Boolean(switchingRole)}
+                        >
+                          <span>{switchingRole ? 'Switching...' : 'Switch Roles'}</span>
+                          <span className="profile-role-trigger-icon" aria-hidden="true">v</span>
+                        </button>
 
-                      <div className="profile-role-menu" role="menu" aria-label="Available roles">
-                        {switchableRoles.length > 0 ? switchableRoles.map((roleItem) => {
-                          const isCurrentRole = roleItem.roleKey === activeRoleKey;
-                          const isSwitchingThisRole = switchingRole === roleItem.roleKey;
+                        <div className="profile-role-menu" role="menu" aria-label="Available roles">
+                          {switchableRoles.length > 0 ? switchableRoles.map((roleItem) => {
+                            const isCurrentRole = roleItem.roleKey === activeRoleKey;
+                            const isSwitchingThisRole = switchingRole === roleItem.roleKey;
 
-                          return (
-                            <button
-                              key={roleItem.roleKey}
-                              className={`profile-role-menu-item${isCurrentRole ? ' active' : ''}`}
-                              type="button"
-                              role="menuitem"
-                              onClick={() => handleRoleSwitch(roleItem.roleKey)}
-                              disabled={isCurrentRole || Boolean(switchingRole)}
-                            >
-                              <span>{roleLabel(roleItem.roleKey)}</span>
-                              <small>
-                                {isCurrentRole
-                                  ? 'Current role'
-                                  : isSwitchingThisRole
-                                    ? 'Switching now...'
-                                    : roleItem.isPrimary
-                                      ? 'Primary role'
-                                      : 'Available to switch'}
-                              </small>
-                            </button>
-                          );
-                        }) : (
-                          <div className="profile-role-menu-empty">No verified roles available to switch.</div>
-                        )}
+                            return (
+                              <button
+                                key={roleItem.roleKey}
+                                className={`profile-role-menu-item${isCurrentRole ? ' active' : ''}`}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => handleRoleSwitch(roleItem.roleKey)}
+                                disabled={isCurrentRole || Boolean(switchingRole)}
+                              >
+                                <span>{roleLabel(roleItem.roleKey)}</span>
+                                <small>
+                                  {isCurrentRole
+                                    ? 'Current role'
+                                    : isSwitchingThisRole
+                                      ? 'Switching now...'
+                                      : roleItem.isPrimary
+                                        ? 'Primary role'
+                                        : 'Available to switch'}
+                                </small>
+                              </button>
+                            );
+                          }) : (
+                            <div className="profile-role-menu-empty">No verified roles available to switch.</div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {(driverApplication?.status === 'pending' || staffApplication?.status === 'pending') && (
           <div className="alert alert-info">
@@ -927,40 +1075,67 @@ export default function Profile() {
               <div className="form-row">
                 <div className="form-group">
                   <label>Full Name</label>
-                  <input disabled={!isEditMode} value={profile.fullName} onChange={(e) => setProfile((prev) => ({ ...prev, fullName: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.fullName)}
+                    disabled={!isEditMode}
+                    value={profile.fullName}
+                    onChange={(e) => updateProfileField('fullName', e.target.value)}
+                  />
+                  {renderProfileFieldError('fullName')}
                 </div>
                 <div className="form-group">
                   <label>Username</label>
-                  <input disabled={!isEditMode} value={profile.username} onChange={(e) => setProfile((prev) => ({ ...prev, username: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.username)}
+                    disabled={!isEditMode}
+                    value={profile.username}
+                    onChange={(e) => updateProfileField('username', e.target.value)}
+                  />
+                  {renderProfileFieldError('username')}
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Email</label>
-                  <input disabled={!isEditMode} type="email" value={profile.email} onChange={(e) => setProfile((prev) => ({ ...prev, email: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.email)}
+                    disabled={!isEditMode}
+                    type="email"
+                    value={profile.email}
+                    onChange={(e) => updateProfileField('email', e.target.value)}
+                  />
+                  {renderProfileFieldError('email')}
                 </div>
                 <div className="form-group">
                   <label>Phone</label>
-                  <input disabled={!isEditMode} value={profile.phone} onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.phone)}
+                    disabled={!isEditMode}
+                    value={profile.phone}
+                    onChange={(e) => updateProfileField('phone', e.target.value)}
+                  />
+                  {renderProfileFieldError('phone')}
                 </div>
               </div>
               <div className="form-group">
                 <label>Profile Image</label>
                 <input
+                  className={getInvalidFieldClass(profileErrors.profileImage)}
                   disabled={!isEditMode}
                   type="file"
                   accept="image/jpeg,image/png,image/gif,image/webp"
                   onChange={handleProfileImageChange}
                 />
+                {renderProfileFieldError('profileImage')}
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>City</label>
-                  <input disabled={!isEditMode} value={profile.city} onChange={(e) => setProfile((prev) => ({ ...prev, city: e.target.value }))} />
+                  <input disabled={!isEditMode} value={profile.city} onChange={(e) => updateProfileField('city', e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label>Date of Birth</label>
-                  <input disabled={!isEditMode} type="date" value={profile.dob} onChange={(e) => setProfile((prev) => ({ ...prev, dob: e.target.value }))} />
+                  <input disabled={!isEditMode} type="date" value={profile.dob} onChange={(e) => updateProfileField('dob', e.target.value)} />
                 </div>
               </div>
               <div className="form-row">
@@ -969,7 +1144,7 @@ export default function Profile() {
                   <select
                     disabled={!isEditMode}
                     value={profile.preferredLanguage}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, preferredLanguage: e.target.value }))}
+                    onChange={(e) => updateProfileField('preferredLanguage', e.target.value)}
                   >
                     <option value="English">English</option>
                     <option value="Sinhala">Sinhala</option>
@@ -981,48 +1156,72 @@ export default function Profile() {
                   <input
                     disabled={!isEditMode}
                     value={profile.emergencyContactName}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactName: e.target.value }))}
+                    onChange={(e) => updateProfileField('emergencyContactName', e.target.value)}
                   />
                 </div>
               </div>
               <div className="form-group">
                 <label>Address</label>
-                <input disabled={!isEditMode} value={profile.address} onChange={(e) => setProfile((prev) => ({ ...prev, address: e.target.value }))} />
+                <input disabled={!isEditMode} value={profile.address} onChange={(e) => updateProfileField('address', e.target.value)} />
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Emergency Contact Phone</label>
                   <input
+                    className={getInvalidFieldClass(profileErrors.emergencyContactPhone)}
                     disabled={!isEditMode}
                     value={profile.emergencyContactPhone}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactPhone: e.target.value }))}
+                    onChange={(e) => updateProfileField('emergencyContactPhone', e.target.value)}
                   />
+                  {renderProfileFieldError('emergencyContactPhone')}
                 </div>
                 <div className="form-group">
                   <label>Relationship</label>
                   <input
                     disabled={!isEditMode}
                     value={profile.emergencyContactRelationship}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactRelationship: e.target.value }))}
+                    onChange={(e) => updateProfileField('emergencyContactRelationship', e.target.value)}
                   />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Bio</label>
-                  <textarea disabled={!isEditMode} rows="3" value={profile.bio} onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))} />
+                  <textarea disabled={!isEditMode} rows="3" value={profile.bio} onChange={(e) => updateProfileField('bio', e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label>Current Password</label>
-                  <input disabled={!isEditMode} type="password" value={profile.currentPassword} onChange={(e) => setProfile((prev) => ({ ...prev, currentPassword: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.currentPassword)}
+                    disabled={!isEditMode}
+                    type="password"
+                    value={profile.currentPassword}
+                    onChange={(e) => updateProfileField('currentPassword', e.target.value)}
+                  />
+                  {renderProfileFieldError('currentPassword')}
                 </div>
                 <div className="form-group">
                   <label>New Password</label>
-                  <input disabled={!isEditMode} type="password" minLength={8} value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.password)}
+                    disabled={!isEditMode}
+                    type="password"
+                    minLength={8}
+                    value={profile.password}
+                    onChange={(e) => updateProfileField('password', e.target.value)}
+                  />
+                  {renderProfileFieldError('password')}
                 </div>
                 <div className="form-group">
                   <label>Confirm Password</label>
-                  <input disabled={!isEditMode} type="password" value={profile.confirmPassword} onChange={(e) => setProfile((prev) => ({ ...prev, confirmPassword: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.confirmPassword)}
+                    disabled={!isEditMode}
+                    type="password"
+                    value={profile.confirmPassword}
+                    onChange={(e) => updateProfileField('confirmPassword', e.target.value)}
+                  />
+                  {renderProfileFieldError('confirmPassword')}
                 </div>
               </div>
               <div className="profile-form-actions">
@@ -1038,8 +1237,8 @@ export default function Profile() {
           <div id="driver-role" className="form-card profile-section-card role-onboarding-card" style={{ marginBottom: '1.5rem' }}>
             <div className="profile-section-heading">
               <div>
-                <h3>Driver Profile</h3>
-                <p>Maintain the driver profile, review application state, and manage the next action from one card.</p>
+                <h3>Driver Application</h3>
+                <p>Maintain driver details, review application state, and manage the next action from one card.</p>
               </div>
               <span className={getBadgeClass(driverOnboardingState.tone)}>{driverOnboardingState.stateLabel}</span>
             </div>
@@ -1081,32 +1280,59 @@ export default function Profile() {
             )}
             <form onSubmit={(e) => {
               e.preventDefault();
-              saveRoleProfile('/users/driver-profile', driverProfile, 'Driver profile updated successfully', 'driver');
+              saveRoleProfile('/users/driver-profile', driverProfile, 'Driver application updated successfully', 'driver');
             }}
             >
               <div className="form-row">
                 <div className="form-group">
                   <label>Driving License Number</label>
-                  <input value={driverProfile.drivingLicenseNumber} onChange={(e) => setDriverProfile((prev) => ({ ...prev, drivingLicenseNumber: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.driver?.drivingLicenseNumber)}
+                    inputMode="numeric"
+                    maxLength="10"
+                    placeholder="e.g. 2000096271"
+                    value={driverProfile.drivingLicenseNumber}
+                    onChange={(e) => updateDriverProfileField('drivingLicenseNumber', e.target.value)}
+                  />
+                  {renderProviderFieldError('driver', 'drivingLicenseNumber')}
                 </div>
                 <div className="form-group">
                   <label>License Expiry Date</label>
-                  <input type="date" value={driverProfile.licenseExpiryDate} onChange={(e) => setDriverProfile((prev) => ({ ...prev, licenseExpiryDate: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.driver?.licenseExpiryDate)}
+                    type="date"
+                    value={driverProfile.licenseExpiryDate}
+                    onChange={(e) => updateDriverProfileField('licenseExpiryDate', e.target.value)}
+                  />
+                  {renderProviderFieldError('driver', 'licenseExpiryDate')}
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>NIC / ID</label>
-                  <input value={driverProfile.nicId} onChange={(e) => setDriverProfile((prev) => ({ ...prev, nicId: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.driver?.nicId)}
+                    autoCapitalize="characters"
+                    maxLength="12"
+                    placeholder="e.g. 901234567V or 199012345678"
+                    value={driverProfile.nicId}
+                    onChange={(e) => updateDriverProfileField('nicId', e.target.value)}
+                  />
+                  {renderProviderFieldError('driver', 'nicId')}
                 </div>
                 <div className="form-group">
                   <label>Service Area</label>
-                  <input value={driverProfile.serviceArea} onChange={(e) => setDriverProfile((prev) => ({ ...prev, serviceArea: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.driver?.serviceArea)}
+                    value={driverProfile.serviceArea}
+                    onChange={(e) => updateDriverProfileField('serviceArea', e.target.value)}
+                  />
+                  {renderProviderFieldError('driver', 'serviceArea')}
                 </div>
               </div>
               <div className="form-group">
                 <label>Provider Onboarding Details</label>
-                <textarea rows="3" value={driverProfile.providerDetails} onChange={(e) => setDriverProfile((prev) => ({ ...prev, providerDetails: e.target.value }))} />
+                <textarea rows="3" value={driverProfile.providerDetails} onChange={(e) => updateDriverProfileField('providerDetails', e.target.value)} />
               </div>
               <div className="form-header" style={{ marginTop: '1rem' }}>
                 <h3>Verification Documents</h3>
@@ -1137,7 +1363,7 @@ export default function Profile() {
               <div className="profile-form-actions">
                 {driverRole && (
                   <button className="btn btn-secondary" type="submit" disabled={busyAction === 'driver' || driverProfileBlocked}>
-                    {busyAction === 'driver' ? 'Saving...' : 'Save Driver Profile'}
+                    {busyAction === 'driver' ? 'Saving...' : 'Save Driver Application'}
                   </button>
                 )}
               </div>
@@ -1159,10 +1385,10 @@ export default function Profile() {
                     : driverApplication?.status === 'pending'
                       ? 'Driver Application Pending'
                       : driverApplication?.status === 'rejected'
-                        ? 'Re-apply for Driver Role'
+                        ? 'Re-submit Driver Application'
                         : driverRole?.roleStatus === 'active' && driverRole?.verificationStatus === 'verified'
                           ? 'Driver Role Approved'
-                          : 'Apply for Driver Role'}
+                          : 'Submit Driver Application'}
                 </button>
               </div>
             )}
@@ -1193,31 +1419,57 @@ export default function Profile() {
               <div className="form-row">
                 <div className="form-group">
                   <label>Store Name</label>
-                  <input value={staffProfile.storeName} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeName: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeName)}
+                    value={staffProfile.storeName}
+                    onChange={(e) => updateStaffProfileField('storeName', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeName')}
                 </div>
                 <div className="form-group">
                   <label>Store Owner</label>
-                  <input value={staffProfile.storeOwner} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeOwner: e.target.value }))} />
+                  <input value={staffProfile.storeOwner} onChange={(e) => updateStaffProfileField('storeOwner', e.target.value)} />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Business Registration Number</label>
-                  <input value={staffProfile.businessRegistrationNumber} onChange={(e) => setStaffProfile((prev) => ({ ...prev, businessRegistrationNumber: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.businessRegistrationNumber)}
+                    value={staffProfile.businessRegistrationNumber}
+                    onChange={(e) => updateStaffProfileField('businessRegistrationNumber', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'businessRegistrationNumber')}
                 </div>
                 <div className="form-group">
                   <label>Store Contact Number</label>
-                  <input value={staffProfile.storeContactNumber} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeContactNumber: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeContactNumber)}
+                    value={staffProfile.storeContactNumber}
+                    onChange={(e) => updateStaffProfileField('storeContactNumber', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeContactNumber')}
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Store Email</label>
-                  <input type="email" value={staffProfile.storeEmail} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeEmail: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeEmail)}
+                    type="email"
+                    value={staffProfile.storeEmail}
+                    onChange={(e) => updateStaffProfileField('storeEmail', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeEmail')}
                 </div>
                 <div className="form-group">
                   <label>Store Address</label>
-                  <input value={staffProfile.storeAddress} onChange={(e) => setStaffProfile((prev) => ({ ...prev, storeAddress: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(providerErrors.staff?.storeAddress)}
+                    value={staffProfile.storeAddress}
+                    onChange={(e) => updateStaffProfileField('storeAddress', e.target.value)}
+                  />
+                  {renderProviderFieldError('staff', 'storeAddress')}
                 </div>
               </div>
               <div className="form-header" style={{ marginTop: '1rem' }}>
@@ -1294,40 +1546,67 @@ export default function Profile() {
               <div className="form-row">
                 <div className="form-group">
                   <label>Full Name</label>
-                  <input disabled={!isEditMode} value={profile.fullName} onChange={(e) => setProfile((prev) => ({ ...prev, fullName: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.fullName)}
+                    disabled={!isEditMode}
+                    value={profile.fullName}
+                    onChange={(e) => updateProfileField('fullName', e.target.value)}
+                  />
+                  {renderProfileFieldError('fullName')}
                 </div>
                 <div className="form-group">
                   <label>Username</label>
-                  <input disabled={!isEditMode} value={profile.username} onChange={(e) => setProfile((prev) => ({ ...prev, username: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.username)}
+                    disabled={!isEditMode}
+                    value={profile.username}
+                    onChange={(e) => updateProfileField('username', e.target.value)}
+                  />
+                  {renderProfileFieldError('username')}
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Email</label>
-                  <input disabled={!isEditMode} type="email" value={profile.email} onChange={(e) => setProfile((prev) => ({ ...prev, email: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.email)}
+                    disabled={!isEditMode}
+                    type="email"
+                    value={profile.email}
+                    onChange={(e) => updateProfileField('email', e.target.value)}
+                  />
+                  {renderProfileFieldError('email')}
                 </div>
                 <div className="form-group">
                   <label>Phone</label>
-                  <input disabled={!isEditMode} value={profile.phone} onChange={(e) => setProfile((prev) => ({ ...prev, phone: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.phone)}
+                    disabled={!isEditMode}
+                    value={profile.phone}
+                    onChange={(e) => updateProfileField('phone', e.target.value)}
+                  />
+                  {renderProfileFieldError('phone')}
                 </div>
               </div>
               <div className="form-group">
                 <label>Profile Image</label>
                 <input
+                  className={getInvalidFieldClass(profileErrors.profileImage)}
                   disabled={!isEditMode}
                   type="file"
                   accept="image/jpeg,image/png,image/gif,image/webp"
                   onChange={handleProfileImageChange}
                 />
+                {renderProfileFieldError('profileImage')}
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>City</label>
-                  <input disabled={!isEditMode} value={profile.city} onChange={(e) => setProfile((prev) => ({ ...prev, city: e.target.value }))} />
+                  <input disabled={!isEditMode} value={profile.city} onChange={(e) => updateProfileField('city', e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label>Date of Birth</label>
-                  <input disabled={!isEditMode} type="date" value={profile.dob} onChange={(e) => setProfile((prev) => ({ ...prev, dob: e.target.value }))} />
+                  <input disabled={!isEditMode} type="date" value={profile.dob} onChange={(e) => updateProfileField('dob', e.target.value)} />
                 </div>
               </div>
               <div className="form-row">
@@ -1336,7 +1615,7 @@ export default function Profile() {
                   <select
                     disabled={!isEditMode}
                     value={profile.preferredLanguage}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, preferredLanguage: e.target.value }))}
+                    onChange={(e) => updateProfileField('preferredLanguage', e.target.value)}
                   >
                     <option value="English">English</option>
                     <option value="Sinhala">Sinhala</option>
@@ -1348,48 +1627,72 @@ export default function Profile() {
                   <input
                     disabled={!isEditMode}
                     value={profile.emergencyContactName}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactName: e.target.value }))}
+                    onChange={(e) => updateProfileField('emergencyContactName', e.target.value)}
                   />
                 </div>
               </div>
               <div className="form-group">
                 <label>Address</label>
-                <input disabled={!isEditMode} value={profile.address} onChange={(e) => setProfile((prev) => ({ ...prev, address: e.target.value }))} />
+                <input disabled={!isEditMode} value={profile.address} onChange={(e) => updateProfileField('address', e.target.value)} />
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Emergency Contact Phone</label>
                   <input
+                    className={getInvalidFieldClass(profileErrors.emergencyContactPhone)}
                     disabled={!isEditMode}
                     value={profile.emergencyContactPhone}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactPhone: e.target.value }))}
+                    onChange={(e) => updateProfileField('emergencyContactPhone', e.target.value)}
                   />
+                  {renderProfileFieldError('emergencyContactPhone')}
                 </div>
                 <div className="form-group">
                   <label>Relationship</label>
                   <input
                     disabled={!isEditMode}
                     value={profile.emergencyContactRelationship}
-                    onChange={(e) => setProfile((prev) => ({ ...prev, emergencyContactRelationship: e.target.value }))}
+                    onChange={(e) => updateProfileField('emergencyContactRelationship', e.target.value)}
                   />
                 </div>
               </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Bio</label>
-                  <textarea disabled={!isEditMode} rows="3" value={profile.bio} onChange={(e) => setProfile((prev) => ({ ...prev, bio: e.target.value }))} />
+                  <textarea disabled={!isEditMode} rows="3" value={profile.bio} onChange={(e) => updateProfileField('bio', e.target.value)} />
                 </div>
                 <div className="form-group">
                   <label>Current Password</label>
-                  <input disabled={!isEditMode} type="password" value={profile.currentPassword} onChange={(e) => setProfile((prev) => ({ ...prev, currentPassword: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.currentPassword)}
+                    disabled={!isEditMode}
+                    type="password"
+                    value={profile.currentPassword}
+                    onChange={(e) => updateProfileField('currentPassword', e.target.value)}
+                  />
+                  {renderProfileFieldError('currentPassword')}
                 </div>
                 <div className="form-group">
                   <label>New Password</label>
-                  <input disabled={!isEditMode} type="password" minLength={8} value={profile.password} onChange={(e) => setProfile((prev) => ({ ...prev, password: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.password)}
+                    disabled={!isEditMode}
+                    type="password"
+                    minLength={8}
+                    value={profile.password}
+                    onChange={(e) => updateProfileField('password', e.target.value)}
+                  />
+                  {renderProfileFieldError('password')}
                 </div>
                 <div className="form-group">
                   <label>Confirm Password</label>
-                  <input disabled={!isEditMode} type="password" value={profile.confirmPassword} onChange={(e) => setProfile((prev) => ({ ...prev, confirmPassword: e.target.value }))} />
+                  <input
+                    className={getInvalidFieldClass(profileErrors.confirmPassword)}
+                    disabled={!isEditMode}
+                    type="password"
+                    value={profile.confirmPassword}
+                    onChange={(e) => updateProfileField('confirmPassword', e.target.value)}
+                  />
+                  {renderProfileFieldError('confirmPassword')}
                 </div>
               </div>
               <div className="profile-form-actions">

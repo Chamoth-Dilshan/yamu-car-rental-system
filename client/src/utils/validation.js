@@ -1,6 +1,9 @@
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 export const USERNAME_PATTERN = /^[a-z0-9._-]{3,30}$/;
 export const PHONE_PATTERN = /^\+?[\d\s().-]{7,20}$/;
+export const SRI_LANKAN_OLD_NIC_PATTERN = /^\d{9}[VX]$/;
+export const SRI_LANKAN_NEW_NIC_PATTERN = /^\d{12}$/;
+export const SRI_LANKAN_DRIVING_LICENSE_PATTERN = /^\d{10}$/;
 export const MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024;
 export const MAX_DOCUMENT_FILE_SIZE = 10 * 1024 * 1024;
 export const PROFILE_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -45,6 +48,80 @@ export const validateOptionalPhone = (value, label = 'Phone number') => {
 
   return PHONE_PATTERN.test(normalized) ? '' : `${label} must be a valid phone number`;
 };
+
+export const normalizeSriLankanNic = (value) => String(value || '').trim().toUpperCase();
+
+export const normalizeSriLankanDrivingLicenseNumber = (value) => String(value || '').trim();
+
+const getSriLankanNicDayCode = (value) => (
+  SRI_LANKAN_OLD_NIC_PATTERN.test(value)
+    ? Number(value.slice(2, 5))
+    : Number(value.slice(4, 7))
+);
+
+const hasValidSriLankanNicDayCode = (dayCode) => {
+  const dayOfYear = dayCode > 500 ? dayCode - 500 : dayCode;
+  return (
+    dayOfYear >= 1
+    && dayOfYear <= 366
+    && (dayCode <= 366 || (dayCode >= 501 && dayCode <= 866))
+  );
+};
+
+export const validateSriLankanNic = (value, label = 'NIC / ID') => {
+  const normalized = normalizeSriLankanNic(value);
+
+  if (!normalized) {
+    return `${label} is required`;
+  }
+
+  if (!SRI_LANKAN_OLD_NIC_PATTERN.test(normalized) && !SRI_LANKAN_NEW_NIC_PATTERN.test(normalized)) {
+    return `${label} must be a Sri Lankan NIC: 9 digits followed by V/X or 12 digits`;
+  }
+
+  if (!hasValidSriLankanNicDayCode(getSriLankanNicDayCode(normalized))) {
+    return `${label} must contain a valid Sri Lankan NIC day code`;
+  }
+
+  return '';
+};
+
+export const isValidSriLankanNic = (value) => !validateSriLankanNic(value);
+
+export const validateSriLankanDrivingLicenseNumber = (value, label = 'Driving license number') => {
+  const normalized = normalizeSriLankanDrivingLicenseNumber(value);
+
+  if (!normalized) {
+    return `${label} is required`;
+  }
+
+  return SRI_LANKAN_DRIVING_LICENSE_PATTERN.test(normalized)
+    ? ''
+    : `${label} must be a 10-digit Sri Lankan driving licence number`;
+};
+
+export const isValidSriLankanDrivingLicenseNumber = (value) => !validateSriLankanDrivingLicenseNumber(value);
+
+export const validateLicenseExpiryDate = (value, label = 'License expiry date') => {
+  const normalized = String(value || '').trim();
+
+  if (!normalized) {
+    return `${label} is required`;
+  }
+
+  const parsed = new Date(`${normalized}T00:00:00`);
+
+  if (Number.isNaN(parsed.valueOf())) {
+    return `${label} must be a valid date`;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return parsed >= today ? '' : `${label} must be today or a future date`;
+};
+
+export const isValidLicenseExpiryDate = (value) => !validateLicenseExpiryDate(value);
 
 export const validatePasswordStrength = (value) => {
   const password = String(value || '');

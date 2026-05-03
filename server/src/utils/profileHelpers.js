@@ -13,6 +13,9 @@ const MIN_PASSWORD_LENGTH = 8;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const USERNAME_REGEX = /^[a-z0-9._-]{3,30}$/;
 const PHONE_REGEX = /^\+?[\d\s().-]{7,20}$/;
+const SRI_LANKAN_OLD_NIC_REGEX = /^\d{9}[VX]$/;
+const SRI_LANKAN_NEW_NIC_REGEX = /^\d{12}$/;
+const SRI_LANKAN_DRIVING_LICENSE_REGEX = /^\d{10}$/;
 
 const trimValue = (value, fallback = '') => (
   typeof value === 'string' ? value.trim() : (value ?? fallback)
@@ -103,6 +106,99 @@ const validateOptionalPhone = (value, { label = 'Phone number' } = {}) => {
   }
 
   return { value: normalized, error: null };
+};
+
+const normalizeSriLankanNic = (value) => String(trimValue(value, '')).toUpperCase();
+
+const normalizeSriLankanDrivingLicenseNumber = (value) => trimValue(value, '');
+
+const getSriLankanNicDayCode = (value) => (
+  SRI_LANKAN_OLD_NIC_REGEX.test(value)
+    ? Number(value.slice(2, 5))
+    : Number(value.slice(4, 7))
+);
+
+const hasValidSriLankanNicDayCode = (dayCode) => {
+  const dayOfYear = dayCode > 500 ? dayCode - 500 : dayCode;
+  return (
+    dayOfYear >= 1
+    && dayOfYear <= 366
+    && (dayCode <= 366 || (dayCode >= 501 && dayCode <= 866))
+  );
+};
+
+const validateSriLankanNic = (value, { label = 'NIC / ID', required = true } = {}) => {
+  const normalized = normalizeSriLankanNic(value);
+
+  if (!normalized) {
+    return {
+      value: normalized,
+      error: required ? `${label} is required` : null
+    };
+  }
+
+  if (!SRI_LANKAN_OLD_NIC_REGEX.test(normalized) && !SRI_LANKAN_NEW_NIC_REGEX.test(normalized)) {
+    return {
+      value: normalized,
+      error: `${label} must be a Sri Lankan NIC: 9 digits followed by V/X or 12 digits`
+    };
+  }
+
+  if (!hasValidSriLankanNicDayCode(getSriLankanNicDayCode(normalized))) {
+    return {
+      value: normalized,
+      error: `${label} must contain a valid Sri Lankan NIC day code`
+    };
+  }
+
+  return { value: normalized, error: null };
+};
+
+const validateSriLankanDrivingLicenseNumber = (value, { label = 'Driving license number', required = true } = {}) => {
+  const normalized = normalizeSriLankanDrivingLicenseNumber(value);
+
+  if (!normalized) {
+    return {
+      value: normalized,
+      error: required ? `${label} is required` : null
+    };
+  }
+
+  if (!SRI_LANKAN_DRIVING_LICENSE_REGEX.test(normalized)) {
+    return {
+      value: normalized,
+      error: `${label} must be a 10-digit Sri Lankan driving licence number`
+    };
+  }
+
+  return { value: normalized, error: null };
+};
+
+const validateLicenseExpiryDate = (value, { label = 'License expiry date', required = true } = {}) => {
+  const normalized = typeof value === 'string' ? value.trim() : value;
+  const parsed = typeof normalized === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+    ? new Date(`${normalized}T00:00:00`)
+    : parseDate(normalized);
+
+  if (!normalized) {
+    return {
+      value: parsed,
+      error: required ? `${label} is required` : null
+    };
+  }
+
+  if (!parsed) {
+    return { value: parsed, error: `${label} must be a valid date` };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (parsed < today) {
+    return { value: parsed, error: `${label} must be today or a future date` };
+  }
+
+  return { value: parsed, error: null };
 };
 
 const hasDocumentFile = (input = {}) => Boolean(
@@ -297,6 +393,9 @@ module.exports = {
   EMAIL_REGEX,
   USERNAME_REGEX,
   PHONE_REGEX,
+  SRI_LANKAN_OLD_NIC_REGEX,
+  SRI_LANKAN_NEW_NIC_REGEX,
+  SRI_LANKAN_DRIVING_LICENSE_REGEX,
   trimValue,
   parseDate,
   normalizePreferredLanguage,
@@ -307,6 +406,11 @@ module.exports = {
   validateEmailAddress,
   validateUsernameValue,
   validateOptionalPhone,
+  normalizeSriLankanNic,
+  normalizeSriLankanDrivingLicenseNumber,
+  validateSriLankanNic,
+  validateSriLankanDrivingLicenseNumber,
+  validateLicenseExpiryDate,
   hasDocumentFile,
   normalizeDocumentStatus,
   buildDocumentMetadata,

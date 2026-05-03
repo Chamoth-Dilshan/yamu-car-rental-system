@@ -22,6 +22,10 @@ const getMyBookings = async (req, res) => {
       ...req.query
     })
 
+    if (result.error) {
+      return sendServiceError(res, result)
+    }
+
     return res.json(result)
   } catch (error) {
     return sendServerError(res, error, 'Failed to load your bookings')
@@ -94,6 +98,10 @@ const getDriverBookings = async (req, res) => {
       ...req.query
     })
 
+    if (result.error) {
+      return sendServiceError(res, result)
+    }
+
     return res.json(result)
   } catch (error) {
     return sendServerError(res, error, 'Failed to load booking requests')
@@ -125,6 +133,10 @@ const getStaffVehicleBookings = async (req, res) => {
       staffId: req.user._id,
       ...req.query
     })
+
+    if (result.error) {
+      return sendServiceError(res, result)
+    }
 
     return res.json(result)
   } catch (error) {

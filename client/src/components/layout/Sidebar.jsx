@@ -21,7 +21,7 @@ const menuItems = {
     { to: '/driver/ads', label: 'My Driver Ad', end: true },
     { to: '/driver/bookings', label: 'Booking Requests', end: true },
     { section: 'Account' },
-    { to: '/profile/driver', label: 'Driver Profile', end: true },
+    { to: '/profile/driverapplication', label: 'Driver Application', end: true },
     { to: '/notifications', label: 'Notifications', end: true },
     { to: '/apply-roles', label: 'Role Requests', end: false },
     { to: '/switch-roles', label: 'Switch Roles', end: true }

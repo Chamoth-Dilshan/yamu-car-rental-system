@@ -17,26 +17,10 @@ const {
   syncUserRoles
 } = require('../../utils/roleHelpers');
 const {
-  trimValue,
-  validateEmailAddress,
-  validateOptionalPhone,
-  validatePasswordStrength,
-  validateUsernameValue
-} = require('../../utils/profileHelpers');
-
-const RESTRICTED_SIGNUP_FIELDS = [
-  'role',
-  'roles',
-  'activeRole',
-  'primaryRole',
-  'accountStatus',
-  'verificationStatus',
-  'isSystemAdmin',
-  'permissions',
-  'emailVerified',
-  'authProvider',
-  'googleId'
-];
+  validateRegistrationPayload,
+  validateLoginPayload,
+  validateGoogleCredentialPayload
+} = require('./auth.validation');
 
 const buildActiveCustomerRole = () => buildRoleAssignment('customer', {
   roleStatus: 'active',
@@ -82,53 +66,14 @@ const respondWithAuthSession = async (res, user) => {
 
 const register = async (req, res) => {
   try {
-    const { fullName, email, password, confirmPassword, username, phone, address, city } = req.body;
-    const restrictedField = RESTRICTED_SIGNUP_FIELDS.find((field) => Object.prototype.hasOwnProperty.call(req.body, field));
-
-    if (restrictedField) {
-      return res.status(400).json({ message: 'Role and account status fields cannot be set during registration' });
-    }
-
-    const normalizedFullName = trimValue(fullName, '');
-    if (!normalizedFullName) {
-      return res.status(400).json({ message: 'Full name is required' });
-    }
-
-    const emailValidation = validateEmailAddress(email);
-    if (emailValidation.error) {
-      return res.status(400).json({ message: emailValidation.error });
-    }
-
-    const usernameValidation = validateUsernameValue(username);
-    if (usernameValidation.error) {
-      return res.status(400).json({ message: usernameValidation.error });
-    }
-
-    if (!password) {
-      return res.status(400).json({ message: 'Password is required' });
-    }
-
-    const passwordError = validatePasswordStrength(password);
-    if (passwordError) {
-      return res.status(400).json({ message: passwordError });
-    }
-
-    if (!confirmPassword) {
-      return res.status(400).json({ message: 'Confirm password is required' });
-    }
-
-    if (password !== confirmPassword) {
-      return res.status(400).json({ message: 'Passwords do not match' });
-    }
-
-    const phoneValidation = validateOptionalPhone(phone);
-    if (phoneValidation.error) {
-      return res.status(400).json({ message: phoneValidation.error });
+    const validatedRegistration = validateRegistrationPayload(req.body);
+    if (validatedRegistration.error) {
+      return res.status(400).json({ message: validatedRegistration.error });
     }
 
     const [existingUsername, existingEmail] = await Promise.all([
-      User.findOne({ username: usernameValidation.value }).select('_id'),
-      User.findOne({ email: emailValidation.value }).select('_id')
+      User.findOne({ username: validatedRegistration.username }).select('_id'),
+      User.findOne({ email: validatedRegistration.email }).select('_id')
     ]);
 
     if (existingUsername) {
@@ -140,13 +85,13 @@ const register = async (req, res) => {
     }
 
     await User.create({
-      username: usernameValidation.value,
-      fullName: normalizedFullName,
-      email: emailValidation.value,
-      password,
-      phone: phoneValidation.value,
-      address: trimValue(address, ''),
-      city: trimValue(city, ''),
+      username: validatedRegistration.username,
+      fullName: validatedRegistration.fullName,
+      email: validatedRegistration.email,
+      password: validatedRegistration.password,
+      phone: validatedRegistration.phone,
+      address: validatedRegistration.address,
+      city: validatedRegistration.city,
       role: 'customer',
       accountStatus: 'active',
       verificationStatus: 'verified',
@@ -175,22 +120,16 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
-
-    const identifier = String(email || '').trim().toLowerCase();
-    if (!identifier) {
-      return res.status(400).json({ message: 'Email or username is required' });
-    }
-
-    if (!password) {
-      return res.status(400).json({ message: 'Password is required' });
+    const validatedLogin = validateLoginPayload(req.body);
+    if (validatedLogin.error) {
+      return res.status(400).json({ message: validatedLogin.error });
     }
 
     const user = await User.findOne({
-      $or: [{ email: identifier }, { username: identifier }]
+      $or: [{ email: validatedLogin.identifier }, { username: validatedLogin.identifier }]
     });
 
-    if (!user || !(await user.matchPassword(password))) {
+    if (!user || !(await user.matchPassword(validatedLogin.password))) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
@@ -206,16 +145,15 @@ const login = async (req, res) => {
 
 const googleLogin = async (req, res) => {
   try {
-    const credential = String(req.body.credential || req.body.idToken || '').trim();
-
-    if (!credential) {
-      return res.status(400).json({ message: 'Google credential is required.' });
+    const validatedGoogleCredential = validateGoogleCredentialPayload(req.body);
+    if (validatedGoogleCredential.error) {
+      return res.status(400).json({ message: validatedGoogleCredential.error });
     }
 
     let googleAccount;
 
     try {
-      googleAccount = await verifyGoogleIdToken(credential);
+      googleAccount = await verifyGoogleIdToken(validatedGoogleCredential.credential);
     } catch (error) {
       return res.status(error.statusCode || 401).json({
         message: error.message || 'Invalid Google credential.'

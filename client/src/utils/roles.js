@@ -8,7 +8,7 @@ const ROLE_LABELS = {
 export const getProfilePathForRole = (role = '') => {
   switch (role) {
     case 'driver':
-      return '/profile/driver';
+      return '/profile/driverapplication';
     case 'store':
     case 'staff':
       return '/profile/store';
