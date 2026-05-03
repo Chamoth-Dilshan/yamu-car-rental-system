@@ -175,9 +175,12 @@ const validateSriLankanDrivingLicenseNumber = (value, { label = 'Driving license
 };
 
 const validateLicenseExpiryDate = (value, { label = 'License expiry date', required = true } = {}) => {
-  const parsed = parseDate(value);
+  const normalized = typeof value === 'string' ? value.trim() : value;
+  const parsed = typeof normalized === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(normalized)
+    ? new Date(`${normalized}T00:00:00`)
+    : parseDate(normalized);
 
-  if (!value) {
+  if (!normalized) {
     return {
       value: parsed,
       error: required ? `${label} is required` : null

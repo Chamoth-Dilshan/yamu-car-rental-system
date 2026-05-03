@@ -715,7 +715,8 @@ const createDriverUser = (index, adminId) => {
   const serviceArea = `${city} and nearby areas`
   const submittedAt = new Date(Date.UTC(2026, 1, (sequence % 24) + 1))
   const reviewedAt = new Date(Date.UTC(2026, 1, (sequence % 24) + 2))
-  const licenseNumber = `DL-${pad(2000 + sequence, 5)}`
+  const licenseNumber = pad(2000000000 + sequence, 10)
+  const licenseExpiryDate = new Date(Date.UTC(2028, (sequence % 12), (sequence % 27) + 1))
   const nicId = `${90 + (sequence % 9)}${pad(1000000 + sequence, 7)}V`
 
   return {
@@ -738,7 +739,7 @@ const createDriverUser = (index, adminId) => {
     ],
     driverProfile: {
       drivingLicenseNumber: licenseNumber,
-      licenseExpiryDate: new Date(Date.UTC(2028, (sequence % 12), (sequence % 27) + 1)),
+      licenseExpiryDate,
       nicId,
       serviceArea,
       providerDetails: `${pick(DRIVER_SPECIALTIES, index)} with reliable local route knowledge and customer-focused service.`,
@@ -756,6 +757,7 @@ const createDriverUser = (index, adminId) => {
         reviewedAt,
         {
           drivingLicenseNumber: licenseNumber,
+          licenseExpiryDate,
           nicId,
           serviceArea
         }
@@ -792,7 +794,8 @@ const createPendingDriverApplicantUser = (index) => {
   const city = pick(CITIES, index, 10)
   const fullName = buildFullName(index + 220, 7)
   const submittedAt = new Date(Date.UTC(2026, 2, 3 + (sequence % 20)))
-  const licenseNumber = `PDL-${pad(4000 + sequence, 5)}`
+  const licenseNumber = pad(2000100000 + sequence, 10)
+  const licenseExpiryDate = new Date(Date.UTC(2028, sequence % 12, (sequence % 27) + 1))
   const nicId = `${91 + (sequence % 8)}${pad(2000000 + sequence, 7)}V`
 
   return {
@@ -815,7 +818,7 @@ const createPendingDriverApplicantUser = (index) => {
     ],
     driverProfile: {
       drivingLicenseNumber: licenseNumber,
-      licenseExpiryDate: new Date(Date.UTC(2028, sequence % 12, (sequence % 27) + 1)),
+      licenseExpiryDate,
       nicId,
       serviceArea: `${city} and nearby areas`,
       providerDetails: `${pick(DRIVER_SPECIALTIES, index)} with recent onboarding submission.`,
@@ -831,6 +834,7 @@ const createPendingDriverApplicantUser = (index) => {
         submittedAt,
         {
           drivingLicenseNumber: licenseNumber,
+          licenseExpiryDate,
           nicId,
           serviceArea: `${city} and nearby areas`,
           documents: {
