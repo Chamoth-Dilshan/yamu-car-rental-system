@@ -402,6 +402,50 @@ const CARD_BRANDS = [
   { brand: 'Card', prefix: '6' }
 ]
 
+const VEHICLE_BOOKING_FLOW_STATUSES = [
+  'pending',
+  'pending',
+  'confirmed',
+  'confirmed',
+  'completed',
+  'completed',
+  'completed',
+  'completed',
+  'closed',
+  'cancelled'
+]
+
+const DRIVER_BOOKING_FLOW_STATUSES = [
+  'pending',
+  'confirmed',
+  'confirmed',
+  'completed',
+  'completed',
+  'completed',
+  'closed',
+  'cancelled'
+]
+
+const PAYMENT_FLOW_OUTCOMES = [
+  { method: 'saved_card', status: 'paid' },
+  { method: 'bank_transfer', status: 'processing' },
+  { method: 'card', status: 'paid' },
+  { method: 'cash', status: 'processing' },
+  { method: 'admin_manual', status: 'paid' },
+  { method: 'saved_card', status: 'refunded' },
+  { method: 'card', status: 'failed' },
+  { method: 'cash', status: 'cancelled' },
+  { method: 'bank_transfer', status: 'paid' },
+  { method: 'card', status: 'pending' }
+]
+
+const CLOSED_PAYMENT_FLOW_OUTCOMES = [
+  { method: 'saved_card', status: 'paid' },
+  { method: 'admin_manual', status: 'paid' },
+  { method: 'bank_transfer', status: 'paid' },
+  { method: 'saved_card', status: 'refunded' }
+]
+
 const getPositiveInt = (value, fallback) => {
   const numeric = Number.parseInt(value, 10)
   return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback
@@ -411,12 +455,12 @@ const buildSeedTargets = () => {
   const requestedUsers = getPositiveInt(process.env.SEED_USER_COUNT, 200)
   const requestedVehicles = getPositiveInt(process.env.SEED_VEHICLE_COUNT, 100)
   const requestedDrivers = getPositiveInt(process.env.SEED_DRIVER_COUNT, 50)
-  const requestedVehicleBookings = getPositiveInt(process.env.SEED_VEHICLE_BOOKING_COUNT, 32)
-  const requestedDriverBookings = getPositiveInt(process.env.SEED_DRIVER_BOOKING_COUNT, 20)
-  const requestedCards = getPositiveInt(process.env.SEED_SAVED_CARD_COUNT, 40)
+  const requestedVehicleBookings = getPositiveInt(process.env.SEED_VEHICLE_BOOKING_COUNT, 72)
+  const requestedDriverBookings = getPositiveInt(process.env.SEED_DRIVER_BOOKING_COUNT, 44)
+  const requestedCards = getPositiveInt(process.env.SEED_SAVED_CARD_COUNT, 80)
   const requestedMaintenanceRecords = getPositiveInt(process.env.SEED_MAINTENANCE_RECORD_COUNT, 28)
-  const requestedReviews = getPositiveInt(process.env.SEED_REVIEW_COUNT, 24)
-  const requestedComplaints = getPositiveInt(process.env.SEED_COMPLAINT_COUNT, 14)
+  const requestedReviews = getPositiveInt(process.env.SEED_REVIEW_COUNT, 40)
+  const requestedComplaints = getPositiveInt(process.env.SEED_COMPLAINT_COUNT, 24)
   const inventoryItemsPerStaff = getPositiveInt(process.env.SEED_INVENTORY_ITEMS_PER_STAFF, 6)
   const staffCount = Math.max(1, Math.ceil(requestedVehicles / 5))
   const minimumActiveCustomers = Math.max(1, Math.min(12, Math.ceil((requestedVehicleBookings + requestedDriverBookings) / 4)))
@@ -1084,19 +1128,14 @@ const createPaymentCardRecord = (index, customer, isDefault = false) => {
 }
 
 const createPaymentRecord = (index, booking, customer, card, admin) => {
-  const outcome = pick([
-    { method: 'saved_card', status: 'paid' },
-    { method: 'bank_transfer', status: 'processing' },
-    { method: 'card', status: 'paid' },
-    { method: 'cash', status: 'processing' },
-    { method: 'admin_manual', status: 'paid' },
-    { method: 'saved_card', status: 'refunded' },
-    { method: 'card', status: 'failed' },
-    { method: 'cash', status: 'cancelled' }
-  ], index)
+  const outcome = pick(
+    booking.bookingStatus === 'closed' ? CLOSED_PAYMENT_FLOW_OUTCOMES : PAYMENT_FLOW_OUTCOMES,
+    index
+  )
   const method = outcome.method === 'saved_card' && !card ? 'card' : outcome.method
   const paidLike = ['paid', 'refunded'].includes(outcome.status)
-  const paymentDate = new Date(Date.UTC(2026, 4, 2 + (index % 20), 6 + (index % 8), 15))
+  const paymentDate = new Date(new Date(booking.endDate).getTime() + (1000 * 60 * 60 * (8 + (index % 36))))
+  const bankTransferReference = `BANK-${pad(index + 1, 5)}`
   const payment = {
     paymentNo: `PAY-SEED-${pad(index + 1, 5)}`,
     booking: booking._id,
@@ -1111,7 +1150,15 @@ const createPaymentRecord = (index, booking, customer, card, admin) => {
     customerSnapshot: buildCustomerSnapshot(customer),
     verifiedBy: ['cash', 'bank_transfer', 'admin_manual'].includes(method) && paidLike ? admin._id : null,
     verifiedAt: paidLike ? paymentDate : null,
-    adminNote: outcome.status === 'failed' ? 'Seeded failed payment for dashboard testing' : '',
+    adminNote: outcome.status === 'processing'
+      ? 'Seeded payment waiting for admin verification.'
+      : outcome.status === 'failed'
+        ? 'Seeded failed payment for dashboard testing.'
+        : outcome.status === 'cancelled'
+          ? 'Seeded cancelled payment attempt.'
+          : outcome.status === 'refunded'
+            ? 'Seeded refund completed by admin.'
+            : '',
     failureReason: outcome.status === 'failed' ? 'Card authorization was declined by the test processor.' : '',
     refund: outcome.status === 'refunded'
       ? {
@@ -1131,17 +1178,29 @@ const createPaymentRecord = (index, booking, customer, card, admin) => {
     payment.bankTransfer = {
       accountName: customer.fullName,
       bankName: pick(['Bank of Ceylon', 'Commercial Bank', 'Sampath Bank', 'HNB'], index),
-      referenceNo: `BANK-${pad(index + 1, 5)}`,
+      referenceNo: bankTransferReference,
       depositedAt: paymentDate,
-      note: 'Seeded transfer awaiting verification'
+      note: outcome.status === 'processing'
+        ? 'Seeded transfer awaiting verification.'
+        : 'Seeded transfer verified by admin.',
+      proofFile: {
+        fileName: `bank-transfer-${pad(index + 1, 5)}.pdf`,
+        filePath: `/uploads/seed/bank-transfer-${pad(index + 1, 5)}.pdf`,
+        reference: bankTransferReference,
+        mimeType: 'application/pdf',
+        size: 120000 + (index * 137),
+        uploadedAt: paymentDate
+      }
     }
   }
 
   if (method === 'cash' || method === 'admin_manual') {
     payment.cash = {
       payerName: customer.fullName,
-      collectedBy: method === 'admin_manual' ? admin.fullName : '',
-      note: method === 'cash' ? 'Seeded cash payment awaiting collection check' : 'Seeded admin manual payment'
+      collectedBy: paidLike || method === 'admin_manual' ? admin.fullName : '',
+      note: method === 'cash'
+        ? 'Seeded cash payment awaiting collection check.'
+        : 'Seeded admin manual payment.'
     }
   }
 
@@ -1230,7 +1289,7 @@ const createVehicleBookingRecord = (index, customer, vehicle) => {
   const billableDays = 1 + (index % 4)
   const startDate = new Date(Date.UTC(2026, 2, 5 + index))
   const endDate = new Date(Date.UTC(2026, 2, 5 + index + billableDays - 1))
-  const bookingStatus = pick(['pending', 'confirmed', 'completed', 'completed', 'closed', 'cancelled'], index)
+  const bookingStatus = pick(VEHICLE_BOOKING_FLOW_STATUSES, index)
   const baseAmount = vehicle.pricePerDay * billableDays
 
   return {
@@ -1258,7 +1317,11 @@ const createVehicleBookingRecord = (index, customer, vehicle) => {
     totalAmount: baseAmount,
     paymentStatus: 'pending',
     bookingStatus,
-    adminNote: bookingStatus === 'cancelled' ? 'Seeded cancellation for admin workflow testing.' : '',
+    adminNote: bookingStatus === 'cancelled'
+      ? 'Seeded cancellation for admin workflow testing.'
+      : bookingStatus === 'closed'
+        ? 'Seeded closed booking after payment workflow.'
+        : '',
     driverResponseNote: ''
   }
 }
@@ -1267,7 +1330,7 @@ const createDriverBookingRecord = (index, customer, driver, ad) => {
   const billableDays = 1 + (index % 3)
   const startDate = new Date(Date.UTC(2026, 3, 10 + index))
   const endDate = new Date(Date.UTC(2026, 3, 10 + index + billableDays - 1))
-  const bookingStatus = pick(['pending', 'confirmed', 'completed', 'completed', 'closed', 'cancelled'], index, 2)
+  const bookingStatus = pick(DRIVER_BOOKING_FLOW_STATUSES, index, 2)
   const baseAmount = ad.dailyRate * billableDays
 
   return {
@@ -1301,7 +1364,9 @@ const createDriverBookingRecord = (index, customer, driver, ad) => {
       ? 'Schedule conflict in seeded driver workflow.'
       : bookingStatus === 'confirmed'
         ? 'Driver confirmed this seeded request.'
-        : ''
+        : bookingStatus === 'completed'
+          ? 'Driver completed this seeded trip.'
+          : ''
   }
 }
 
