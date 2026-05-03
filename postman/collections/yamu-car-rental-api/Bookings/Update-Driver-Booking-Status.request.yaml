@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Driver Booking Status
+method: PUT
+url: '{{baseUrl}}/api/bookings/{{bookingId}}/driver-status'
+order: 7000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "bookingStatus": "confirmed",
+      "driverResponseNote": "I will be there on time"
+    }

@@ -1,0 +1,24 @@
+$kind: http-request
+name: Update User
+method: PUT
+url: '{{baseUrl}}/api/admin/users/{{userId}}'
+order: 3000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "fullName": "John Doe",
+      "email": "john@example.com",
+      "username": "johndoe",
+      "accountStatus": "active",
+      "roles": [
+        { "roleKey": "customer", "roleStatus": "active", "verificationStatus": "verified", "isPrimary": true }
+      ],
+      "activeRole": "customer",
+      "primaryRole": "customer"
+    }

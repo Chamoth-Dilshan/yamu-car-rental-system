@@ -1,0 +1,24 @@
+$kind: http-request
+name: Checkout Booking Payment
+method: POST
+url: '{{baseUrl}}/api/payments/checkout/{{bookingId}}'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "method": "card",
+      "amount": 10000,
+      "card": {
+        "cardholderName": "Demo Customer",
+        "cardNumber": "4111111111111111",
+        "expiryMonth": "12",
+        "expiryYear": "2030",
+        "cvv": "123"
+      }
+    }

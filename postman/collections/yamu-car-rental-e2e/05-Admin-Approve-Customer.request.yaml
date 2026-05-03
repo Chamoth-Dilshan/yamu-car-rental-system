@@ -1,0 +1,33 @@
+$kind: http-request
+name: '05 - Verify Customer Is Already Active'
+method: GET
+url: '{{baseUrl}}/api/admin/users'
+order: 5000
+headers:
+  - key: Authorization
+    value: 'Bearer {{adminToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Admin can list users for customer verification", () => {
+        pm.response.to.have.status(200);
+      });
+
+      const users = pm.response.json();
+      const customerId = pm.environment.get("e2eCustomerUserId");
+      const customer = users.find(u => u._id === customerId);
+
+      pm.test("Customer did not require admin approval", () => {
+        pm.expect(customer, `Customer with id ${customerId} not found`).to.exist;
+        pm.expect(customer.accountStatus).to.equal("active");
+        pm.expect(customer.verificationStatus).to.equal("verified");
+      });
+
+      pm.test("Customer role remains usable immediately", () => {
+        pm.expect(customer, `Customer with id ${customerId} not found`).to.exist;
+        const customerRole = (customer.roles || []).find(role => role.roleKey === "customer");
+        pm.expect(customerRole, "customer role assignment").to.exist;
+        pm.expect(customerRole.roleStatus).to.equal("active");
+        pm.expect(customerRole.verificationStatus).to.equal("verified");
+      });

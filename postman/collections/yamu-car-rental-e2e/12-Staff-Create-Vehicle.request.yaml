@@ -1,0 +1,47 @@
+$kind: http-request
+name: '12 - Staff Create Vehicle'
+method: POST
+url: '{{baseUrl}}/api/vehicles'
+order: 12000
+headers:
+  - key: Authorization
+    value: 'Bearer {{staffToken}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "make": "Toyota",
+      "model": "Corolla",
+      "year": 2022,
+      "licensePlate": "E2E-TEST-001",
+      "color": "White",
+      "transmission": "automatic",
+      "fuelType": "petrol",
+      "seats": 5,
+      "pricePerDay": 5000,
+      "city": "Colombo",
+      "description": "E2E test vehicle - clean and reliable",
+      "features": ["AC", "GPS", "Bluetooth"]
+    }
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Staff can create a vehicle", () => {
+        pm.response.to.have.status(201);
+      });
+
+      pm.test("Vehicle creation returns vehicle object", () => {
+        const json = pm.response.json();
+        pm.expect(json).to.have.property("vehicle");
+        pm.expect(json.vehicle).to.have.property("_id");
+        pm.expect(json.vehicle.make).to.equal("Toyota");
+        pm.expect(json.vehicle.model).to.equal("Corolla");
+      });
+
+      const json = pm.response.json();
+      if (json.vehicle && json.vehicle._id) {
+        pm.environment.set("e2eVehicleId", json.vehicle._id);
+      }

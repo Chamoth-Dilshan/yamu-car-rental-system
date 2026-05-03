@@ -1,0 +1,5 @@
+$kind: http-request
+name: Get Driver Ad by ID
+method: GET
+url: '{{baseUrl}}/api/driver-ads/{{driverAdId}}'
+order: 2000

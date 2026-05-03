@@ -1,0 +1,27 @@
+$kind: http-request
+name: '08 - Admin Get Users (Find Staff)'
+method: GET
+url: '{{baseUrl}}/api/admin/users'
+order: 8000
+headers:
+  - key: Authorization
+    value: 'Bearer {{adminToken}}'
+scripts:
+  - type: afterResponse
+    language: text/javascript
+    code: |-
+      pm.test("Admin can list users", () => {
+        pm.response.to.have.status(200);
+      });
+
+      const json = pm.response.json();
+      const staffEmail = pm.environment.get("e2eStaffEmail");
+      const staffUser = json.find(u => u.email === staffEmail);
+
+      pm.test("Newly registered staff user is found in user list", () => {
+        pm.expect(staffUser, `Staff with email ${staffEmail} not found`).to.exist;
+      });
+
+      if (staffUser) {
+        pm.environment.set("e2eStaffUserId", staffUser._id);
+      }

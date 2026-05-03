@@ -1,0 +1,8 @@
+$kind: http-request
+name: Mark All Notifications Read
+method: PUT
+url: '{{baseUrl}}/api/users/notifications/read-all'
+order: 10000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'

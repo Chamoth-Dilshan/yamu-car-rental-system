@@ -1,0 +1,17 @@
+$kind: http-request
+name: Update Admin Profile
+method: PUT
+url: '{{baseUrl}}/api/users/admin-profile'
+order: 6000
+headers:
+  - key: Authorization
+    value: 'Bearer {{token}}'
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "accessScope": "full",
+      "controlNotes": "System administrator"
+    }
